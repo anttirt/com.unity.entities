@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Networking;
 
 namespace Unity.Entities.Content
@@ -181,13 +182,15 @@ namespace Unity.Entities.Content
             }
         }
 
+        public delegate bool InstalledArchivePathDelegate(RemoteContentLocation loc, out string path);
+
         LinkedList<DownloadOperation> activeDownloads;
         Dictionary<RemoteContentLocation, DownloadStatus> downloadStates;
         int maxActive = 5;
         Func<DownloadOperation> createOpFunc;
         long activeDownloadedBytes = 0;
         long completeDownloadedBytes = 0;
-
+        InstalledArchivePathDelegate installedArchivePathFunc;
 
         /// <summary>
         /// The root directory of the local cache.
@@ -224,7 +227,7 @@ namespace Unity.Entities.Content
         /// <param name="priority">The priority of the service. Higher values are placed at the front of the service list.</param>
         /// <param name="maxActiveDownloads">The maximum allowed concurrent downloads. When there are more requests than can be run concurrently, they are queued until some of the active operations complete.</param>
         /// <param name="createDownloadOpFunc">Allows for specifying a custom type of DownloadOperation. By default, this will use UnityWebRequest.</param>
-        public ContentDownloadService(string name, string cacheDir, int priority = 1, int maxActiveDownloads = 5, Func<DownloadOperation> createDownloadOpFunc = null)
+        public ContentDownloadService(string name, string cacheDir, int priority = 1, int maxActiveDownloads = 5, Func<DownloadOperation> createDownloadOpFunc = null, InstalledArchivePathDelegate installedArchivePathFunc = null)
         {
             Name = name;
             Priority = priority;
@@ -233,6 +236,7 @@ namespace Unity.Entities.Content
             activeDownloads = new LinkedList<DownloadOperation>();
             downloadStates = new Dictionary<RemoteContentLocation, DownloadStatus>();
             createOpFunc = createDownloadOpFunc == null ? () => new DownloadOperationUnityWebRequest() : createDownloadOpFunc;
+            this.installedArchivePathFunc = installedArchivePathFunc;
             Directory.CreateDirectory(cacheDir);
         }
 
@@ -332,6 +336,21 @@ namespace Unity.Entities.Content
         }
 
         /// <summary>
+        /// Gets the local cache file path for a location and checks to see if it exists.
+        /// </summary>
+        /// <param name="loc">The content location.</param>
+        /// <param name="path">The local cache path.  This will be set regardless if the cached file exists.</param>
+        /// <returns>True if the cached file exists, otherwise false.</returns>
+        public bool GetInstalledFilePath(RemoteContentLocation loc, out string path)
+        {
+            if(installedArchivePathFunc != null)
+                return installedArchivePathFunc.Invoke(loc, out path);
+
+            path = default;
+            return false;
+        }
+
+        /// <summary>
         /// Resets the download statistics.
         /// </summary>
         public void ClearDownloadProgress()
@@ -377,8 +396,16 @@ namespace Unity.Entities.Content
                 }
                 else
                 {
-                    if (GetLocalCacheFilePath(loc, out var cachePath))
+                    if (GetInstalledFilePath(loc, out var installedPath))
                     {
+                        ContentDeliveryGlobalState.LogFunc?.Invoke($"Content ({loc.Path}) {loc.Hash} supplied by installed files");
+                        s.DownloadState = State.Complete;
+                        s.BytesDownloaded = loc.Size;
+                        s.LocalPath = installedPath;
+                    }
+                    else if (GetLocalCacheFilePath(loc, out var cachePath))
+                    {
+                        ContentDeliveryGlobalState.LogFunc?.Invoke($"Content ({loc.Path}) {loc.Hash} supplied by local cache");
                         File.SetLastAccessTime(cachePath, DateTime.Now);
                         s.DownloadState = State.Complete;
                         s.BytesDownloaded = loc.Size;
@@ -386,6 +413,7 @@ namespace Unity.Entities.Content
                     }
                     else
                     {
+                        ContentDeliveryGlobalState.LogFunc?.Invoke($"Content ({loc.Path}) {loc.Hash} will be downloaded");
                         var op = createOpFunc();
                         op.Init(loc, $"{cachePath}.tmpdownload", cachePath);
                         activeDownloads.AddLast(op);

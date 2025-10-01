@@ -36,6 +36,7 @@ namespace Unity.Entities.Content
         internal struct ArchiveLocation
         {
             public int PathIndex;
+            public Hash128 ContentHash;
         }
 
         internal UnsafeHashMap<UntypedWeakReferenceId, SceneLocation> SceneLocations;
@@ -226,7 +227,7 @@ namespace Unity.Entities.Content
             for (int archiveIndex = 0; archiveIndex < catalogData.Archives.Length; archiveIndex++)
             {
                 var archiveId = catalogData.Archives[archiveIndex].ArchiveId;
-                ArchiveLocations.TryAdd(archiveId, new ArchiveLocation { PathIndex = ManagedStrings.Add(pathTransformFunc(archiveId.ToString())) });
+                ArchiveLocations.TryAdd(archiveId, new ArchiveLocation { PathIndex = ManagedStrings.Add(pathTransformFunc(archiveId.ToString())), ContentHash = catalogData.Archives[archiveIndex].ContentHash });
             }
         }
 

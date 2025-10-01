@@ -11,6 +11,10 @@ using UnityEngine.SceneManagement;
 using Unity.Content;
 using Unity.Burst;
 using System.Threading;
+using System.Collections.Generic;
+using System.IO;
+
+
 #if ENABLE_PROFILER
 using Unity.Profiling;
 using System.Runtime.CompilerServices;
@@ -51,6 +55,25 @@ namespace Unity.Entities.Content
         /// <returns>The relative path of the archive file.</returns>
         [ExcludeFromBurstCompatTesting("References managed objects")]
         public static string DefaultArchivePathFunc(string archiveId) => $"{k_ContentArchiveDirectory}/{archiveId}";
+
+        [ExcludeFromBurstCompatTesting("References managed objects")]
+        public static bool InstalledArchivePathFunc(RemoteContentLocation loc, out string archivePath)
+        {
+            if(InstalledArchivePaths?.TryGetValue(loc.Hash, out archivePath) == true)
+            {
+#if ENABLE_CONTENT_DIAGNOSTICS
+                LogFunc?.Invoke($"InstalledArchivePathFunc({loc.Hash}) -> {archivePath}");
+#endif
+                return true;
+            }
+
+#if ENABLE_CONTENT_DIAGNOSTICS
+            LogFunc?.Invoke($"InstalledArchivePathFunc({loc.Hash}) -> NOT FOUND");
+#endif
+
+            archivePath = default;
+            return false;
+        }
 
         struct ActiveArchive
         {
@@ -117,11 +140,13 @@ namespace Unity.Entities.Content
         struct DeferredSceneUnloadsType { }
 
         static RuntimeContentCatalog Catalog;
+        static RuntimeContentCatalog InstalledCatalog;
         static UnsafeHashMap<ContentArchiveId, ActiveArchive> ActiveArchives;
         static UnsafeHashMap<ContentFileId, ActiveFile> ActiveFiles;
         static UnsafeHashMap<UntypedWeakReferenceId, ActiveObject> ActiveObjects;
         static UnsafeList<ActiveDependencySet> ActiveDependencySets;
         static UnsafeHashMap<int, ActiveScene> ActiveScenes;
+        static Dictionary<Hash128, string> InstalledArchivePaths;
 
         static int currentGeneration = -1;
 
@@ -154,6 +179,7 @@ namespace Unity.Entities.Content
 #if UNITY_EDITOR
             Catalog.Initialize();
 #endif
+            InstalledCatalog = new RuntimeContentCatalog();
             ActiveArchives = new UnsafeHashMap<ContentArchiveId, ActiveArchive>(2048, Allocator.Persistent);
             ActiveFiles = new UnsafeHashMap<ContentFileId, ActiveFile>(2048, Allocator.Persistent);
             ActiveObjects = new UnsafeHashMap<UntypedWeakReferenceId, ActiveObject>(2048, Allocator.Persistent);
@@ -350,6 +376,9 @@ namespace Unity.Entities.Content
                 if (Catalog.IsCreated)
                     Catalog.Dispose();
 
+                if (InstalledCatalog.IsCreated)
+                    InstalledCatalog.Dispose();
+
                 if (SharedStaticObjectValueCache.Data.IsCreated)
                 {
 #if ENABLE_CONTENT_DIAGNOSTICS
@@ -428,6 +457,48 @@ namespace Unity.Entities.Content
 #if ENABLE_CONTENT_DIAGNOSTICS
             if (LogFunc != null)
                 Catalog.Print(LogFunc);
+#endif
+            return true;
+        }
+
+        [ExcludeFromBurstCompatTesting("References managed objects")]
+        public static bool LoadInstalledCatalogData(string catalogPath, Func<string, string> fileNameFunc, Func<string, string> archivePathFunc, Dictionary<Hash128, string> additionalInstalledFiles)
+        {
+#if ENABLE_CONTENT_DIAGNOSTICS
+            LogFunc?.Invoke($"LoadInstalledCatalogData({catalogPath})");
+#endif
+            if (!InstalledCatalog.LoadCatalogData(catalogPath, archivePathFunc, fileNameFunc))
+            {
+#if ENABLE_CONTENT_DIAGNOSTICS
+                LogFunc?.Invoke($"Failed to load catalog from path {catalogPath}.");
+#endif
+                return false;
+            }
+
+            InstalledArchivePaths = new Dictionary<Hash128, string>();
+
+            foreach(var kv in InstalledCatalog.ArchiveLocations)
+            {
+                if(kv.Key.IsValid && InstalledCatalog.TryGetArchiveLocation(kv.Key, out string archivePath))
+                {
+#if ENABLE_CONTENT_DIAGNOSTICS
+                    LogFunc?.Invoke($"Installed archive {kv.Key} file found at {archivePath}");
+#endif
+                    InstalledArchivePaths[kv.Value.ContentHash] = Path.Combine(Application.streamingAssetsPath, archivePath);
+                }
+            }
+
+            // entity scene loading has its own logic that falls back to
+            // installed files, so we don't need these in InstalledCatalog
+            if(additionalInstalledFiles != null)
+            {
+                foreach(var (key, value) in additionalInstalledFiles)
+                    InstalledArchivePaths[key] = Path.Combine(Application.streamingAssetsPath, value);
+            }
+
+#if ENABLE_CONTENT_DIAGNOSTICS
+            if (LogFunc != null)
+                InstalledCatalog.Print(LogFunc);
 #endif
             return true;
         }
@@ -832,8 +903,24 @@ namespace Unity.Entities.Content
 #endif
             if (!ActiveArchives.TryGetValue(archiveId, out var activeArchive))
             {
-                if (!Catalog.TryGetArchiveLocation(archiveId, out string archivePath))
+                string archivePath;
+                if (Catalog.TryGetArchiveLocation(archiveId, out archivePath) && System.IO.File.Exists(archivePath))
+                {
+#if ENABLE_CONTENT_DIAGNOSTICS
+                    LogFunc?.Invoke($"Archive {archiveId} supplied at {archivePath} by downloaded catalog");
+#endif
+                }
+                else if (InstalledCatalog.TryGetArchiveLocation(archiveId, out archivePath))
+                {
+#if ENABLE_CONTENT_DIAGNOSTICS
+                    LogFunc?.Invoke($"Archive {archiveId} supplied at {archivePath} by installed catalog");
+#endif
+                }
+                else
+                {
                     throw new Exception($"Invalid archive location: {archiveId}");
+                }
+
                 activeArchive = new ActiveArchive() { ArchiveId = archiveId, ReferenceCount = 1 };
                 if (archiveId.IsValid)
                 {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
 using UnityEngine;
@@ -107,8 +108,10 @@ namespace Unity.Entities.Content
         /// <param name="localCachePath">Optional path for the local cache. Set null or leave empty to create a folder named 'ContentCache' in the device's Application.persistentDataPath.</param>
         /// <param name="initialContentSet">Initial content set to download.  'all' is generally used to denote the entire content set.</param>
         /// <param name="allowOverrideArgs">Set to true, to use application command line arguments to override the passed in values.</param>
-        public static void LoadContentCatalog(string remoteUrlRoot, string localCachePath, string initialContentSet, bool allowOverrideArgs = false)
+        public static void LoadContentCatalog(string remoteUrlRoot, string localCachePath, string initialContentSet, bool allowOverrideArgs = false, Dictionary<Hash128, string> additionalInstalledFiles = null)
         {
+            LoadInstalledCatalog((p,d) => $"{Application.streamingAssetsPath}/{p}", additionalInstalledFiles);
+
 #if ENABLE_CONTENT_DELIVERY
             if (allowOverrideArgs)
             {
@@ -129,7 +132,7 @@ namespace Unity.Entities.Content
                     {
                         if (s >= ContentDeliveryGlobalState.ContentUpdateState.ContentReady)
                             LoadCatalogFunc(ContentDeliveryGlobalState.PathRemapFuncWithFileCheck);
-                    });
+                    }, RuntimeContentManager.InstalledArchivePathFunc);
                 }
                 else
                 {
@@ -147,7 +150,7 @@ namespace Unity.Entities.Content
                 {
                     if (s >= ContentDeliveryGlobalState.ContentUpdateState.ContentReady)
                         LoadCatalogFunc(ContentDeliveryGlobalState.PathRemapFuncWithFileCheck);
-                });
+                }, RuntimeContentManager.InstalledArchivePathFunc);
             }
 
 #else
@@ -165,6 +168,24 @@ namespace Unity.Entities.Content
                 RuntimeContentManager.LoadLocalCatalogData(catalogPath,
                     RuntimeContentManager.DefaultContentFileNameFunc,
                     p => remapFunc(RuntimeContentManager.DefaultArchivePathFunc(p), false));
+            }
+            else
+            {
+                ContentDeliveryGlobalState.LogFunc?.Invoke($"{catalogPath} does not exist.");
+            }
+        }
+
+        static void LoadInstalledCatalog(Func<string, bool, string> remapFunc, Dictionary<Hash128, string> additionalInstalledFiles)
+        {
+            var catalogPath = remapFunc(RuntimeContentManager.RelativeCatalogPath, true);
+            ContentDeliveryGlobalState.LogFunc?.Invoke($"RuntimeContentSystem.LoadInstalledCatalog({catalogPath})");
+
+            if (ContentDeliveryGlobalState.FileExists(catalogPath))
+            {
+                RuntimeContentManager.LoadInstalledCatalogData(catalogPath,
+                    RuntimeContentManager.DefaultContentFileNameFunc,
+                    p => remapFunc(RuntimeContentManager.DefaultArchivePathFunc(p), false),
+                    additionalInstalledFiles);
             }
             else
             {

@@ -14,6 +14,12 @@ namespace Unity.Entities.Content
         /// <returns>The set of archive ids.</returns>
         IEnumerable<ContentArchiveId> GetArchiveIds();
         /// <summary>
+        /// Get the content hash for the archive.
+        /// </summary>
+        /// <param name="archiveId"></param>
+        /// <returns></returns>
+        Hash128 GetContentHash(ContentArchiveId archiveId);
+        /// <summary>
         /// Get the set of content files contained within a specific archive.
         /// </summary>
         /// <param name="archiveId">The id of the archive.</param>
