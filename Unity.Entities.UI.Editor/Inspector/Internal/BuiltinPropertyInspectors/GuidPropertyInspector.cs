@@ -1,12 +1,12 @@
 using JetBrains.Annotations;
 using UnityEditor.UIElements;
-using UnityEditor;
+
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.UI
 {
     [UsedImplicitly]
-    class GuidPropertyInspector : PropertyInspector<GUID>
+    class GuidPropertyInspector : PropertyInspector<UnityEngine.GUID>
     {
         TextField m_Field;
 

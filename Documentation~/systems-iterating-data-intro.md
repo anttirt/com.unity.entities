@@ -12,7 +12,6 @@ This section explains how to iterate over entity data in the following ways:
 |[Iterate over component data with IJobEntity](iterating-data-ijobentity.md)| Write once and create multiple schedules with `IJobEntity`.|
 | [Iterate over chunks of data with IJobChunk](iterating-data-ijobchunk.md)| Iterate over archetype chunks that contain matching entities with `IJobChunk`. |
 |[Iterate manually over data](iterating-manually.md)| Manually iterate over entities or archetype chunks.|
-|[Iterate over component data with Entities.ForEach](iterating-data-entities-foreach.md)|Use `Entities.ForEach` in SystemBase to iterate over entities.|
 |[Query data with an entity query](systems-entityquery.md)|Find component data with entity queries.|
 |[Look up arbitrary data](systems-looking-up-data.md)|Access arbitrary data without using an entity query.|
 

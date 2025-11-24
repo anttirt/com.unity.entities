@@ -258,7 +258,7 @@ namespace Unity.Scenes
                     globalObjectId = new GlobalObjectId();
                 }
 
-                if (globalObjectId.assetGUID == new GUID())
+                if (globalObjectId.assetGUID == new UnityEngine.GUID())
                 {
                     //@TODO: How do we handle this
                     Debug.LogWarning($"{objectTable[i]} has no valid GUID. LiveConversion currently does not support built-in assets.");

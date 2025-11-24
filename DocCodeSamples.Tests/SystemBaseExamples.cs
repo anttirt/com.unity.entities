@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using Unity.Entities.UniversalDelegates;
 
 namespace Doc.CodeSamples.SyBase.Tests
@@ -52,63 +51,42 @@ namespace Doc.CodeSamples.SyBase.Tests
 
     #endregion
 
-    [RequireMatchingQueriesForUpdate]
-    public partial class EntitiesBasicExample : SystemBase
-    {
-        protected override void OnUpdate()
-        {
-            float dT = SystemAPI.Time.DeltaTime; // Captured variable
-
-            #region entities-foreach-basic
-
-            Entities
-                .WithName("Update_Position") // Shown in error messages and profiler
-                .WithAll<LocalToWorld>() // Require the LocalToWorld component
-                .ForEach(
-                    // Write to Displacement (ref), read Velocity (in)
-                    (ref Position position, in Velocity velocity) =>
-                    {
-                        //Execute for each selected entity
-                        position = new Position()
-                        {
-                            // dT is a captured variable
-                            Value = position.Value + velocity.Value * dT
-                        };
-                    }
-                )
-                .ScheduleParallel(); // Schedule as a parallel job
-
-            #endregion
-        }
-    }
-
     #region basic-job
 
     public partial class JobSystem : SystemBase
     {
+        [BurstCompile]
+        struct FibonacciJob : IJob
+        {
+            public NativeArray<int> Sequence;
+
+            public void Execute()
+            {
+                Sequence[0] = Sequence[Sequence.Length - 2];
+                Sequence[1] = Sequence[Sequence.Length - 1];
+                for (int i = 2; i < Sequence.Length; i++)
+                {
+                    Sequence[i] = Sequence[i - 1] + Sequence[i - 2];
+                }
+            }
+        }
+
         NativeArray<int> EndlessSequence;
 
         protected override void OnUpdate()
         {
-            NativeArray<int> sequence = EndlessSequence; // Can only capture local variables
-            if (!sequence.IsCreated)
+            if (!EndlessSequence.IsCreated)
             {
                 EndlessSequence = new NativeArray<int>(1000, Allocator.Persistent);
-                sequence[sequence.Length - 2] = 1;
-                sequence[sequence.Length - 1] = 1;
+                EndlessSequence[EndlessSequence.Length - 2] = 1;
+                EndlessSequence[EndlessSequence.Length - 1] = 1;
             }
-            Job
-                .WithName("Fibonacci_Job")
-                .WithCode(() =>
+
+            var job = new FibonacciJob
                 {
-                    sequence[0] = sequence[sequence.Length - 2];
-                    sequence[1] = sequence[sequence.Length - 1];
-                    for (int i = 3; i < sequence.Length; i++)
-                    {
-                        sequence[i] = sequence[i - 1] + sequence[i - 2];
-                    }
-                })
-                .Schedule();
+                Sequence = EndlessSequence
+            };
+            job.Schedule();
         }
 
         protected override void OnDestroy()
@@ -128,26 +106,6 @@ namespace Doc.CodeSamples.SyBase.Tests
     {
     }
 
-    [RequireMatchingQueriesForUpdate]
-    public partial class LambdaParamsEx : SystemBase
-    {
-        protected override void OnUpdate()
-        {
-            Entities
-            #region lambda-params
-
-                .ForEach((Entity entity,
-                int entityInQueryIndex,
-                ref WritableComponent aReadwriteComponent,
-                in ReadonlyComponent aReadonlyComponent) =>
-                {
-                    /*..*/
-                })
-                #endregion
-                .ScheduleParallel();
-        }
-    }
-
     public struct AComponent : IComponentData
     {
     }
@@ -161,35 +119,48 @@ namespace Doc.CodeSamples.SyBase.Tests
     {
         #region simple-dependency
 
+        [BurstCompile]
+        partial struct JobOne : IJobEntity
+        {       
+            public void Execute(in AComponent c)
+            {
+                /*...*/
+            }
+        }
+
+        [BurstCompile]
+        partial struct JobTwo : IJobEntity
+        {
+            public void Execute(in AnotherComponent c)
+                {
+                    /*...*/
+            }
+        }
+
+        [BurstCompile]
+        struct JobThree : IJob
+        {
+            [DeallocateOnJobCompletion] public NativeArray<int> Result; // Automatically disposed when job completes
+
+            public void Execute()
+                {
+                    /*...*/
+                Result[0] = 1;
+            }
+        }
+
         protected override void OnUpdate()
         {
-            Entities
-                .WithName("ForEach_Job_One")
-                .ForEach((ref AComponent c) =>
-                {
-                    /*...*/
-                })
-                .ScheduleParallel();
+            // Implicit dependency chaining: each ScheduleParallel updates SystemBase.Dependency
+            new JobOne().ScheduleParallel();
+            new JobTwo().ScheduleParallel();
 
-            Entities
-                .WithName("ForEach_Job_Two")
-                .ForEach((ref AnotherComponent c) =>
+            // Final job depends on previous via implicit Dependency and disposes its NativeArray automatically
+            var jobThree = new JobThree
                 {
-                    /*...*/
-                })
-                .ScheduleParallel();
-
-            NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
-
-            Job
-                .WithName("Job_Three")
-                .WithDisposeOnCompletion(result)
-                .WithCode(() =>
-                {
-                    /*...*/
-                    result[0] = 1;
-                })
-                .Schedule();
+                Result = new NativeArray<int>(1, Allocator.TempJob)
+            };
+            jobThree.Schedule();
         }
 
         #endregion
@@ -200,39 +171,53 @@ namespace Doc.CodeSamples.SyBase.Tests
     {
         #region manual-dependency
 
+        [BurstCompile]
+        partial struct JobOne : IJobEntity
+        {
+            public void Execute(in AComponent c)
+                {
+                    /*...*/
+            }
+        }
+
+        [BurstCompile]
+        partial struct JobTwo : IJobEntity
+        {
+            public void Execute(in AnotherComponent c)
+                {
+                    /*...*/
+            }
+        }
+
+        [BurstCompile]
+        struct JobThree : IJob
+        {
+            [DeallocateOnJobCompletion] public NativeArray<int> Result; // Automatically disposed when job completes
+
+            public void Execute()
+            {
+                /*...*/
+                Result[0] = 1;
+            }
+        }
+
         protected override void OnUpdate()
         {
-            JobHandle One = Entities
-                .WithName("ForEach_Job_One")
-                .ForEach((ref AComponent c) =>
-                {
-                    /*...*/
-                })
-                .ScheduleParallel(this.Dependency);
-
-            JobHandle Two = Entities
-                .WithName("ForEach_Job_Two")
-                .ForEach((ref AnotherComponent c) =>
-                {
-                    /*...*/
-                })
-                .ScheduleParallel(this.Dependency);
+            // Explicitly opt-out of implicit chaining by scheduling with incoming system Dependency
+            JobHandle One = new JobOne().ScheduleParallel(this.Dependency);
+            JobHandle Two = new JobTwo().ScheduleParallel(this.Dependency);
 
             JobHandle intermediateDependencies =
                 JobHandle.CombineDependencies(One, Two);
 
-            NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
-
-            JobHandle finalDependency = Job
-                .WithName("Job_Three")
-                .WithDisposeOnCompletion(result)
-                .WithCode(() =>
+            var jobThree = new JobThree
                 {
-                    /*...*/
-                    result[0] = 1;
-                })
-                .Schedule(intermediateDependencies);
+                Result = new NativeArray<int>(1, Allocator.TempJob)
+            };
 
+            JobHandle finalDependency = jobThree.Schedule(intermediateDependencies);
+
+            // Propagate combined dependency to subsequent systems
             this.Dependency = finalDependency;
         }
 

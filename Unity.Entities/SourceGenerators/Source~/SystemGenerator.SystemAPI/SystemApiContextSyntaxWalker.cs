@@ -49,12 +49,7 @@ public partial class SystemApiContextSyntaxWalker : CSharpSyntaxWalker, IModuleS
         _isWalkingNestedInvocation = false;
 
         // Begin depth-first traversal of the candidate node
-        VisitLeadingTrivia(candidateSyntax.Node.GetFirstToken());
         Visit(candidateSyntax.Node);
-        if (_hasWrittenSyntax)
-        {
-            VisitTrailingTrivia(candidateSyntax.Node.GetFirstToken());
-        }
 
         for (int i = 0; i < _numClosingBracketsForNestedSystemApiInvocations; i++)
             _writer.Write(")");

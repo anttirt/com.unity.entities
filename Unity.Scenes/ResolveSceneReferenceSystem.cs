@@ -8,7 +8,7 @@ using Unity.Entities.Serialization;
 #if UNITY_EDITOR
 using Unity.Assertions;
 using Unity.Entities.Conversion;
-using UnityEditor;
+
 #endif
 using Hash128 = Unity.Entities.Hash128;
 
@@ -90,7 +90,7 @@ namespace Unity.Scenes
     {
         struct AssetDependencyTrackerState : ICleanupComponentData
         {
-            public UnityEditor.GUID SceneAndBuildConfigGUID;
+            public UnityEngine.GUID SceneAndBuildConfigGUID;
         }
 
         EntityQuery m_AddScenes;

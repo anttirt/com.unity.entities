@@ -16,7 +16,7 @@ namespace Unity.Scenes
     {
         public struct Completed
         {
-            public GUID Asset;
+            public UnityEngine.GUID Asset;
             public T UserKey;
 
             /// <summary>
@@ -51,10 +51,10 @@ namespace Unity.Scenes
             }
         }
 
-        private NativeParallelMultiHashMap<GUID, ReportedValue> _AllAssets;
-        private NativeParallelHashMap<GUID, RefCount>               _AllAssetsRefCount;
+        private NativeParallelMultiHashMap<UnityEngine.GUID, ReportedValue> _AllAssets;
+        private NativeParallelHashMap<UnityEngine.GUID, RefCount>               _AllAssetsRefCount;
 
-        private NativeList<GUID> _InProgress;
+        private NativeList<UnityEngine.GUID> _InProgress;
         private NativeList<Hash128> _ArtifactCache;
 
         Type   _AssetImportType;
@@ -79,9 +79,9 @@ namespace Unity.Scenes
             _ProgressID = -1;
             _ProgressSummary = progressSummary;
 
-             _AllAssets = new NativeParallelMultiHashMap<GUID, ReportedValue>(1024, Allocator.Persistent);
-             _AllAssetsRefCount = new NativeParallelHashMap<GUID, RefCount>(1024, Allocator.Persistent);
-             _InProgress = new NativeList<GUID>(1024, Allocator.Persistent);
+             _AllAssets = new NativeParallelMultiHashMap<UnityEngine.GUID, ReportedValue>(1024, Allocator.Persistent);
+             _AllAssetsRefCount = new NativeParallelHashMap<UnityEngine.GUID, RefCount>(1024, Allocator.Persistent);
+             _InProgress = new NativeList<UnityEngine.GUID>(1024, Allocator.Persistent);
             _ArtifactCache = new NativeList<Hash128>(1024, Allocator.Persistent);
             _IsAssetWorker = AssetDatabaseCompatibility.IsAssetImportWorkerProcess();
         }
@@ -97,7 +97,7 @@ namespace Unity.Scenes
             _ArtifactCache.Dispose();
         }
 
-        public void Add(GUID asset, T userKey, bool async)
+        public void Add(UnityEngine.GUID asset, T userKey, bool async)
         {
             if (GetIterator(asset, userKey, out var temp, out var temp2))
                 throw new ArgumentException("Add must not be called with an asset & userKey that has already been Added.");
@@ -129,7 +129,7 @@ namespace Unity.Scenes
             _GlobalArtifactDependencyVersion = 0;
         }
 
-        public void Remove(GUID asset, T userKey)
+        public void Remove(UnityEngine.GUID asset, T userKey)
         {
             LogDependencyTracker($"Remove: {asset}");
 
@@ -200,7 +200,7 @@ namespace Unity.Scenes
                 LogDependencyTracker($"Update refresh: {globalArtifactDependencyVersion}");
 
                 using (var all = _AllAssetsRefCount.GetKeyArray(Allocator.TempJob))
-                using (var allSync = new NativeList<GUID>(Allocator.TempJob))
+                using (var allSync = new NativeList<UnityEngine.GUID>(Allocator.TempJob))
                 {
                     // Get all Synchronous import assets
                     foreach (var asset in _AllAssetsRefCount)
@@ -351,7 +351,7 @@ namespace Unity.Scenes
             get { return _InProgress.Length; }
         }
 
-        bool GetIterator(GUID asset, T userKey, out NativeParallelMultiHashMapIterator<GUID> iterator, out ReportedValue value)
+        bool GetIterator(UnityEngine.GUID asset, T userKey, out NativeParallelMultiHashMapIterator<UnityEngine.GUID> iterator, out ReportedValue value)
         {
             if (_AllAssets.TryGetFirstValue(asset, out value, out iterator))
             {
@@ -366,7 +366,7 @@ namespace Unity.Scenes
             return false;
         }
 
-        void AddToCompletionList(GUID guid, Hash128 artifact, NativeList<Completed> completed)
+        void AddToCompletionList(UnityEngine.GUID guid, Hash128 artifact, NativeList<Completed> completed)
         {
             if (!_AllAssets.TryGetFirstValue(guid, out var value, out var it))
                 throw new InvalidOperationException();

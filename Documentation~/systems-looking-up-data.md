@@ -4,22 +4,26 @@ uid: accessing-looking-up-data
 
 # Look up arbitrary data
 
-The most efficient way to access and change data is to use a [system](concepts-systems.md) with an [entity query](systems-entityquery.md) and a job. This utilizes the CPU resources in the most efficient way, with minimal memory cache misses. It's best practice to use the most efficient, fastest path to perform the bulk of data transformations. However, there are times when you might need to access an arbitrary component of an arbitrary entity at an arbitrary point in your program.
+The most efficient way to access and change data is to use a [system](concepts-systems.md) together with an [entity query](systems-entityquery.md) that runs in a job. This maximizes parallelism and minimizes cache misses. Use that fast path for the bulk of transformations. However, there are times when you might need to access a component on an arbitrary entity at an arbitrary point in your system update.
 
-You can look up data in an entity's [`IComponentData`](xref:Unity.Entities.IComponentData) and its [dynamic buffers](components-buffer-introducing.md). 
+You can look up data in an entity's [`IComponentData`](xref:Unity.Entities.IComponentData) and its [dynamic buffers](components-buffer-introducing.md).
 
 ## Look up entity data in a system
 
-To look up data stored in a component of an arbitrary entity from inside a system's `Job.WithCode` method, use [`GetComponent<T>(Entity)`](xref:Unity.Entities.SystemBase.GetComponent``1(Unity.Entities.Entity)) 
+Inside a `SystemBase` you can iterate entities on the main thread with [`SystemAPI.Query`](systems-systemapi-query.md) and then perform targeted lookups on arbitrary entities using:
+
+* `SystemAPI.HasComponent<T>(Entity)`
+* `SystemAPI.GetComponent<T>(Entity)`
+* `GetComponentLookup<T>(bool isReadOnly)`
+* `GetBufferLookup<T>(bool isReadOnly)`
 
 For example, the following code uses `GetComponent<T>(Entity)` to get a `Target` component, which has an entity field that identifies the entity to target. It then rotates the tracking entities towards their target:
 
 [!code-cs[lookup-foreach](../DocCodeSamples.Tests/LookupDataExamples.cs#lookup-foreach)]
 
-If you want to access data stored in a dynamic buffer, you also need to declare a local variable of type [`BufferLookup`](xref:Unity.Entities.BufferLookup`1) in the `SystemBase` [`OnUpdate`](xref:Unity.Entities.SystemBase.OnUpdate*) method. You can then capture the local variable in a lambda expression. For example: 
+If you want to access data stored in a dynamic buffer on an arbitrary entity (not necessarily part of the current iteration), create a local `BufferLookup<T>` (via `GetBufferLookup<T>(true)` for read-only lookup). Capture it in the `foreach` loop and use it to test for the buffer and fetch it:
 
 [!code-cs[lookup-foreach-buffer](../DocCodeSamples.Tests/LookupDataExamples.cs#lookup-foreach-buffer)]
-
 
 ## Look up entity data in a job
 

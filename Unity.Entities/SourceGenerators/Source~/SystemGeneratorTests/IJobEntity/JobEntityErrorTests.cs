@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
 using Unity.Entities.SourceGen.JobEntityGenerator;
+using Unity.Entities.SourceGen.SystemGenerator;
 using Unity.Entities.SourceGen.SystemGenerator.Common;
 using VerifyCS =
     Unity.Entities.SourceGenerators.Test.CSharpIncrementalGeneratorVerifier<
@@ -442,5 +443,37 @@ public class JobEntityErrorTests
 
         var expected = VerifyCS.CompilerError(nameof(JobEntityGeneratorErrors.SGJE0023)).WithLocation(0);
         await VerifyCS.VerifySourceGeneratorAsync(source, expected);
+    }
+
+    [TestMethod]
+    public async Task SGJE0024_FailedScheduleInvocationGeneration()
+    {
+        const string source = @"
+            using System;
+            using Unity.Entities;
+            using Unity.Entities.Internal;
+            using Unity.Jobs;
+            partial struct TestJob : IJobEntity
+            {
+                public {|#1:PrivateType|} type;
+                void Execute()
+                {
+                }
+            }
+            public partial struct TestSystem : ISystem
+            {
+                public void OnUpdate(ref SystemState state)
+                {
+                    var job = new TestJob{ };
+                    {|#0:job.Schedule|}();
+                }
+            }";
+
+        var expected = Test.CSharpSourceGeneratorVerifier<SystemGenerator>
+            .CompilerError(nameof(JobEntityGeneratorErrors.SGJE0024)).WithLocation(0);
+        var expected1 = VerifyCS.CompilerError("CS0246").WithLocation(1);
+        var expected2 = VerifyCS.CompilerError("CS8377").WithSpan(18, 25, 18, 33);
+        var allExpected = new[] { expected, expected1, expected2};
+        await Test.CSharpSourceGeneratorVerifier<SystemGenerator>.VerifySourceGeneratorAsync(source, allExpected);
     }
 }

@@ -1,5 +1,4 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-﻿using Unity.Burst;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -145,55 +144,6 @@ namespace DocCodeSamples.Tests
             m_BoidQuery.SetSharedComponentFilter(new BoidSetting{num=1});
             m_ObstacleQuery = GetEntityQuery(typeof(LocalToWorld), typeof(BoidObstacle));
             m_TargetQuery = GetEntityQuery(typeof(LocalToWorld), typeof(BoidTarget));;
-        }
-    }
-    #endregion
-
-    #region BoidsForEach
-    [RequireMatchingQueriesForUpdate]
-    public partial class BoidForEachSystem : SystemBase
-    {
-        EntityQuery m_BoidQuery;
-        EntityQuery m_ObstacleQuery;
-        EntityQuery m_TargetQuery;
-        protected override void OnUpdate()
-        {
-            // Calculate amount of entities in respective queries.
-            var boidCount = m_BoidQuery.CalculateEntityCount();
-            var obstacleCount = m_ObstacleQuery.CalculateEntityCount();
-            var targetCount = m_TargetQuery.CalculateEntityCount();
-
-            // Allocate arrays to store data equal to the amount of entities matching respective queries.
-            var cellSeparation = CollectionHelper.CreateNativeArray<float3, RewindableAllocator>(boidCount, ref World.UpdateAllocator);
-            var copyTargetPositions = CollectionHelper.CreateNativeArray<float3, RewindableAllocator>(targetCount, ref World.UpdateAllocator);
-            var copyObstaclePositions = CollectionHelper.CreateNativeArray<float3, RewindableAllocator>(obstacleCount, ref World.UpdateAllocator);
-
-            // Schedule job for respective arrays to be stored with respective queries.
-            Entities
-                .WithSharedComponentFilter(new BoidSetting{num=1})
-                .ForEach((int entityInQueryIndex, in LocalToWorld localToWorld) =>
-                {
-                    cellSeparation[entityInQueryIndex] = localToWorld.Position;
-                })
-                .ScheduleParallel();
-
-            Entities
-                .WithAll<BoidTarget>()
-                .WithStoreEntityQueryInField(ref m_TargetQuery)
-                .ForEach((int entityInQueryIndex, in LocalToWorld localToWorld) =>
-                {
-                    copyTargetPositions[entityInQueryIndex] = localToWorld.Position;
-                })
-                .ScheduleParallel();
-
-            Entities
-                .WithAll<BoidObstacle>()
-                .WithStoreEntityQueryInField(ref m_ObstacleQuery)
-                .ForEach((int entityInQueryIndex, in LocalToWorld localToWorld) =>
-                {
-                    copyObstaclePositions[entityInQueryIndex] = localToWorld.Position;
-                })
-                .ScheduleParallel();
         }
     }
     #endregion

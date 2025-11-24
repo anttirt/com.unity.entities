@@ -8,8 +8,7 @@
         <AssemblyName>Unity.Entities</AssemblyName>
         <RootNamespace>Unity.Entities</RootNamespace>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <Deterministic>true</Deterministic>
-        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <Deterministic>True</Deterministic>
         <PlatformTarget>AnyCPU</PlatformTarget>
     </PropertyGroup>
 

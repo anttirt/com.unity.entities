@@ -58,7 +58,10 @@ public partial class JobEntityModule
 
             // check if type is an error symbol
             if (systemDescription.SemanticModel.GetSymbolInfo(candidate.MemberAccessExpressionSyntax).CandidateSymbols.Length > 0)
+            {
+                JobEntityGeneratorErrors.SGJE0024(systemDescription, candidate.MemberAccessExpressionSyntax.GetLocation());
                 return false;
+            }
 
             return true;
         }

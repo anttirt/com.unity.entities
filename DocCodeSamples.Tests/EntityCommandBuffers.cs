@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using Doc.CodeSamples.Tests;
 using Unity.Burst;
 using Unity.Collections;
@@ -26,84 +25,6 @@ namespace Doc.CodeSamples.Tests
         }
     }
 
-    #region ecb_parallel_for
-
-    public struct HealthLevel : IComponentData
-    {
-        public int Value;
-    }
-
-    partial class EcbParallelFor : SystemBase
-    {
-        protected override void OnUpdate()
-        {
-            Entities
-                .WithDeferredPlaybackSystem<EndSimulationEntityCommandBufferSystem>()
-                .ForEach(
-                    (Entity entity, EntityCommandBuffer ecb, in HealthLevel health) =>
-                    {
-                        if (health.Value == 0)
-                        {
-                            ecb.DestroyEntity(entity);
-                        }
-                    }
-                ).ScheduleParallel();
-        }
-    }
-
-    #endregion
-
-    #region ecb_concurrent
-
-    struct Lifetime : IComponentData
-    {
-        public byte Value;
-    }
-
-    [RequireMatchingQueriesForUpdate]
-    partial class LifetimeSystem : SystemBase
-    {
-        EndSimulationEntityCommandBufferSystem m_EndSimulationEcbSystem;
-
-        protected override void OnCreate()
-        {
-            base.OnCreate();
-
-            // Find the ECB system once and store it for later usage
-            m_EndSimulationEcbSystem = World
-                .GetOrCreateSystemManaged<EndSimulationEntityCommandBufferSystem>();
-        }
-
-        protected override void OnUpdate()
-        {
-            // Acquire an ECB and convert it to a concurrent one to be able
-            // to use it from a parallel job.
-            var ecb = m_EndSimulationEcbSystem.CreateCommandBuffer().AsParallelWriter();
-            Entities
-                .ForEach((Entity entity, int entityInQueryIndex, ref Lifetime lifetime) =>
-                {
-                    // Track the lifetime of an entity and destroy it once
-                    // the lifetime reaches zero
-                    if (lifetime.Value == 0)
-                    {
-                        // pass the entityInQueryIndex to the operation so
-                        // the ECB can play back the commands in the right
-                        // order
-                        ecb.DestroyEntity(entityInQueryIndex, entity);
-                    }
-                    else
-                    {
-                        lifetime.Value -= 1;
-                    }
-                }).ScheduleParallel();
-
-            // Make sure that the ECB system knows about our job
-            m_EndSimulationEcbSystem.AddJobHandleForProducer(this.Dependency);
-        }
-    }
-
-    #endregion
-
     public struct FooComp : IComponentData
     {
         public int Value;
@@ -119,30 +40,37 @@ namespace Doc.CodeSamples.Tests
     {
         #region ecb_single_threaded
 
-        protected override void OnUpdate()
+        // Single-threaded scheduling using IJobEntity (replaces deprecated Entities.ForEach).
+        [BurstCompile]
+        partial struct AddBarJob : IJobEntity
         {
-            // You don't specify a size because the buffer will grow as needed.
-            EntityCommandBuffer ecb = new EntityCommandBuffer(Allocator.TempJob);
+            public EntityCommandBuffer Ecb;
 
-            // The ECB is captured by the ForEach job.
-            // Until completed, the job owns the ECB's job safety handle.
-            Entities
-                .ForEach((Entity e, in FooComp foo) =>
+            void Execute(Entity e, in FooComp foo)
                 {
                     if (foo.Value > 0)
                     {
                         // Record a command that will later add BarComp to the entity.
-                        ecb.AddComponent<BarComp>(e);
+                    Ecb.AddComponent<BarComp>(e);
                     }
-                }).Schedule();
+            }
+        }
 
+        protected override void OnUpdate()
+        {
+            // Buffer grows as needed.
+            var ecb = new EntityCommandBuffer(Allocator.TempJob);
+
+            // Schedule a single job (not parallel) that records commands.
+            new AddBarJob { Ecb = ecb }.Schedule();
+
+            // Complete the job so we can play back on the main thread.
             Dependency.Complete();
 
-            // Now that the job is completed, you can enact the changes.
-            // Note that Playback can only be called on the main thread.
+            // Apply the recorded structural changes.
             ecb.Playback(EntityManager);
 
-            // You are responsible for disposing of any ECB you create.
+            // Dispose the ECB.
             ecb.Dispose();
         }
 

@@ -7,7 +7,7 @@ Entities 1.4 has some changes that might introduce warnings to your project. To 
 
 ## Change Entities.ForEach code
 
-To consolidate the Entities API and improve iteration time, [`Entities.ForEach`](iterating-entities-foreach-ecb.md) is deprecated in Entities 1.4, and you should use either [`IJobEntity`](#ijobentity) or [`SystemAPI.Query`](#systemapiquery).
+To consolidate the Entities API and improve iteration time, `Entities.ForEach` is deprecated in Entities 1.4, and you should use either [`IJobEntity`](#ijobentity) or [`SystemAPI.Query`](#systemapiquery).
 
 ### IJobEntity
 
@@ -91,7 +91,7 @@ For more information about `SystemAPI.Query`, refer to [Iterate over component d
 
 ## Change Aspects code
 
-[Aspects](aspects-intro.md) is deprecated from Entities 1.4, and there's no direct replacement for them. Instead you must replace the abstraction with explicit code that queries for the correct set of components and performs the expected operation on them. The following code provides a simple example of converting an aspect and its usage into an explicit `EntityQuery` and a helper method designed to perform the operation.
+Aspects is deprecated from Entities 1.4, and there's no direct replacement for them. Instead you must replace the abstraction with explicit code that queries for the correct set of components and performs the expected operation on them. The following code provides a simple example of converting an aspect and its usage into an explicit `EntityQuery` and a helper method designed to perform the operation.
 
 Code example using Aspects:
 

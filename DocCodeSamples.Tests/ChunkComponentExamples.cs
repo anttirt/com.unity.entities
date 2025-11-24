@@ -161,20 +161,6 @@ namespace Doc.CodeSamples.Tests
 
         private void snippets()
         {
-            #region component-list-chunk-component
-
-            ComponentType[] compTypes = {
-                ComponentType.ChunkComponent<ChunkComponentA>(),
-                ComponentType.ReadOnly<GeneralPurposeComponentA>()
-            };
-            Entity entity = EntityManager.CreateEntity(compTypes);
-            #endregion
-
-            #region em-snippet
-
-            EntityManager.AddChunkComponentData<ChunkComponentA>(entity);
-            #endregion
-
             #region desc-chunk-component
 
             EntityQuery ChunksWithoutChunkComponentA = new EntityQueryBuilder(Allocator.Temp)
@@ -193,15 +179,6 @@ namespace Doc.CodeSamples.Tests
                     .Build(this);
             #endregion
 
-            #region archetype-chunk-component
-
-            EntityArchetype ArchetypeWithChunkComponent
-                = EntityManager.CreateArchetype(
-                ComponentType.ChunkComponent(typeof(ChunkComponentA)),
-                ComponentType.ReadWrite<GeneralPurposeComponentA>());
-            Entity newEntity
-                = EntityManager.CreateEntity(ArchetypeWithChunkComponent);
-            #endregion
             {
                 #region read-chunk-component
 
@@ -219,15 +196,6 @@ namespace Doc.CodeSamples.Tests
                 #endregion
             }
 
-            #region read-entity-chunk-component
-
-            if (EntityManager.HasChunkComponent<ChunkComponentA>(entity))
-            {
-                ChunkComponentA chunkComponentValue =
-                 EntityManager.GetChunkComponentData<ChunkComponentA>(entity);
-            }
-            #endregion
-
             {
                 ArchetypeChunk chunk = default;
                 #region set-chunk-component
@@ -236,14 +204,6 @@ namespace Doc.CodeSamples.Tests
                     chunk, new ChunkComponentA() { Value = 7 });
                 #endregion
             }
-
-            #region set-entity-chunk-component
-
-            var entityChunk = EntityManager.GetChunk(entity);
-            EntityManager.SetChunkComponentData<ChunkComponentA>(
-                entityChunk,
-                new ChunkComponentA() { Value = 8 });
-            #endregion
         }
     }
 }

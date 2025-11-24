@@ -79,7 +79,7 @@ namespace Unity.Scenes.Editor
         }
 
 
-        internal static Hash128[] GetSubScenes(GUID guid)
+        internal static Hash128[] GetSubScenes(UnityEngine.GUID guid)
         {
             if(!GetGameObjectSceneMetaData(guid, false, out var sceneMetaDataRef))
             {

@@ -6,8 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <RootNamespace>Unity.Entities.Analyzer.Test</RootNamespace>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>True</Deterministic>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
 
