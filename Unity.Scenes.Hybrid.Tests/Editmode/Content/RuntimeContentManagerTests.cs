@@ -198,35 +198,41 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             p.Item2.Set();
         }
 
-    #if false
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromThreads()
+        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromThreads([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            Assert.IsTrue(InitializeCatalogForTest());
+            var allids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(allids.Length, 0);
+
+            var ids = new List<UntypedWeakReferenceId>();
+            for (int i = 0; i < allids.Length; i++)
+                if (allids[i].GenerationType == WeakReferenceGenerationType.UnityObject)
+                    ids.Add(allids[i]);
+            allids.Dispose();
+
             while (RuntimeContentManager.UnfinishedObjectLoads() > 0)
             {
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
 
-            var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
-            var evts = new ManualResetEvent[ids.Length];
-            for (int i = 0; i < ids.Length; i++)
+            var evts = new ManualResetEvent[ids.Count];
+            for (int i = 0; i < ids.Count; i++)
             {
                 new Thread(LoadThreadFunc).Start((ids[i], evts[i] = new ManualResetEvent(false)));
             }
             WaitHandle.WaitAll(evts);
-            Assert.AreEqual(ids.Length * 5, RuntimeContentManager.UnfinishedObjectLoads());
+            Assert.AreEqual(ids.Count * 5, RuntimeContentManager.UnfinishedObjectLoads());
             RuntimeContentManager.ProcessQueuedCommands();
             while (RuntimeContentManager.UnfinishedObjectLoads() > 0)
             {
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
-            Assert.AreEqual(ids.Length, RuntimeContentManager.CompletedObjectLoads());
-            for (int i = 0; i < ids.Length; i++)
+            Assert.AreEqual(ids.Count, RuntimeContentManager.CompletedObjectLoads());
+            for (int i = 0; i < ids.Count; i++)
             {
                 evts[i].Reset();
                 new Thread(ReleaseThreadFunc).Start((ids[i], evts[i]));
@@ -237,9 +243,7 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
-            ids.Dispose();
         }
- #endif
 
         struct LoadObjectJob : IJob
         {
@@ -258,12 +262,15 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
                 RuntimeContentManager.ReleaseObjectAsync(id);
             }
         }
-        #if false
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAdditive_GOScenes()
+        public IEnumerator RuntimeContentManager_CanLoadAdditive_GOScenes([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
-            Assert.IsTrue(InitializeCatalogForTest());
+
+            var ids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(ids.Length, 0);
+            ids.Dispose();
+
             while (RuntimeContentManager.UnfinishedObjectLoads() > 0)
             {
                 RuntimeContentManager.ProcessQueuedCommands();
@@ -283,39 +290,53 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             Assert.True(sceneInstance2.IsValid());
             sceneRef.Unload(ref sceneInstance2);
             Assert.IsFalse(sceneInstance2.IsValid());
-            
+
+            //yield 2 frames to ensure that scenes get unloaded - they are unloaded at the end of the frame
+            for(int i = 0; i < 2; i++)
+            {
+                RuntimeContentManager.ProcessQueuedCommands();
+                yield return null;
+            }
+
             var sceneFileCount2 = Loading.ContentLoadInterface.GetSceneFiles(RuntimeContentManager.Namespace).Length;
             Assert.AreEqual(sceneFileCount, sceneFileCount2);
         }
 
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromJobs()
+        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromJobs([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            Assert.IsTrue(InitializeCatalogForTest());
+            var allids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(allids.Length, 0);
+
+            var ids = new List<UntypedWeakReferenceId>();
+            for (int i = 0; i < allids.Length; i++)
+                if (allids[i].GenerationType == WeakReferenceGenerationType.UnityObject)
+                    ids.Add(allids[i]);
+            allids.Dispose();
+
             while (RuntimeContentManager.UnfinishedObjectLoads() > 0)
             {
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
 
-            var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
-            var jobs = new NativeArray<JobHandle>(ids.Length, Allocator.Persistent);
-            for (int i = 0; i < ids.Length; i++)
+            var jobs = new NativeArray<JobHandle>(ids.Count, Allocator.Persistent);
+            for (int i = 0; i < ids.Count; i++)
             {
                 jobs[i] = (new LoadObjectJob { id = ids[i] }).Schedule();
             }
             JobHandle.CompleteAll(jobs);
-            Assert.AreEqual(ids.Length, RuntimeContentManager.UnfinishedObjectLoads());
+            Assert.AreEqual(ids.Count, RuntimeContentManager.UnfinishedObjectLoads());
             RuntimeContentManager.ProcessQueuedCommands();
             while (RuntimeContentManager.UnfinishedObjectLoads() > 0)
             {
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
-            Assert.AreEqual(ids.Length, RuntimeContentManager.CompletedObjectLoads());
-            for (int i = 0; i < ids.Length; i++)
+            Assert.AreEqual(ids.Count, RuntimeContentManager.CompletedObjectLoads());
+            for (int i = 0; i < ids.Count; i++)
             {
                 jobs[i] = (new ReleaseObjectJob { id = ids[i] }).Schedule();
             }
@@ -325,10 +346,9 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
                 RuntimeContentManager.ProcessQueuedCommands();
                 yield return null;
             }
-            ids.Dispose();
             jobs.Dispose();
         }
-    #endif
+
         IEnumerator AssertCanLoadAndRelease<TObject>(UntypedWeakReferenceId id) where TObject : UnityEngine.Object
         {
             RuntimeContentManager.LoadObjectAsync(id);
@@ -343,37 +363,48 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             RuntimeContentManager.ProcessQueuedCommands();
             Assert.AreEqual(ObjectLoadingStatus.None, RuntimeContentManager.GetObjectLoadingStatus(id));
         }
-    
-    #if false
+
         [Test]
-        public void LoadingObjectsCountIsCorrectAfterLoadsAndReleases()
+        public void LoadingObjectsCountIsCorrectAfterLoadsAndReleases([Values(false, true)] bool useAssetDB)
         {
-            Assert.IsTrue(InitializeCatalogForTest());
+            var allids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(allids.Length, 0);
+
+            var ids = new List<UntypedWeakReferenceId>();
+            for (int i = 0; i < allids.Length; i++)
+                if (allids[i].GenerationType == WeakReferenceGenerationType.UnityObject)
+                    ids.Add(allids[i]);
+            allids.Dispose();
+
             Assert.AreEqual(0, RuntimeContentManager.LoadingObjectsCount());
-            var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
-            for (int i = 0; i < ids.Length; i++)
+            for (int i = 0; i < ids.Count; i++)
                 RuntimeContentManager.LoadObjectAsync(ids[i]);
             Assert.AreEqual(0, RuntimeContentManager.LoadingObjectsCount());
             RuntimeContentManager.ProcessQueuedCommands();
-            Assert.AreEqual(ids.Length, RuntimeContentManager.LoadingObjectsCount());
-            for (int i = 0; i < ids.Length; i++)
+            Assert.AreEqual(ids.Count, RuntimeContentManager.LoadingObjectsCount());
+            for (int i = 0; i < ids.Count; i++)
                 RuntimeContentManager.ReleaseObjectAsync(ids[i]);
-            Assert.AreEqual(ids.Length, RuntimeContentManager.LoadingObjectsCount());
+            Assert.AreEqual(ids.Count, RuntimeContentManager.LoadingObjectsCount());
             RuntimeContentManager.ProcessQueuedCommands();
             Assert.AreEqual(0, RuntimeContentManager.LoadingObjectsCount());
-            ids.Dispose();
         }
 
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadLocalAssets()
+        public IEnumerator RuntimeContentManager_CanLoadLocalAssets([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            Assert.IsTrue(InitializeCatalogForTest());
-            var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
-            for(int i = 0; i < ids. Length; i++)
+            var allids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(allids.Length, 0);
+
+            var ids = new List<UntypedWeakReferenceId>();
+            for (int i = 0; i < allids.Length; i++)
+                if (allids[i].GenerationType == WeakReferenceGenerationType.UnityObject)
+                    ids.Add(allids[i]);
+            allids.Dispose();
+
+            for (int i = 0; i < ids. Count; i++)
                 yield return AssertCanLoadAndRelease<UnityEngine.Object>(ids[i]);
-            ids.Dispose();
         }
 
         [UnityTest]
@@ -403,33 +434,39 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             RuntimeContentManager.ReleaseInstancesAsync(handle2);
             RuntimeContentManager.ProcessQueuedCommands();
         }
-        #endif
 
-        bool InitializeCatalogForTest()
+
+        NativeArray<UntypedWeakReferenceId> InitializeCatalogForTest(bool clearCatalog)
         {
             string catalogPath = Path.Combine(TestStreamingAssetsFullPath, RuntimeContentManager.RelativeCatalogPath);
             RuntimeContentManager.Cleanup(out var _);
             RuntimeContentManager.Initialize();
-            return RuntimeContentManager.LoadLocalCatalogData(catalogPath, RuntimeContentManager.DefaultContentFileNameFunc, f => $"{TestStreamingAssetsFullPath}/{RuntimeContentManager.DefaultArchivePathFunc(f)}");
+            if (!RuntimeContentManager.LoadLocalCatalogData(catalogPath, RuntimeContentManager.DefaultContentFileNameFunc, f => $"{TestStreamingAssetsFullPath}/{RuntimeContentManager.DefaultArchivePathFunc(f)}"))
+                return default;
+            var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
+            if (clearCatalog)
+            {
+                RuntimeContentManager.Cleanup(out var _);
+                RuntimeContentManager.Initialize();
+            }
+            return ids;
         }
 
-    #if false
         [UnityTest]
-#if UNITY_EDITOR_LINUX
-        [Ignore("DOTS-7790 - Ubuntu editor often crashes when running this test")]
-#endif
-        public IEnumerator WeakObjectReference_CanLoadAndRelease()
+        public IEnumerator WeakObjectReference_CanLoadAndRelease([Values(false, true)] bool useAssetDB)
         {
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CI")) && useAssetDB)
+            {
+                Assert.Ignore("[DOTS-11045] Skipping `true` parameter value in CI, as it frequently fails with a `Failed to find artifact load path for id <some GUID>`");
+            }
+
             yield return new EnterPlayMode();
 
-            Assert.IsTrue(InitializeCatalogForTest());
+            var ids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(ids.Length, 0);
             WeakObjectReference<UnityEngine.Object> matRef = default;
-
-            {
-                var ids = RuntimeContentManager.GetObjectIds(Allocator.Persistent);
-                matRef.Id = ids[0];// new UntypedWeakReferenceId { GlobalId = new RuntimeGlobalObjectId { AssetGUID = ids[0] }, GenerationType = WeakReferenceGenerationType.UnityObject};
-                ids.Dispose();
-            }
+            matRef.Id = ids[0];
+            ids.Dispose();
 
             matRef.LoadAsync();
             RuntimeContentManager.ProcessQueuedCommands();
@@ -446,6 +483,29 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             Assert.AreEqual(ObjectLoadingStatus.None, matRef.LoadingStatus);
         }
 
+        [UnityTest]
+        public IEnumerator WeakObjectReference_CanLoadAndReleaseWithWaitForCompletion([Values(false, true)] bool useAssetDB)
+        {
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CI")) && useAssetDB)
+            {
+                Assert.Ignore("[DOTS-11045] Skipping `true` parameter value in CI, as it frequently fails with a `Failed to find artifact load path for id <some GUID>`");
+            }
+
+            yield return new EnterPlayMode();
+
+            var ids = InitializeCatalogForTest(useAssetDB);
+            Assert.Greater(ids.Length, 0);
+
+            WeakObjectReference<UnityEngine.Object> matRef = default;
+            matRef.Id = ids[0];
+            ids.Dispose();
+
+            matRef.LoadAsync();
+            Assert.IsTrue(matRef.WaitForCompletion());
+            Assert.IsTrue(matRef.LoadingStatus == ObjectLoadingStatus.Completed);
+            Assert.NotNull(matRef.Result, $"Result: {matRef.Result}, Status: {matRef.LoadingStatus}");
+            matRef.Release();
+        }
 
         [Test]
         public void WeakObjectReference_WhenNotLoaded_LoadingStatus_IsNone()
@@ -505,7 +565,7 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
             wr.Id.GenerationType = WeakReferenceGenerationType.UnityObject;
             Assert.IsFalse(wr.IsReferenceValid);
         }
-#endif
+
     }
 }
 #endif
