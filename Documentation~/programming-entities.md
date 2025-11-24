@@ -10,7 +10,6 @@ This section outlines how to organize and manage the entities and components in 
 |[Manage structural changes](systems-manage-structural-changes.md)|Manage structural changes in your project.|
 |[Iterate over component data](systems-iterating-data-intro.md)|Use different methods of iterating through data depending on the system type.|
 |[Transforms](transforms-intro.md)|Control the position and rotation of entities.|
-|[Aspect overview](aspects-intro.md)|Group together components in a single struct.|
 |[Store immutable data with blob assets](blob-assets-intro.md)|Use blob assets to access store immutable data.|
 
 ## Additional resources

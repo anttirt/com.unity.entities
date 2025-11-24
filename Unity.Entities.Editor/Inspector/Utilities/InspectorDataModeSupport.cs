@@ -48,10 +48,6 @@ namespace Unity.Entities.Editor
 
         static void OnPlayModeStateChanged(PlayModeStateChange stateChange)
         {
-            if (stateChange is PlayModeStateChange.ExitingPlayMode &&
-                (Selection.activeObject is EntitySelectionProxy || Selection.activeContext is EntitySelectionProxy))
-                Selection.activeObject = null;
-
             if (stateChange is not (PlayModeStateChange.EnteredEditMode or PlayModeStateChange.EnteredPlayMode))
                 return;
 

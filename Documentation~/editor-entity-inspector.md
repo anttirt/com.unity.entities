@@ -11,7 +11,6 @@ In Authoring data mode, represented by a white ![Authoring mode icon - a circle]
 In Runtime data mode, represented by an orange ![Runtime data mode icon - an orange circle](images/editor-runtime-mode-dark.png) or red ![Runtime data mode icon - a red circle](images/editor-runtime-mode-light.png) circle, the Inspector window displays data about the selected entity in three tabs:
 
 * **Components:** Displays all the [components](concepts-components.md) on an entity, similar to displaying the MonoBehaviours on a GameObject. 
-* **Aspects:** Displays information about the [aspects](aspects-intro.md) associated with the selected entity.
 * **Relationships:** Displays all the [systems](concepts-systems.md) that interact with the selected entity. This tab displays information only if the entity has one or more components that satisfy a [system query](systems-entityquery.md).
 
 ### Components and Aspects tab

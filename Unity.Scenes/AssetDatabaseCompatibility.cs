@@ -21,21 +21,21 @@ namespace Unity.Scenes
         internal static void UnregisterCustomDependencyPrefixFilter(string prefixFilter) => AssetDatabase.UnregisterCustomDependencyPrefixFilter(prefixFilter);
         internal static void RegisterCustomDependency(string dependency, Hash128 hashOfValue) => AssetDatabase.RegisterCustomDependency(dependency, hashOfValue);
 
-        internal static string GuidToPath(GUID guid)
+        internal static string GuidToPath(UnityEngine.GUID guid)
         {
             return AssetDatabase.GUIDToAssetPath(guid);
         }
-        public static GUID PathToGUID(string assetPath)
+        public static UnityEngine.GUID PathToGUID(string assetPath)
         {
             return AssetDatabase.GUIDFromAssetPath(assetPath);
         }
 
-        public static Hash128 GetAssetDependencyHash(GUID guid)
+        public static Hash128 GetAssetDependencyHash(UnityEngine.GUID guid)
         {
             return AssetDatabase.GetAssetDependencyHash(guid);
         }
 
-        internal static Hash128 GetArtifactHash(GUID guid, Type importerType, ImportMode mode)
+        internal static Hash128 GetArtifactHash(UnityEngine.GUID guid, Type importerType, ImportMode mode)
         {
             switch (mode)
             {
@@ -52,7 +52,7 @@ namespace Unity.Scenes
 
         internal static Hash128 GetArtifactHash(string guid, Type importerType, ImportMode mode)
         {
-            return GetArtifactHash(new GUID(guid), importerType, mode);
+            return GetArtifactHash(new UnityEngine.GUID(guid), importerType, mode);
         }
 
 
@@ -63,13 +63,13 @@ namespace Unity.Scenes
 
         internal static bool GetArtifactPaths(Hash128 artifactHash, out string[] paths)
         {
-            return AssetDatabaseExperimental.GetArtifactPaths(new ArtifactID
+            return AssetDatabaseExperimental.GetArtifactPaths(new ImportResultID
             {
                 value = artifactHash
             }, out paths);
         }
 
-        internal static void ProduceArtifactsAsync(NativeArray<GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
+        internal static void ProduceArtifactsAsync(NativeArray<UnityEngine.GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
         {
             artifacts.ResizeUninitialized(guids.Length);
 
@@ -78,13 +78,13 @@ namespace Unity.Scenes
             for (int i = 0; i != guids.Length; i++)
                 artifacts[i] = res[i].value;
         }
-        internal static void ProduceArtifactsAsync(NativeArray<GUID> guids, Type assetImportType)
+        internal static void ProduceArtifactsAsync(NativeArray<UnityEngine.GUID> guids, Type assetImportType)
         {
             //@TODO: use batch API when it lands in trunk
             AssetDatabaseExperimental.ProduceArtifactsAsync(guids.ToArray(), assetImportType);
         }
 
-        internal static void ProduceArtifacts(NativeArray<GUID> guids, Type assetImportType, NativeArray<Hash128> artifacts)
+        internal static void ProduceArtifacts(NativeArray<UnityEngine.GUID> guids, Type assetImportType, NativeArray<Hash128> artifacts)
         {
             //@TODO: use batch API when it lands in trunk
             for (int i = 0; i != guids.Length; i++)
@@ -138,7 +138,7 @@ namespace Unity.Scenes
         /// Produce artifacts for the given guids using the passed in importer.
         /// </summary>
         /// <returns>Returns true if the artifacts were successfully created</returns>
-        internal static bool ProduceArtifactsRefreshIfNecessary(NativeArray<GUID> guids, Type assetImportType, NativeArray<Hash128> artifacts)
+        internal static bool ProduceArtifactsRefreshIfNecessary(NativeArray<UnityEngine.GUID> guids, Type assetImportType, NativeArray<Hash128> artifacts)
         {
             ProduceArtifacts(guids, assetImportType, artifacts);
 
@@ -174,13 +174,13 @@ namespace Unity.Scenes
         /// Produce artifacts for the given guids using the passed in importer.
         /// </summary>
         /// <returns>Returns true if the artifacts were successfully created</returns>
-        internal static bool ProduceArtifactsRefreshIfNecessary(NativeArray<GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
+        internal static bool ProduceArtifactsRefreshIfNecessary(NativeArray<UnityEngine.GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
         {
             artifacts.ResizeUninitialized(guids.Length);
             return ProduceArtifactsRefreshIfNecessary(guids, assetImportType, artifacts.AsArray());
         }
 
-        internal static void LookupArtifacts(NativeArray<GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
+        internal static void LookupArtifacts(NativeArray<UnityEngine.GUID> guids, Type assetImportType, NativeList<Hash128> artifacts)
         {
             artifacts.ResizeUninitialized(guids.Length);
             //@TODO: use batch API when it lands in trunk
@@ -189,7 +189,7 @@ namespace Unity.Scenes
         }
 
 
-        internal static bool AssetExists(GUID guid)
+        internal static bool AssetExists(UnityEngine.GUID guid)
         {
             return AssetDatabase.GetAssetDependencyHash(guid) != default;
         }

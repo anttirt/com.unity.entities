@@ -132,4 +132,13 @@ public static class JobEntityGeneratorErrors
             $"`{parameterTypeFullName}` is {parameterAccessibility}, but is used as a parameter type in the `Execute()` method of `{jobEntityTypeFullName}`, which is {jobAccessibility}. This is not allowed.",
             location);
     }
+
+    public static void SGJE0024(ISourceGeneratorDiagnosable context, Location location)
+    {
+        context.LogError(
+            nameof(SGJE0024),
+            k_ErrorTitle,
+            "Failure to generate the schedule invocation. This can be due to either an incomplete type or a partially source generated type. Make sure that there's no other compilation errors in the console. Or make sure that your IJobEntity doesn't depend on any source generated types.",
+            location);
+    }
 }

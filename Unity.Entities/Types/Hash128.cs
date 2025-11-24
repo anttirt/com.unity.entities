@@ -272,14 +272,14 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="guid">The UnityEditor.GUID to convert.</param>
         /// <returns>The corresponding Hash128.</returns>
-        public static unsafe implicit operator Hash128(UnityEditor.GUID guid) => *(Hash128*)&guid;
+        public static unsafe implicit operator Hash128(UnityEngine.GUID guid) => *(Hash128*)&guid;
 
         /// <summary>
         /// Implicitly convert a Hash128 to a UnityEditor.GUID.
         /// </summary>
         /// <param name="guid">The Hash128 to convert.</param>
         /// <returns>The corresponding UnityEditor.GUID.</returns>
-        public static unsafe implicit operator UnityEditor.GUID(Hash128 guid) => *(UnityEditor.GUID*) & guid;
+        public static unsafe implicit operator UnityEngine.GUID(Hash128 guid) => *(UnityEngine.GUID*) & guid;
         #endif
 
         /// <summary>

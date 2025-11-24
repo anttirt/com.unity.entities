@@ -24,7 +24,6 @@ namespace Unity.Entities.CodeGeneratedJobForEach
     /// </summary>
     /// <remarks>
     /// This interface allows you to use as many arguments as you want and to put the ref/in/value parameters in any order you want.
-    /// For more information, see the user manual documentation on [Custom delegates](xref:iterating-data-entities-foreach).
     /// </remarks>
     public interface ISupportForEachWithUniversalDelegate { }
 

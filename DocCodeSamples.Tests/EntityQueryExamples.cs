@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using Unity.Collections;
 using Unity.Entities;
@@ -289,33 +288,6 @@ namespace Doc.CodeSamples.Tests
         protected override void OnUpdate()
         {
             throw new NotImplementedException();
-        }
-    }
-    #endregion
-
-    #region get-query
-
-    [RequireMatchingQueriesForUpdate]
-    public partial class RotationSpeedSys : SystemBase
-    {
-        private EntityQuery query;
-
-        protected override void OnUpdate()
-        {
-            float deltaTime = SystemAPI.Time.DeltaTime;
-
-            Entities
-                .WithStoreEntityQueryInField(ref query)
-                .ForEach(
-                (ref ObjectRotation rotation, in ObjectRotationSpeed speed) => {
-                    rotation.Value
-                        = math.mul(
-                            math.normalize(rotation.Value),
-                                quaternion.AxisAngle(math.up(),
-                                    speed.RadiansPerSecond * deltaTime)
-                         );
-                })
-                .Schedule();
         }
     }
     #endregion

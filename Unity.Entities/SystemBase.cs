@@ -95,7 +95,6 @@ namespace Unity.Entities
     /// [ECB]: xref:Unity.Entities.EntityCommandBuffer
     /// [ComponentSystemBase.GetEntityQuery]: xref:Unity.Entities.ComponentSystemBase.GetEntityQuery*
     /// [ComponentSystemBase.RequireForUpdate]: xref:Unity.Entities.ComponentSystemBase.RequireForUpdate*
-    /// [Entities.ForEach]: xref:iterating-data-entities-foreach
     /// [Job.WithCode]: xref:Unity.Entities.SystemBase.Job
     /// </remarks>
     [RequireDerived]
@@ -144,7 +143,6 @@ namespace Unity.Entities
         ///
         /// [JobHandle]: https://docs.unity3d.com/ScriptReference/Unity.Jobs.JobHandle.html
         /// [JobHandle.CombineDependencies]: https://docs.unity3d.com/ScriptReference/Unity.Jobs.JobHandle.CombineDependencies.html
-        /// [Entities.ForEach]: xref:iterating-data-entities-foreach
         /// [Job.WithCode]: xref:Unity.Entities.SystemBase.Job
         /// </remarks>
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -175,10 +173,6 @@ namespace Unity.Entities
         /// data. Entities provides a LINQ method-style syntax that you use to describe the work to be performed.
         /// Unity uses a compiler extension to convert the description into efficient, (optionally) multi-threaded
         /// executable code.
-        ///
-        /// <example>
-        /// <code source="../DocCodeSamples.Tests/SystemBaseExamples.cs" region="entities-foreach-basic" title="Basic ForEach Example" language="csharp"/>
-        /// </example>
         ///
         /// ##### **Describing the entity query**
         ///
@@ -234,10 +228,6 @@ namespace Unity.Entities
         ///
         /// * **`int nativeThreadIndex`** — a unique index for the thread executing the current iteration of the
         ///   lambda expression. When you execute the lambda expression using Run(), nativeThreadIndex is always zero.
-        ///
-        /// <example>
-        /// <code source="../DocCodeSamples.Tests/SystemBaseExamples.cs" region="lambda-params" title="Lambda Parameters" language="csharp"/>
-        /// </example>
         ///
         /// ##### **Capturing variables**
         ///
@@ -308,10 +298,6 @@ namespace Unity.Entities
         /// The Jobs property provides a convenient mechanism for implementing single jobs. Unity uses a compiler
         /// extension to convert the job description you create with Job.WithCode into efficient, executable code that
         /// (optionally) runs in a background thread.
-        ///
-        /// <example>
-        /// <code source="../DocCodeSamples.Tests/LambdaJobExamples.cs" region="job-with-code-example" title="Basic Job Example" language="csharp"/>
-        /// </example>
         ///
         /// Implement your lambda expression inside the `Job.WithCode(lambda)` function. The lambda expression cannot
         /// take any parameters. You can capture local variables.

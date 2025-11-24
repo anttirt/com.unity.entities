@@ -135,7 +135,7 @@ This index doesn't take query filtering into account. The job skips any chunks w
 If the EntityQuery that schedules the job includes any [enableable components](components-enableable.md), the entities in a given chunk might not match the query. For example, if an entity in a matching chunk has a required component disabled, that entity doesn't match the query and the job shouldn't process it. `IJobChunk` doesn't automatically skip these entities. This means that you must correctly handle enableable components, and only process entities which match the query.
 
 > [!NOTE]
-> Other job types such as [IJobEntity](iterating-data-ijobentity.md) and [Entities.ForEach](iterating-data-entities-foreach.md) automatically skip individual entities which don't match the provided query due to their enableable components.
+> Other job types such as [IJobEntity](iterating-data-ijobentity.md) automatically skip individual entities which don't match the provided query due to their enableable components.
 
 An `IJobChunk`'s `Execute` method takes two additional parameters to help efficiently identify the entities that it should process:
 

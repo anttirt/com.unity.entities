@@ -39,25 +39,13 @@ namespace Unity.Entities.CodeGen
         static WorldSystemFilterFlags GetChildDefaultFilterFlag(TypeDefinition typeDef)
         {
             var flags = WorldSystemFilterFlags.Default;
-            bool found = false;
-            var filterFlagsAttribute = typeDef.CustomAttributes.FirstOrDefault(ca => ca.AttributeType.Name == nameof(WorldSystemFilterAttribute));
+            var filterFlagsAttribute = typeDef.CustomAttributes.FirstOrDefault(ca => ca.AttributeType.Name == nameof(WorldSystemFilterAttribute) && ca.ConstructorArguments.Count >= 2);
             if (filterFlagsAttribute != null)
             {
-                foreach (var field in filterFlagsAttribute.Fields)
-                    if (field.Name == nameof(WorldSystemFilterAttribute.ChildDefaultFilterFlags))
-                    {
-                        found = true;
-                        flags = (WorldSystemFilterFlags)field.Argument.Value;
-                        break;
-                    }
-                if (!found && filterFlagsAttribute.ConstructorArguments.Count >= 2)
-                {
-                    // override the default value if flags are provided
-                    flags = (WorldSystemFilterFlags)filterFlagsAttribute.ConstructorArguments[1].Value;
-                    found = true;
-                }
+                // override the default value if flags are provided
+                flags = (WorldSystemFilterFlags)filterFlagsAttribute.ConstructorArguments[1].Value;
             }
-            if (!found && typeDef.BaseType != null) // Traverse the hierarchy to fetch a flags from an ancestor if we can't find one on this type
+            else if (typeDef.BaseType != null) // Traverse the hierarchy to fetch a flags from an ancestor if we can't find one on this type
                 flags = (WorldSystemFilterFlags)GetChildDefaultFilterFlag(typeDef.BaseType.Resolve());
             return flags;
         }

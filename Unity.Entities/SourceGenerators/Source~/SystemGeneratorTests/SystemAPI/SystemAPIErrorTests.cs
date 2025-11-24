@@ -1,5 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
+using Unity.Entities.SourceGen.JobEntityGenerator;
+using Unity.Entities.SourceGen.SystemGenerator;
 using Unity.Entities.SourceGen.SystemGenerator.SystemAPI;
 using VerifyCS =
     Unity.Entities.SourceGenerators.Test.CSharpSourceGeneratorVerifier<
@@ -25,12 +27,14 @@ public class SystemAPIErrorTests
             partial struct SomeSystem : ISystem {
                 public void OnUpdate(ref SystemState state) {
                     var hadComp = {|#0:HasComponent<EcsTestData>|}();
-                    new SomeJobEntity().ScheduleParallel({|#1:SystemAPI.Query<RefRO<EcsTestData>>().WithEntityAccess()|});
+                    {|#2:new SomeJobEntity().ScheduleParallel|}({|#1:SystemAPI.Query<RefRO<EcsTestData>>().WithEntityAccess()|});
                 }
             }";
         var expectedA = VerifyCS.CompilerError("CS7036").WithLocation(0);
         var expectedB = VerifyCS.CompilerError("CS1503").WithLocation(1);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expectedA, expectedB);
+        var expectedC = Test.CSharpSourceGeneratorVerifier<SystemGenerator>
+            .CompilerError(nameof(JobEntityGeneratorErrors.SGJE0024)).WithLocation(2);
+        await VerifyCS.VerifySourceGeneratorAsync(source, expectedA, expectedB, expectedC);
     }
 
     [TestMethod]

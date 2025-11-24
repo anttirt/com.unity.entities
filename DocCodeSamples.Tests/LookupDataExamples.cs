@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
@@ -19,71 +18,64 @@ namespace Doc.CodeSamples.Tests
         {
             float deltaTime = SystemAPI.Time.DeltaTime;
 
-            Entities
-                .ForEach((ref Rotation orientation,
-                in LocalToWorld transform,
-                in Target target) =>
-                {
-                    // Check to make sure the target Entity still exists and has
-                    // the needed component
-                    if (!SystemAPI.HasComponent<LocalToWorld>(target.entity))
-                        return;
+            // Iterate over all entities that have a LocalTransform and a Target component.
+            foreach (var (transform, target) in
+                     SystemAPI.Query<RefRW<LocalTransform>, RefRO<Target>>())
+            {
+                var targetEntity = target.ValueRO.entity;
 
-                    // Look up the entity data
-                    LocalToWorld targetTransform
-                        = SystemAPI.GetComponent<LocalToWorld>(target.entity);
-                    float3 targetPosition = targetTransform.Position;
+                // Ensure the target entity still exists and has a LocalTransform.
+                if (!SystemAPI.HasComponent<LocalTransform>(targetEntity))
+                    continue;
 
-                    // Calculate the rotation
-                    float3 displacement = targetPosition - transform.Position;
-                    float3 upReference = new float3(0, 1, 0);
-                    quaternion lookRotation =
-                        quaternion.LookRotationSafe(displacement, upReference);
+                // Look up the target entity's transform data.
+                var targetTransform = SystemAPI.GetComponent<LocalTransform>(targetEntity);
 
-                    orientation.Value =
-                        math.slerp(orientation.Value, lookRotation, deltaTime);
-                })
-                .ScheduleParallel();
+                // Calculate a smooth rotation towards the target.
+                float3 displacement = targetTransform.Position - transform.ValueRO.Position;
+                quaternion lookRotation = quaternion.LookRotationSafe(displacement, math.up());
+
+                transform.ValueRW.Rotation =
+                    math.slerp(transform.ValueRO.Rotation, lookRotation, deltaTime);
+            }
         }
     }
     #endregion
-    #region lookup-foreach-buffer
 
+    #region lookup-foreach-buffer
     public struct BufferData : IBufferElementData
     {
         public float Value;
     }
+
     [RequireMatchingQueriesForUpdate]
     public partial class BufferLookupSystem : SystemBase
     {
         protected override void OnUpdate()
         {
-            BufferLookup<BufferData> buffersOfAllEntities
-                = this.GetBufferLookup<BufferData>(true);
+            // Acquire a read-only lookup for BufferData on arbitrary entities.
+            var bufferLookup = GetBufferLookup<BufferData>(true);
 
-            Entities
-                .ForEach((ref Rotation orientation,
-                in LocalToWorld transform,
-                in Target target) =>
-                {
-                    // Check to make sure the target Entity with this buffer type still exists
-                    if (!buffersOfAllEntities.HasBuffer(target.entity))
-                        return;
-
-                    // Get a reference to the buffer
-                    DynamicBuffer<BufferData> bufferOfOneEntity =
-                        buffersOfAllEntities[target.entity];
-
-                    // Use the data in the buffer
-                    float avg = 0;
-                    for (var i = 0; i < bufferOfOneEntity.Length; i++)
+            // Iterate over chaser entities that have a LocalTransform and a Target.
+            foreach (var (transform, target) in
+                     SystemAPI.Query<RefRW<LocalTransform>, RefRO<Target>>())
                     {
-                        avg += bufferOfOneEntity[i].Value;
+                var targetEntity = target.ValueRO.entity;
+
+                // Check the target entity still exists and has this buffer type.
+                if (!bufferLookup.HasBuffer(targetEntity))
+                    continue;
+
+                // Get the dynamic buffer from the target entity.
+                DynamicBuffer<BufferData> buffer = bufferLookup[targetEntity];
+
+                // Example use: compute average of buffer values.
+                float sum = 0f;
+                for (int i = 0; i < buffer.Length; i++)
+                    sum += buffer[i].Value;
+
+                float avg = buffer.Length > 0 ? sum / buffer.Length : 0f;
                     }
-                    if (bufferOfOneEntity.Length > 0)
-                        avg /= bufferOfOneEntity.Length;
-                })
-                .ScheduleParallel();
         }
     }
     #endregion
