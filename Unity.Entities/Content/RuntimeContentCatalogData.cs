@@ -82,6 +82,10 @@ namespace Unity.Entities.Content
         /// The id of the archive, this is transformed into the archive path at runtime.
         /// </summary>
         public ContentArchiveId ArchiveId;
+        /// <summary>
+        /// The hash of the content archive file contents
+        /// </summary>
+        public Hash128 ContentHash;
     }
 
     /// <summary>

@@ -42,6 +42,15 @@ namespace Unity.Entities.Content
             return _results.BundleInfos.Keys.Select(s => new ContentArchiveId { Value = new Hash128(s) }).OrderBy(id => id.Value).Append(default);
         }
 
+        public Hash128 GetContentHash(ContentArchiveId archiveId)
+        {
+            if(!archiveId.IsValid)
+                return default;
+
+            //return _results.BundleInfos[archiveId.ToString()].Hash;
+            return UnityEngine.Hash128.Compute(System.IO.File.ReadAllBytes(_results.BundleInfos[archiveId.ToString()].FileName));
+        }
+
         public IEnumerable<ContentFileId> GetDependencies(ContentFileId fileId)
         {
             if (!fileId.IsValid)

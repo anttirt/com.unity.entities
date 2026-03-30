@@ -121,6 +121,8 @@ namespace Unity.Entities.Content
         /// </summary>
         public IEnumerable<ContentDownloadService> DownloadServices => downloadServices.Values;
 
+        public ContentDownloadService.InstalledArchivePathDelegate InstalledArchivePathFunc { get; internal set; }
+
         struct DescendingOrderComparer : IComparer<int>
         {
             public int Compare(int x, int y) => y - x;
@@ -182,6 +184,12 @@ namespace Unity.Entities.Content
             //check for the remapped path on device before returning it, but only if needed.  The local catalog uses this method to remap local archive paths to the cache and they do not need to be on device for this.
             if (requireFileOnDevice && !ContentDeliveryGlobalState.FileExists(cachePath))
             {
+                if(InstalledArchivePathFunc?.Invoke(locStatus.Location, out var installedPath) == true)
+                {
+                    ContentDeliveryGlobalState.LogFunc?.Invoke($"RemapContentPath id [{id.Name},{id.Hash}] with relative path {originalPath} - resolved to installed {installedPath}.");
+                    return installedPath;
+                }
+
                 ContentDeliveryGlobalState.LogFunc?.Invoke($"RemapContentPath id [{id.Name},{id.Hash}] with relative path {originalPath} - local cache path {cachePath} does not exist.");
                 return originalPath;
             }

@@ -71,7 +71,7 @@ namespace Unity.Entities.Content
             int archiveIndex = 0;
             foreach (var a in archiveEnum)
             {
-                archives[archiveIndex] = new ContentArchiveLocation() { ArchiveId = a };
+                archives[archiveIndex] = new ContentArchiveLocation() { ArchiveId = a, ContentHash = dataSource.GetContentHash(a) };
                 var fileEnum = dataSource.GetFileIds(a);
                 foreach (var f in fileEnum)
                 {

@@ -175,8 +175,9 @@ namespace Unity.Scenes.Editor
                         throw new InvalidOperationException($"Failed to build EntityScene for '{AssetDatabaseCompatibility.GuidToPath(sceneGuid)}'");
                 }
 
-                foreach (var artifactPath in artifactPaths)
+                for (int artifactPathIndex = 0; artifactPathIndex < artifactPaths.Length; artifactPathIndex++)
                 {
+                    var artifactPath = artifactPaths[artifactPathIndex];
                     var ext = Path.GetExtension(artifactPath);
 
                     if (ext == headerExt)
@@ -210,7 +211,9 @@ namespace Unity.Scenes.Editor
                         */
                         var sectionIndex = EntityScenesPaths.GetSectionIndexFromPath(artifactPath);
                         var address = $"{artifactHash}.{sectionIndex}";
-                        var id = UnityEngine.Hash128.Compute(address);
+                        var assetSource = $"{sceneGuid}{artifactPathIndex}";
+                        var id = UnityEngine.Hash128.Compute(assetSource);
+                        var createdAssetGuid = HashingMethods.Calculate(assetSource).ToGUID();
                         var ssh = SceneHeaderUtility.CreateSceneSectionHash(sceneGuid, sectionIndex, default);
                         objIdRemapping.Add(id, ssh);
                         pathOverrides[artifactPath] = ssh;
@@ -225,7 +228,7 @@ namespace Unity.Scenes.Editor
                             {
                                 var objs = UnityEditorInternal.InternalEditorUtility.LoadSerializedFileAndForget(artifactPath);
                                 processor.GetObjectIdentifiersAndTypesForSerializedFile(artifactPath, out ObjectIdentifier[] objectIds, out Type[] types, globalUsage);
-                                processor.CreateAssetEntryForObjectIdentifiers(objectIds, artifactPath, address, address, typeof(ReferencedUnityObjects));
+                                processor.CreateAssetEntryForObjectIdentifiers(objectIds, artifactPath, address, address, createdAssetGuid, typeof(ReferencedUnityObjects));
                                 foreach (var obj in objs)
                                 {
                                     ReferencedUnityObjects referencedObjects = obj as ReferencedUnityObjects;
@@ -238,7 +241,7 @@ namespace Unity.Scenes.Editor
                     else if (ext == exportedTypes)
                     {
                         sceneGuidExportedTypePaths.Add((sceneGuid, artifactPath));
-					}
+                    }
                     else if (ext == weakAssetsExt)
                     {
                         /*
@@ -273,7 +276,7 @@ namespace Unity.Scenes.Editor
 #if ENABLE_BUILD_DIAGNOSTICS
             UnityEngine.Debug.Log("Total number of scene imported: " + sceneGuidExportedTypePaths.Count);
 #endif
- 			WriteExportedTypesDebugLog(sceneGuidExportedTypePaths);
+            WriteExportedTypesDebugLog(sceneGuidExportedTypePaths);
             Func<Hash128, long, string, UntypedWeakReferenceId> objIdToRTId = (Hash128 guid, long lfid, string path) =>
             {
                 if (!guid.IsValid && !string.IsNullOrEmpty(path))

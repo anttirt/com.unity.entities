@@ -160,7 +160,7 @@ namespace Unity.Entities.Content
         /// <param name="cachePath">The full local path of the content cache.  This must be a directory that the application has read and write access to.</param>
         /// <param name="initialContentSet">The initial set of content to download.  The content sets are given names during the publish process and by default everything is added to the "all" set.</param>
         /// <param name="updateStateFunc">Callback action that will get called whenever the content update state changes.</param>
-        public static void Initialize(string remoteUrlRoot, string cachePath, string initialContentSet, Action<ContentUpdateState> updateStateFunc)
+        public static void Initialize(string remoteUrlRoot, string cachePath, string initialContentSet, Action<ContentUpdateState> updateStateFunc, ContentDownloadService.InstalledArchivePathDelegate installedArchivePathFunc = null)
         {
             LogFunc?.Invoke($"ContentDeliveryGlobalState.Initialize({remoteUrlRoot}, {cachePath}, {initialContentSet})");
             if (!IsValidURLRoot(remoteUrlRoot))
@@ -180,7 +180,8 @@ namespace Unity.Entities.Content
 
                 contentDeliveryService = new ContentDeliveryService();
                 PathRemapFuncWithFileCheck = contentDeliveryService.RemapContentPath;
-                contentDeliveryService.AddDownloadService(new ContentDownloadService("default", cachePath, 1, 5, null));
+                contentDeliveryService.AddDownloadService(new ContentDownloadService("default", cachePath, 1, 5, null, installedArchivePathFunc));
+                contentDeliveryService.InstalledArchivePathFunc = installedArchivePathFunc;
             }
             RegisterForContentUpdateCompletion(updateStateFunc);
         }
