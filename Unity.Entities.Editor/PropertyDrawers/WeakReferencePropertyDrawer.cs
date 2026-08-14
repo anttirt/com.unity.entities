@@ -32,7 +32,7 @@ namespace Unity.Entities.Editor
                 propertyIdType.intValue,
                 GenerationType);
 
-            var currObject = UntypedWeakReferenceId.GetEditorObject(uwrid);
+            var currObject = uwrid.IsValid ? UntypedWeakReferenceId.GetEditorObject(uwrid) : default;
             var objectField = new ObjectField
             {
                 objectType = targetObjectType,
@@ -77,7 +77,7 @@ namespace Unity.Entities.Editor
                 propertyIdType.intValue,
                 GenerationType);
 
-            var currObject = UntypedWeakReferenceId.GetEditorObject(uwrid);
+            var currObject = uwrid.IsValid ? UntypedWeakReferenceId.GetEditorObject(uwrid) : default;
 
             EditorGUI.BeginChangeCheck();
 
