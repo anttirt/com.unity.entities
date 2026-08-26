@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -11,6 +11,7 @@ namespace Unity.Entities
     /// <summary>
     /// Entities journaling provides detailed information about past ECS events.
     /// </summary>
+    [Obsolete("Journaling is scheduled for removal in a future release. It is recommended to remove dependencies on this API.", false)]
     public static unsafe partial class EntitiesJournaling
     {
         static Dictionary<ulong, WeakReference<World>> s_WorldWeakRefMap;
@@ -101,7 +102,7 @@ namespace Unity.Entities
         /// <para>For this reason, it is not recommended to call this in a debugger watch window, otherwise a deadlock might occur.</para>
         /// </remarks>
         /// <returns>Array of record view.</returns>
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         public static RecordViewArray GetRecords(Ordering ordering) => s_State.GetRecords(ordering, blocking: true);
 
         /// <summary>
@@ -111,7 +112,7 @@ namespace Unity.Entities
         /// Throws <see cref="InvalidOperationException"/> if records are currently locked for write.
         /// </remarks>
         /// <returns>Array of record view.</returns>
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         public static RecordViewArray TryGetRecords(Ordering ordering) => s_State.GetRecords(ordering, blocking: false);
 
         /// <summary>
@@ -142,7 +143,7 @@ namespace Unity.Entities
             Internal_Shutdown();
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, ulong worldSequenceNumber, in SystemHandle executingSystem, Entity* entities, int entityCount, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -166,7 +167,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, worldSequenceNumber, in executingSystem, in originSystem, entities, entityCount, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, ulong worldSequenceNumber, in SystemHandle executingSystem, ArchetypeChunk* chunks, int chunkCount, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -190,7 +191,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, worldSequenceNumber, in executingSystem, in originSystem, chunks, chunkCount, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, ulong worldSequenceNumber, in SystemHandle executingSystem, Archetype* archetype, ChunkIndex chunk, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -212,7 +213,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, worldSequenceNumber, in executingSystem, in originSystem, archetype, chunk, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, EntityComponentStore* entityComponentStore, uint globalSystemVersion, Entity* entities, int entityCount, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -236,7 +237,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, entityComponentStore, globalSystemVersion, in originSystem, entities, entityCount, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, EntityComponentStore* entityComponentStore, uint globalSystemVersion, ArchetypeChunk* chunks, int chunkCount, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -260,7 +261,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, entityComponentStore, globalSystemVersion, in originSystem, chunks, chunkCount, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddRecord(RecordType recordType, EntityComponentStore* entityComponentStore, uint globalSystemVersion, Archetype* archetype, ChunkIndex chunk, in SystemHandle originSystem = default, TypeIndex* types = null, int typeCount = 0, void* data = null, int dataLength = 0)
         {
@@ -282,7 +283,7 @@ namespace Unity.Entities
             s_State.PushBack(recordType, entityComponentStore, globalSystemVersion, in originSystem, archetype, chunk, types, typeCount, data, dataLength);
         }
 
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void AddSystemVersionHandle(EntityComponentStore* store, uint version, in SystemHandle handle)
         {

@@ -1,14 +1,21 @@
 # Shared components introduction
 
-Shared components group entities in chunks based on the values of their shared component, which helps with the de-duplication of data. To do this, Unity stores all entities of an archetype that have the same shared component values together. This removes repeated values across entities.
+Shared components group entities in chunks based on the values of their shared component, which helps with the de-duplication of data. To do this, Unity stores all entities of an archetype that have the same shared component values together. Each unique shared component value is stored once per [world](concepts-worlds.md), so the data isn't repeated across entities.
 
 You can create both [managed and unmanaged shared components](components-shared-create.md). Managed shared components have the same advantages and restrictions as [regular managed components](components-managed.md).
 
-## Shared component value storage
+## When to use shared components
 
-For each [world](concepts-worlds.md), Unity stores shared component values in arrays separate from ECS chunks, and chunks in that world store handles to locate the appropriate shared component values for their archetype. Entities in the same chunk share the same shared component value. Multiple chunks can store the same shared component handle which means there is no limit to the number of entities that can use the same shared component value.
+Shared components work best when many entities share the same value, and the total number of unique values is small. Typical examples include grouping entities by LOD level, game faction, or spawn wave in a game. In these cases, shared components avoid duplicating the same data on every entity and let you efficiently process each group, for example by using [`WithSharedComponentFilter`](xref:Unity.Entities.QueryEnumerable`1.WithSharedComponentFilter*) to iterate only the entities that share a particular value.
 
-If you change the shared component value for an entity, Unity moves the entity to a chunk that uses the new shared component value. This means that changing a shared component value for an entity is a [structural change](concepts-structural-changes.md). If an equal value already exists in the shared component value array, Unity moves the entity to a chunk that stores the index of the existing value. Otherwise, Unity adds the new value to the shared component value array and moves the entity to a new chunk that stores the index of this new value. For information on how to change how ECS compares shared component values, see [Override the default comparison behavior](#override-the-default-comparison-behavior).
+Shared components are less suitable when:
+
+* **Values change frequently.** Changing a shared component value is a [structural change](concepts-structural-changes.md) that moves the entity to a different chunk. If values change often, the cost of repeated structural changes can outweigh the benefits. For alternative techniques, refer to [Optimize shared components](components-shared-optimize.md).
+* **Many entities have unique values.** All entities in a chunk must share the same shared component values. A large number of unique values fragments entities across many sparsely occupied chunks, which negates the benefits of the chunk layout.
+
+## Shared component value changes
+
+When you change a shared component value for an entity, Unity checks whether an equal value already exists in the shared component value array. If it does, Unity moves the entity to a chunk that stores the index of the existing value. Otherwise, Unity adds the new value to the array and moves the entity to a new chunk that stores the index of this new value. Both cases are [structural changes](concepts-structural-changes.md). To change how Unity compares shared component values when deciding which chunk to use, refer to [Override the default comparison behavior](#override-the-default-comparison-behavior).
 
 Unity stores unmanaged and managed shared components separate from one another and makes unmanaged shared components available to [Burst compiled](https://docs.unity3d.com/Packages/com.unity.burst@latest/index.html) code via the unmanaged shared component APIs (such as [`SetUnmanagedSharedComponentData`](xref:Unity.Entities.EntityManager.SetUnmanagedSharedComponentData*)). For more information, see [Optimize shared components](components-shared-optimize.md).
 

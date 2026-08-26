@@ -18,14 +18,20 @@ namespace Unity.Entities.Tests
 
             var query1 = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<EcsTestData>());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData(query1, new EcsTestData3(7));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent(entity1, ComponentType.ChunkComponent<EcsTestData3>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val1 = m_Manager.GetChunkComponentData<EcsTestData3>(entity1).value0;
+            #pragma warning restore 0618
             Assert.AreEqual(7, val1);
 
             Assert.IsTrue(m_Manager.HasComponent(entity2, ComponentType.ChunkComponent<EcsTestData3>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val2 = m_Manager.GetChunkComponentData<EcsTestData3>(entity2).value0;
+            #pragma warning restore 0618
             Assert.AreEqual(7, val2);
 
             Assert.IsFalse(m_Manager.HasComponent(entity3, ComponentType.ChunkComponent<EcsTestData3>()));
@@ -841,18 +847,24 @@ namespace Unity.Entities.Tests
                 queryBuilder.WithAll<EcsTestTagEnableable>();
             using var query = queryBuilder.Build(m_Manager);
             string sharedComponentValue = "value";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new EcsTestSharedCompManaged(sharedComponentValue));
+            #pragma warning restore 0618
             for (int i = 0; i < entitiesPerArchetype; ++i)
             {
                 bool expectedHas1 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities1[i]);
                 Assert.AreEqual(expectedHas1, m_Manager.HasComponent<EcsTestSharedCompManaged>(entities1[i]));
                 if (expectedHas1)
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual(sharedComponentValue, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities1[i]).value);
+                    #pragma warning restore 0618
 
                 bool expectedHas2 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities2[i]);
                 Assert.AreEqual(expectedHas2, m_Manager.HasComponent<EcsTestSharedCompManaged>(entities2[i]));
                 if (expectedHas2)
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual(sharedComponentValue, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities2[i]).value);
+                    #pragma warning restore 0618
 
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestSharedCompManaged>(entities3[i]));
             }
@@ -893,7 +905,9 @@ namespace Unity.Entities.Tests
 
             m_Manager.Debug.IncrementGlobalSystemVersion();
             string sharedComponentValue = "value";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new EcsTestSharedCompManaged(sharedComponentValue));
+            #pragma warning restore 0618
 
             // validate order versions
             Assert.IsTrue(ChangeVersionUtility.DidChange((uint)m_Manager.GetComponentOrderVersion<EcsTestTagEnableable>(), orderVersionForTag));
@@ -975,19 +989,25 @@ namespace Unity.Entities.Tests
                 queryBuilder.WithAll<EcsTestTagEnableable>();
             using var query = queryBuilder.Build(m_Manager);
             string sharedComponentValue = "value";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new EcsTestSharedCompManaged(sharedComponentValue));
+            #pragma warning restore 0618
             for (int i = 0; i < entitiesPerArchetype; ++i)
             {
                 // Entities in archetype1 that matched the query should now have EcsTestSharedComp with the expected value
                 bool expectedHas1 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities1[i]);
                 Assert.AreEqual(expectedHas1, m_Manager.HasComponent<EcsTestSharedCompManaged>(entities1[i]));
                 if (expectedHas1)
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual(sharedComponentValue, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities1[i]).value);
+                    #pragma warning restore 0618
                 // Entities in archetype2 already have EcsTestSharedComp, but should still get the new component value
                 Assert.AreEqual(true, m_Manager.HasComponent<EcsTestSharedCompManaged>(entities2[i]));
                 var expectedValue2 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities2[i])
                     ? sharedComponentValue : default(EcsTestSharedCompManaged).value;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue2, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities2[i]).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -1115,18 +1135,26 @@ namespace Unity.Entities.Tests
                 queryBuilder.WithAll<EcsTestTagEnableable>();
             using var query = queryBuilder.Build(m_Manager);
             var sharedComponentValue = new EcsTestSharedCompManaged("value");
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(query, sharedComponentValue);
+            #pragma warning restore 0618
             for (int i = 0; i < entitiesPerArchetype; ++i)
             {
                 var expectedValue1 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities1[i])
                     ? sharedComponentValue : default(EcsTestSharedCompManaged);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue1, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities1[i]));
+                #pragma warning restore 0618
 
                 var expectedValue2 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities2[i])
                     ? sharedComponentValue : default(EcsTestSharedCompManaged);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue2, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities2[i]));
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(default(EcsTestSharedCompManaged), m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities3[i]));
+                #pragma warning restore 0618
             }
         }
 
@@ -1165,7 +1193,9 @@ namespace Unity.Entities.Tests
 
             m_Manager.Debug.IncrementGlobalSystemVersion();
             string sharedComponentValue = "value";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(query, new EcsTestSharedCompManaged(sharedComponentValue));
+            #pragma warning restore 0618
 
             // validate order versions
             bool expectChange = enabledBitsMode == EnabledBitsMode.FewComponentsDisabled ||
@@ -1238,7 +1268,9 @@ namespace Unity.Entities.Tests
             var sharedComponentValue = new EcsTestSharedCompManaged("value");
             for (int i = 0; i < entitiesPerArchetype; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities2[i], sharedComponentValue);
+                #pragma warning restore 0618
                 if (enabledBitsMode == EnabledBitsMode.FewComponentsDisabled && (i % 100 == 0))
                 {
                     m_Manager.SetComponentEnabled<EcsTestTagEnableable>(entities1[i], false);
@@ -1256,17 +1288,25 @@ namespace Unity.Entities.Tests
             if (enabledBitsMode != EnabledBitsMode.NoEnableableComponents)
                 queryBuilder.WithAll<EcsTestTagEnableable>();
             using var query = queryBuilder.Build(m_Manager);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(query, sharedComponentValue);
+            #pragma warning restore 0618
             for (int i = 0; i < entitiesPerArchetype; ++i)
             {
                 var expectedValue1 = m_Manager.IsComponentEnabled<EcsTestTagEnableable>(entities1[i])
                     ? sharedComponentValue : default(EcsTestSharedCompManaged);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue1, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities1[i]));
+                #pragma warning restore 0618
 
                 var expectedValue2 = sharedComponentValue;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue2, m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities2[i]));
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(default(EcsTestSharedCompManaged), m_Manager.GetSharedComponentManaged<EcsTestSharedCompManaged>(entities3[i]));
+                #pragma warning restore 0618
             }
         }
 
@@ -1349,8 +1389,10 @@ namespace Unity.Entities.Tests
 
                 if (type == ComponentType.ReadWrite<EcsTestSharedComp>())
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp(1));
                     m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp(2));
+                    #pragma warning restore 0618
                 }
 
                 m_ManagerDebug.CheckInternalConsistency();
@@ -1457,16 +1499,20 @@ namespace Unity.Entities.Tests
             var entity1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp));
             var entity2 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp() {value = 5});
             m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp() {value = 9});
+            #pragma warning restore 0618
 
             var query = m_Manager.CreateEntityQuery(typeof(EcsTestData2));
             m_Manager.AddComponent(query, new ComponentTypeSet(typeof(EcsTestData2), typeof(EcsTestData4)));
 
             m_ManagerDebug.CheckInternalConsistency();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(5, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity1).value);
             Assert.AreEqual(9, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity2).value);
+            #pragma warning restore 0618
 
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData4), typeof(EcsTestSharedComp));
             Assert.AreEqual(archetype, m_Manager.GetChunk(entity1).Archetype);
@@ -1570,16 +1616,20 @@ namespace Unity.Entities.Tests
             var entity1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp));
             var entity2 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp() {value = 5});
             m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp() {value = 9});
+            #pragma warning restore 0618
 
             var query = m_Manager.CreateEntityQuery(typeof(EcsTestData2));
             m_Manager.RemoveComponent(query, new ComponentTypeSet(typeof(EcsTestData2), typeof(EcsTestData4)));
 
             m_ManagerDebug.CheckInternalConsistency();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(5, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity1).value);
             Assert.AreEqual(9, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity2).value);
+            #pragma warning restore 0618
 
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestSharedComp));
             Assert.AreEqual(archetype, m_Manager.GetChunk(entity1).Archetype);
@@ -1619,8 +1669,10 @@ namespace Unity.Entities.Tests
 
                 if (type == ComponentType.ReadWrite<EcsTestSharedComp>())
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp(1));
                     m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp(2));
+                    #pragma warning restore 0618
                 }
 
                 m_ManagerDebug.CheckInternalConsistency();
@@ -1690,7 +1742,9 @@ namespace Unity.Entities.Tests
 
             m_ManagerDebug.SetGlobalSystemVersion(30);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.UniversalQuery, new EcsTestSharedComp(1));
+            #pragma warning restore 0618
             m_ManagerDebug.SetGlobalSystemVersion(40);
             m_Manager.AddComponent(m_Manager.UniversalQuery, typeof(EcsTestTag));
             Assert.AreEqual(30, GetSharedComponentDataVersion<EcsTestSharedComp>(entity1));
@@ -1740,15 +1794,21 @@ namespace Unity.Entities.Tests
             var query1 = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<EcsTestData>());
 
             m_ManagerDebug.CheckInternalConsistency();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData(query1, new EcsTestManagedComponent() { value = "SomeString" });
+            #pragma warning restore 0618
             m_ManagerDebug.CheckInternalConsistency();
 
             Assert.IsTrue(m_Manager.HasComponent(entity1, ComponentType.ChunkComponent<EcsTestManagedComponent>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val1 = m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity1).value;
+            #pragma warning restore 0618
             Assert.AreEqual("SomeString", val1);
 
             Assert.IsTrue(m_Manager.HasComponent(entity2, ComponentType.ChunkComponent<EcsTestManagedComponent>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val2 = m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity2).value;
+            #pragma warning restore 0618
             Assert.AreEqual("SomeString", val2);
 
             Assert.IsFalse(m_Manager.HasComponent(entity3, ComponentType.ChunkComponent<EcsTestManagedComponent>()));
@@ -1807,8 +1867,10 @@ namespace Unity.Entities.Tests
 
                 if (type == ComponentType.ReadWrite<EcsTestSharedComp>())
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp(1));
                     m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp(2));
+                    #pragma warning restore 0618
                 }
 
                 m_ManagerDebug.CheckInternalConsistency();
@@ -1858,8 +1920,10 @@ namespace Unity.Entities.Tests
 
                 if (type == ComponentType.ReadWrite<EcsTestSharedComp>())
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp(1));
                     m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp(2));
+                    #pragma warning restore 0618
                 }
 
                 m_ManagerDebug.CheckInternalConsistency();
@@ -1896,7 +1960,9 @@ namespace Unity.Entities.Tests
 
             m_ManagerDebug.SetGlobalSystemVersion(30);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.UniversalQuery, new EcsTestSharedComp(1));
+            #pragma warning restore 0618
 
             m_ManagerDebug.SetGlobalSystemVersion(40);
 

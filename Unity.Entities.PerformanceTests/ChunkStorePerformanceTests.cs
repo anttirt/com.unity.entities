@@ -77,6 +77,7 @@ namespace Unity.Entities.PerformanceTests
             {
                 harness.Dispose();
             })
+            .WarmupCount(1)
             .MeasurementCount(10)
             .IterationsPerMeasurement(1)
             .Run();

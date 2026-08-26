@@ -188,16 +188,15 @@ namespace Unity.Entities.Editor
             m_SubSceneChangeTracker.SetWorld(m_World);
 
             m_HierarchyEntityChangeTracker?.Dispose();
+            m_HierarchyEntityChangeTracker = null;
 
-            if (world == null)
-                m_HierarchyEntityChangeTracker = null;
-            else if (!TypeManager.IsInitialized)
+            if (world != null)
             {
-                Debug.LogError($"{nameof(TypeManager)} has not been initialized properly");
-                m_HierarchyEntityChangeTracker = null;
+                if (!TypeManager.IsInitialized)
+                    Debug.LogError($"{nameof(TypeManager)} has not been initialized properly");
+                else
+                    m_HierarchyEntityChangeTracker = new HierarchyEntityChangeTracker(m_World, m_Allocator) { OperationMode = m_HierarchyEntityChangeTrackerOperationMode };   
             }
-            else
-                m_HierarchyEntityChangeTracker = new HierarchyEntityChangeTracker(m_World, m_Allocator) { OperationMode = m_HierarchyEntityChangeTrackerOperationMode };
 
             Reset();
         }
@@ -271,7 +270,7 @@ namespace Unity.Entities.Editor
                         if (m_HierarchyGameObjectChanges.HasChanges())
                         {
                             // Delegate the implementation to another enumerator.
-                            m_IntegrateGameObjectChangesEnumerator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_HierarchyGameObjectChanges, m_SubSceneMap, GameObjectChangeIntegrationBatchSize);
+                            m_IntegrateGameObjectChangesEnumerator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_HierarchyGameObjectChanges, m_SubSceneMap, m_HierarchyNameStore, GameObjectChangeIntegrationBatchSize);
                         }
                         else if (!IsHierarchyVisible)
                         {
@@ -393,7 +392,7 @@ namespace Unity.Entities.Editor
                     // In practice the expanded state is simply a hashset and there is no risk in adding new elements. We should still find a better solution.
                     foreach (var change in m_HierarchyPrefabStageChanges.GameObjectChangeTrackerEvents)
                         if (change.EventType == GameObjectChangeTrackerEventType.CreatedOrChanged)
-                            m_HierarchyNodes.SetExpanded(HierarchyNodeHandle.FromGameObject(change.InstanceId), true);
+                            m_HierarchyNodes.SetExpanded(HierarchyNodeHandle.FromGameObject(change.EntityId), true);
 
                     m_HierarchyNameStore?.IntegratePrefabStageChanges(m_HierarchyPrefabStageChanges);
                     SetState(UpdateStep.ExportImmutable);

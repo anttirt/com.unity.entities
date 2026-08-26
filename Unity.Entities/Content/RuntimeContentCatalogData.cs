@@ -8,7 +8,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Global id for content archives.
     /// </summary>
-    [Serializable]
     internal struct ContentArchiveId : IEquatable<ContentArchiveId>
     {
         /// <summary>
@@ -30,7 +29,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Global id of content files.
     /// </summary>
-    [Serializable]
     internal struct ContentFileId : IEquatable<ContentFileId>
     {
         /// <summary>
@@ -52,7 +50,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Global id for scenes contained in content archives.
     /// </summary>
-    [Serializable]
     internal struct ContentSceneId : IEquatable<ContentSceneId>
     {
         /// <summary>
@@ -74,7 +71,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Content archive information.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct ContentArchiveLocation
     {
@@ -87,7 +83,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Content file information.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct ContentFileLocation
     {
@@ -108,7 +103,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Content object information.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct ContentObjectLocation
     {
@@ -129,7 +123,6 @@ namespace Unity.Entities.Content
     /// <summary>
     /// Content scene information.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct ContentSceneLocation
     {
@@ -146,11 +139,10 @@ namespace Unity.Entities.Content
         /// </summary>
         public FixedString128Bytes SceneName;
     }
-    
+
     /// <summary>
     /// Content blob information.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct ContentBlobLocation
     {
@@ -171,12 +163,11 @@ namespace Unity.Entities.Content
         /// </summary>
         public long Length;
     }
-    
+
 
     /// <summary>
     /// Serialized catalog data.
     /// </summary>
-    [Serializable]
     [StructLayout(LayoutKind.Sequential)]
     internal struct RuntimeContentCatalogData
     {

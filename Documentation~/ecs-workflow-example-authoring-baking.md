@@ -81,7 +81,7 @@ This step demonstrates how to add a component to an entity using the [baking](ba
 
 For information on adding components to entities without using the authoring and baking process, refer to the section [Add components to an entity](components-add-to-entity.md).
 
-### Create an authoring component
+### <a id="authoring-component"></a>Create an authoring component
 
 An authoring component is a `MonoBehaviour` component that provides a way to pass data from GameObject fields in the Editor into ECS components.
 
@@ -93,19 +93,17 @@ To create an authoring component:
 
 2. Add the script to the **Cube** GameObject.
 
-### Inspect a GameObject in Authoring and Runtime data modes
+### Inspect a GameObject and its corresponding entity
 
-To understand the differences between GameObject and entity concepts better, inspect the cube GameObject in different [data modes](editor-authoring-runtime.md).
+To understand the differences between GameObject and entity concepts better, inspect the cube in the subscene and in the Editor World:
 
-ECS provides two Inspector window data mode views: **Authoring** and **Runtime**. To switch between the modes, click the circle icon in the top-right corner of the Inspector window.
+![Cube GameObject in the subscene and the Cube entity in the Editor World](images/getting-started/ecs-hierarchy-subscene-vs-editor-world.png)<br/>_Cube GameObject in the subscene and the Cube entity in the Editor World_
 
-![The data mode switcher icon in the Inspector window.](images/getting-started/ecs-inspector-data-mode.png)
+Select the **Cube** GameObject in the Hierarchy. The Inspector displays the authoring data, including the **Degrees Per Second** property in the **Rotation Speed Authoring** component, as defined in the `RotationSpeedAuthoring` class.
 
-In the **Authoring** data mode, the Inspector window displays the **Degrees Per Second** property in the **Rotation Speed Authoring** component, as defined in the `RotationSpeedAuthoring` class.
+To inspect the entity data, select the corresponding entity in the Hierarchy under the Editor World node. The [Entity Inspector](editor-entity-inspector.md) displays the entity's runtime components. At this point, the entity view doesn't contain the **Degrees Per Second** property or the **Rotation Speed** component. This is because there isn't a baker that converts the authoring component into an entity component yet.
 
-Click the data mode circle and select **Runtime**. The Inspector window displays the entity data view. The view does not contain the **Degrees Per Second** property, or the **Rotation Speed** component. This is because the component only exists on the GameObject and there is no converter or baker that would convert it into an entity component yet.
-
-The next step is to create a baker class that converts the `MonoBehaviour` component into an entity component. 
+The next step is to create a baker class that converts the `MonoBehaviour` component into an entity component.
 
 ### Create the baker class
 
@@ -142,9 +140,9 @@ This class has the following main functions:
 
 The new `RotationSpeed` component is an ECS component, and it's using the data from the `MonoBehaviour` authoring component.
 
-Save the script and inspect the cube GameObject in the **Runtime** [data mode](editor-authoring-runtime.md). Now the cube has the **Rotation Speed** component with the **Radians Per Second** property.
+Save the script and select the Cube entity in the Hierarchy under the World node to view it in the [Entity Inspector](editor-entity-inspector.md). Now the entity has the **Rotation Speed** component with the **Radians Per Second** property.
 
-![The cube with the Rotation Speed component in the Runtime data mode](images/getting-started/ecs-inspector-runtime-rotation-speed.png)
+![The cube with the Rotation Speed component in the Editor World node](images/getting-started/ecs-inspector-entity-baked-rotation-speed.png)
 
 The property name and units in the component are different from the `MonoBehaviour` authoring component, where the name is **Degrees Per Second** and the units are degrees. This illustrates a common practice where you can add extra processing when converting data from GameObjects into entities.
 
@@ -162,7 +160,7 @@ This task describes how to create an ECS system that rotates entities.
 
 Unlike the GameObject workflow, in ECS you don't assign scripts directly to specific entities. Instead, a system queries for entities that match certain criteria in a world, and then performs actions on all of them.
 
-### Create the rotation system
+### <a id="rotation-system"></a>Create the rotation system
 
 To create a rotation system:
 
@@ -192,7 +190,7 @@ To see the query functionality in action:
 
 1. Create several more cube GameObjects in the subscene.
 
-2. In the **Authoring** data mode, add the **Rotation Speed Authoring** component to some, but not all cubes.
+2. Add the **Rotation Speed Authoring** component to some, but not all cubes.
 
 3. On cubes that have the **Rotation Speed Authoring** component, change the **Degrees Per Second** values.
 
@@ -205,3 +203,5 @@ To see the query functionality in action:
 * [Introduction to the ECS workflow](ecs-workflow-intro.md)
 * [Starter ECS workflow](ecs-workflow-example-starter.md)
 * [Prefab instantiation workflow](ecs-workflow-example-prefab-instantiation.md)
+* [Make a system multithreaded](ecs-workflow-example-multithreading.md)
+* [Use entity command buffer for structural changes](ecs-workflow-example-ecb.md)

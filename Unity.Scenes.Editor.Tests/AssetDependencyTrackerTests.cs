@@ -157,13 +157,6 @@ namespace Unity.Scenes.Tests
             return AsyncDependencyChangeIsDetected_AndRetriggersOnError_Impl(true);
         }
 
-        [UnityTest]
-        [Ignore("The current approach to detecting failures does not detect cases where only the file modification date changes.")]
-        public IEnumerator AsyncDependencyChangeIsDetected_AndRetriggersOnError_WithoutFileChange()
-        {
-            return AsyncDependencyChangeIsDetected_AndRetriggersOnError_Impl(false);
-        }
-
         public IEnumerator AsyncDependencyChangeIsDetected_AndRetriggersOnError_Impl(bool modifyFile)
         {
             // This test is specifically designed to exercise the case where a source asset dependency is changed during import.
@@ -295,7 +288,13 @@ namespace Unity.Scenes.Tests
 
             Assert.AreEqual(paths.Length, 1);
             var path = paths.First(p => p.EndsWith("output", StringComparison.Ordinal));
-            Assert.AreEqual(content, File.ReadAllText(path));
+
+            var tempPath = FileUtil.GetUniqueTempPathInProject();
+            FileUtil.CopyFileOrDirectory(path, tempPath);
+
+            Assert.AreEqual(content, File.ReadAllText(tempPath));
+
+            File.Delete(tempPath);
         }
     }
 }

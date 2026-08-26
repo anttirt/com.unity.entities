@@ -169,6 +169,7 @@ namespace Unity.Entities.Tests
         }
     }
 
+    #pragma warning disable EA0017 // intentionally a managed shared component
     struct ManagedSharedData1 : ISharedComponentData, IEquatable<ManagedSharedData1>
     {
         public Tuple<int, int> value;
@@ -227,6 +228,7 @@ namespace Unity.Entities.Tests
             }
         }
     }
+    #pragma warning restore EA0017
 
     [BurstCompile]
     class SharedComponentDataTests : ECSTestsFixture
@@ -245,9 +247,13 @@ namespace Unity.Entities.Tests
             var group12 = m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData2), typeof(SharedData1));
 
             var group1_filter_0 = m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             group1_filter_0.SetSharedComponentFilterManaged(new SharedData1(0));
+            #pragma warning restore 0618
             var group1_filter_20 = m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             group1_filter_20.SetSharedComponentFilterManaged(new SharedData1(20));
+            #pragma warning restore 0618
 
             Assert.AreEqual(0, group1.CalculateEntityCount());
             Assert.AreEqual(0, group2.CalculateEntityCount());
@@ -268,7 +274,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(117, group1_filter0_data[0].value);
             Assert.AreEqual(243, group1_filter0_data[1].value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e1, new SharedData1(20));
+            #pragma warning restore 0618
 
             group1_filter0_data = group1_filter_0.ToComponentDataArray<EcsTestData>(World.UpdateAllocator.ToAllocator);
             var group1_filter20_data = group1_filter_20.ToComponentDataArray<EcsTestData>(World.UpdateAllocator.ToAllocator);
@@ -278,7 +286,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(117, group1_filter20_data[0].value);
             Assert.AreEqual(243, group1_filter0_data[0].value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e2, new SharedData1(20));
+            #pragma warning restore 0618
 
             group1_filter20_data = group1_filter_20.ToComponentDataArray<EcsTestData>(World.UpdateAllocator.ToAllocator);
 
@@ -309,27 +319,39 @@ namespace Unity.Entities.Tests
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(ue1));
 
             // Managed path
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(me1, new ManagedSharedData1(new Tuple<int, int>(17, 3)));
             m_Manager.AddSharedComponentManaged(me2, new ManagedSharedData1(new Tuple<int, int>(17, 3)));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<ManagedSharedData1>(me1));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(me1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(new Tuple<int, int>(17, 3), m_Manager.GetSharedComponentManaged<ManagedSharedData1>(me1).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<ManagedSharedData1>(me1);
             m_Manager.RemoveComponent<ManagedSharedData1>(me2);
 
             // Unmanaged path
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new SharedData1());
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(ue1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<SharedData1>(ue1).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new SharedData1(17));
             m_Manager.AddSharedComponentManaged(ue2, new SharedData1(17));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(ue1));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(ue1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(ue1).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<SharedData1>(ue1);
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(ue1));
@@ -346,17 +368,23 @@ namespace Unity.Entities.Tests
             Entity ue2 = m_Manager.CreateEntity(archetype);
 
             // Unmanaged through managed api
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new SharedData1(17));
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(ue1));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(ue1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(ue1).value);
+            #pragma warning restore 0618
             Assert.AreEqual(17, m_Manager.GetSharedComponent<SharedData1>(ue1).value);
 
             // Unmanaged API
             m_Manager.AddSharedComponent(ue2, new SharedData1(34));
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(ue2));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(ue2));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData1>(ue2).value);
+            #pragma warning restore 0618
             Assert.AreEqual(34, m_Manager.GetSharedComponent<SharedData1>(ue2).value);
         }
 
@@ -368,13 +396,19 @@ namespace Unity.Entities.Tests
 
             var startCount = m_Manager.GetSharedComponentCount();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new SharedData1(17));
+            #pragma warning restore 0618
             Assert.AreEqual(startCount + 1, m_Manager.GetSharedComponentCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new SharedData2(18));
+            #pragma warning restore 0618
             Assert.AreEqual(startCount + 2, m_Manager.GetSharedComponentCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(ue1, new ManagedSharedData1(new Tuple<int, int>(2, 3)));
+            #pragma warning restore 0618
             Assert.AreEqual(startCount + 3, m_Manager.GetSharedComponentCount());
 
             // ###REVIEW NOTE### Managed Path doesn't clear the SharedDataComponent when they're no longer referenced, should we fix this behavior or keep it?
@@ -401,12 +435,16 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(17, m_Manager.GetSharedComponent<SharedData1>(e1).value);
 
             Assert.AreEqual(0, m_Manager.GetSharedComponent<SharedData1>(e2).value);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e2, new SharedData1(18));
+            #pragma warning restore 0618
             Assert.AreEqual(18, m_Manager.GetSharedComponent<SharedData1>(e2).value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<SharedData1>(e3).value);
             m_Manager.SetSharedComponentManaged(e3, new SharedData1(19));
             Assert.AreEqual(19, m_Manager.GetSharedComponentManaged<SharedData1>(e3).value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -425,7 +463,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(17, m_Manager.GetSharedComponent<SharedData1>(e2).value);
             Assert.AreEqual(17, m_Manager.GetSharedComponent<SharedData1>(e3).value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(chunk, new SharedData1(23));
+            #pragma warning restore 0618
             Assert.AreEqual(23, m_Manager.GetSharedComponent<SharedData1>(e1).value);
             Assert.AreEqual(23, m_Manager.GetSharedComponent<SharedData1>(e2).value);
             Assert.AreEqual(23, m_Manager.GetSharedComponent<SharedData1>(e3).value);
@@ -441,10 +481,14 @@ namespace Unity.Entities.Tests
 
             int refCounter = 0;
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e1, new SharedDataRefCounter(10, &refCounter));
+            #pragma warning restore 0618
             Assert.AreEqual(1, refCounter);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e2, new SharedDataRefCounter(20, &refCounter));
+            #pragma warning restore 0618
             Assert.AreEqual(2, refCounter);
 
             m_Manager.RemoveComponent<SharedDataRefCounter>(e1);
@@ -458,26 +502,36 @@ namespace Unity.Entities.Tests
         public void GetAllUniqueSharedComponents_ReturnsCorrectValues()
         {
             var unique = new List<SharedData1>(0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(unique);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, unique.Count);
             Assert.AreEqual(default(SharedData1).value, unique[0].value);
 
             var archetype = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData));
             Entity e = m_Manager.CreateEntity(archetype);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e, new SharedData1(17));
+            #pragma warning restore 0618
 
             unique.Clear();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(unique);
+            #pragma warning restore 0618
 
             Assert.AreEqual(2, unique.Count);
             Assert.AreEqual(default(SharedData1).value, unique[0].value);
             Assert.AreEqual(17, unique[1].value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e, new SharedData1(34));
+            #pragma warning restore 0618
 
             unique.Clear();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(unique);
+            #pragma warning restore 0618
 
             Assert.AreEqual(2, unique.Count);
             Assert.AreEqual(default(SharedData1).value, unique[0].value);
@@ -486,10 +540,76 @@ namespace Unity.Entities.Tests
             m_Manager.DestroyEntity(e);
 
             unique.Clear();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(unique);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, unique.Count);
             Assert.AreEqual(default(SharedData1).value, unique[0].value);
+        }
+
+        static int FindSharedComponentValueIndex(NativeList<SharedData1> values, int value)
+        {
+            for (int i = 1; i < values.Length; i++)
+            {
+                if (values[i].value == value)
+                    return i;
+            }
+            return -1;
+        }
+
+        [Test]
+        public void GetAllUniqueSharedComponents_ReturnsCorrectValuesAndIndices()
+        {
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out var values, out var indices, Allocator.Temp);
+
+            Assert.AreEqual(1, values.Length);
+            Assert.AreEqual(1, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+
+            var archetype = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData));
+            var e1 = m_Manager.CreateEntity(archetype);
+            m_Manager.SetSharedComponent(e1, new SharedData1(17));
+            var e2 = m_Manager.CreateEntity(archetype);
+            m_Manager.SetSharedComponent(e2, new SharedData1(34));
+
+            values.Dispose();
+            indices.Dispose();
+
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out values, out indices, Allocator.Temp);
+
+            Assert.AreEqual(3, values.Length);
+            Assert.AreEqual(3, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+
+            int pos17 = FindSharedComponentValueIndex(values, 17);
+            int pos34 = FindSharedComponentValueIndex(values, 34);
+            Assert.AreNotEqual(-1, pos17, "Value 17 not found");
+            Assert.AreNotEqual(-1, pos34, "Value 34 not found");
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e1), indices[pos17]);
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e2), indices[pos34]);
+
+            m_Manager.DestroyEntity(e1);
+
+            values.Dispose();
+            indices.Dispose();
+
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out values, out indices, Allocator.Temp);
+
+            Assert.AreEqual(2, values.Length);
+            Assert.AreEqual(2, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+
+            pos34 = FindSharedComponentValueIndex(values, 34);
+            Assert.AreNotEqual(-1, pos34, "Value 34 not found");
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e2), indices[pos34]);
+            Assert.AreEqual(-1, FindSharedComponentValueIndex(values, 17), "Value 17 should have been removed");
+
+            values.Dispose();
+            indices.Dispose();
         }
 
         [Test]
@@ -628,6 +748,89 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public void GetAllUniqueSharedComponents_WithIndices_WorksAsIntended()
+        {
+            AllocatorManager.Initialize();
+            var allocatorHelper = new AllocatorHelper<TestAllocator>(AllocatorManager.Temp);
+            ref var allocator = ref allocatorHelper.Allocator;
+            allocator.Initialize();
+
+            // Empty world: only the default slot.
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out var values, out var indices, allocator.Handle);
+
+            Assert.AreEqual(1, values.Length);
+            Assert.AreEqual(1, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+
+            values.Dispose();
+            indices.Dispose();
+            allocator.AssertNoLeaks();
+
+            // Two entities share value 17; one entity has value 34.
+            var archetype = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData));
+            var e1 = m_Manager.CreateEntity(archetype);
+            m_Manager.SetSharedComponent(e1, new SharedData1(17));
+            var e2 = m_Manager.CreateEntity(archetype);
+            m_Manager.SetSharedComponent(e2, new SharedData1(17));
+            var e3 = m_Manager.CreateEntity(archetype);
+            m_Manager.SetSharedComponent(e3, new SharedData1(34));
+
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out values, out indices, allocator.Handle);
+
+            Assert.AreEqual(3, values.Length);  // default, 17, 34
+            Assert.AreEqual(3, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+
+            int pos17 = FindSharedComponentValueIndex(values, 17);
+            int pos34 = FindSharedComponentValueIndex(values, 34);
+            Assert.AreNotEqual(-1, pos17, "Value 17 not found");
+            Assert.AreNotEqual(-1, pos34, "Value 34 not found");
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e1), indices[pos17]);
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e2), indices[pos17]);  // same as e1
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e3), indices[pos34]);
+
+            values.Dispose();
+            indices.Dispose();
+            allocator.AssertNoLeaks();
+
+            // Destroying one of the two value-17 entities keeps the entry alive.
+            m_Manager.DestroyEntity(e1);
+
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out values, out indices, allocator.Handle);
+
+            Assert.AreEqual(3, values.Length);  // still default, 17, 34
+            Assert.AreEqual(3, indices.Length);
+            Assert.AreNotEqual(-1, FindSharedComponentValueIndex(values, 17), "Value 17 should still be present");
+            Assert.AreNotEqual(-1, FindSharedComponentValueIndex(values, 34), "Value 34 should still be present");
+
+            values.Dispose();
+            indices.Dispose();
+            allocator.AssertNoLeaks();
+
+            // Destroying the last value-17 entity drops that entry.
+            m_Manager.DestroyEntity(e2);
+
+            m_Manager.GetAllUniqueSharedComponents<SharedData1>(out values, out indices, allocator.Handle);
+
+            Assert.AreEqual(2, values.Length);  // default, 34
+            Assert.AreEqual(2, indices.Length);
+            Assert.AreEqual(default(SharedData1).value, values[0].value);
+            Assert.AreEqual(0, indices[0]);
+            Assert.AreEqual(-1, FindSharedComponentValueIndex(values, 17), "Value 17 should have been removed");
+
+            pos34 = FindSharedComponentValueIndex(values, 34);
+            Assert.AreNotEqual(-1, pos34, "Value 34 not found");
+            Assert.AreEqual(m_Manager.GetSharedComponentIndex<SharedData1>(e3), indices[pos34]);
+
+            values.Dispose();
+            indices.Dispose();
+            allocator.AssertNoLeaks();
+            allocator.Dispose();
+        }
+
+        [Test]
         public unsafe void GetAllUniqueSharedComponents_ReturnsCorrectIndices()
         {
             Entity e = m_Manager.CreateEntity();
@@ -637,9 +840,13 @@ namespace Unity.Entities.Tests
             int refcount1 = 1;
             int refcount2 = 1;
             var sharedDataRefCounter1 = new SharedDataRefCounter(0, &refcount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, sharedDataRefCounter1);
+            #pragma warning restore 0618
             var sharedDataRefCounter2 = new SharedDataRefCounter(1, &refcount2);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e2, sharedDataRefCounter2);
+            #pragma warning restore 0618
             /*
              * it's important to also remove one of the shared components, because we have had issues where
              * the index is fine until you remove a component and then is wrong afterwards
@@ -647,7 +854,9 @@ namespace Unity.Entities.Tests
             m_Manager.RemoveComponent<SharedDataRefCounter>(e);
             var values = new List<SharedDataRefCounter>();
             var indices = new List<int>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(values, indices);
+            #pragma warning restore 0618
 
             Assert.That(indices[0] == 0);
             var firstrealindex = indices[1];
@@ -662,11 +871,17 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData));
             Entity e = m_Manager.CreateEntity(archetype);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e, new SharedData1(17));
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -675,12 +890,18 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData));
             Entity e = m_Manager.CreateEntity(archetype);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e, new SharedData1(17));
+            #pragma warning restore 0618
             m_Manager.AddComponentData(e, new EcsTestData2 {value0 = 1, value1 = 2});
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -689,8 +910,10 @@ namespace Unity.Entities.Tests
         {
             Entity e = m_Manager.CreateEntity(typeof(EcsTestData));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => { m_Manager.GetSharedComponentManaged<SharedData1>(e); });
             Assert.Throws<ArgumentException>(() => { m_Manager.SetSharedComponentManaged(e, new SharedData1()); });
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -702,17 +925,25 @@ namespace Unity.Entities.Tests
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(e));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(e));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, new SharedData1(17));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, new SharedData2(34));
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
             Assert.IsTrue(m_Manager.HasComponent<SharedData2>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
             Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData2>(e).value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -728,22 +959,30 @@ namespace Unity.Entities.Tests
             }
 
             var value1 = new ManagedSharedData1(17);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entities, value1);
+            #pragma warning restore 0618
             foreach (var e in entities)
             {
                 Assert.IsTrue(m_Manager.HasComponent<ManagedSharedData1>(e));
                 Assert.IsFalse(m_Manager.HasComponent<ManagedSharedData2>(e));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1.value, m_Manager.GetSharedComponentManaged<ManagedSharedData1>(e).value);
+                #pragma warning restore 0618
             }
 
             var value2 = new ManagedSharedData2(34);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entities, value2);
+            #pragma warning restore 0618
             foreach (var e in entities)
             {
                 Assert.IsTrue(m_Manager.HasComponent<ManagedSharedData1>(e));
                 Assert.IsTrue(m_Manager.HasComponent<ManagedSharedData2>(e));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1.value, m_Manager.GetSharedComponentManaged<ManagedSharedData1>(e).value);
                 Assert.AreEqual(value2.value, m_Manager.GetSharedComponentManaged<ManagedSharedData2>(e).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -764,7 +1003,9 @@ namespace Unity.Entities.Tests
             {
                 Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
                 Assert.IsFalse(m_Manager.HasComponent<SharedData2>(e));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+                #pragma warning restore 0618
             }
 
             m_Manager.AddSharedComponent(entities, new SharedData2(34));
@@ -772,8 +1013,10 @@ namespace Unity.Entities.Tests
             {
                 Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
                 Assert.IsTrue(m_Manager.HasComponent<SharedData2>(e));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
                 Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData2>(e).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -785,18 +1028,26 @@ namespace Unity.Entities.Tests
             using var entities = m_Manager.CreateEntity(archetype, entityCount, World.UpdateAllocator.ToAllocator);
 
             var value1 = new ManagedSharedData1(17);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entities, value1);
+            #pragma warning restore 0618
             foreach (var e in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1.value, m_Manager.GetSharedComponentManaged<ManagedSharedData1>(e).value);
+                #pragma warning restore 0618
             }
 
             var value2 = new ManagedSharedData2(34);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entities, value2);
+            #pragma warning restore 0618
             foreach (var e in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1.value, m_Manager.GetSharedComponentManaged<ManagedSharedData1>(e).value);
                 Assert.AreEqual(value2.value, m_Manager.GetSharedComponentManaged<ManagedSharedData2>(e).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -810,14 +1061,18 @@ namespace Unity.Entities.Tests
             m_Manager.SetSharedComponent(entities, new SharedData1(17));
             foreach (var e in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+                #pragma warning restore 0618
             }
 
             m_Manager.AddSharedComponent(entities, new SharedData2(34));
             foreach (var e in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
                 Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData2>(e).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -836,10 +1091,14 @@ namespace Unity.Entities.Tests
 
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(e));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new SharedData1(17));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -857,10 +1116,14 @@ namespace Unity.Entities.Tests
 
             Assert.IsFalse(m_Manager.HasComponent<EcsTestSharedCompWithMaxChunkCapacity>(e));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new EcsTestSharedCompWithMaxChunkCapacity(17));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<EcsTestSharedCompWithMaxChunkCapacity>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<EcsTestSharedCompWithMaxChunkCapacity>(e).Value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -891,7 +1154,9 @@ namespace Unity.Entities.Tests
                     FastAssert.IsFalse(m_Manager.HasComponent<EcsTestSharedCompWithMaxChunkCapacity>(e));
                 }
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(query, new EcsTestSharedCompWithMaxChunkCapacity(17));
+                #pragma warning restore 0618
                 var chunk = m_Manager.GetChunk(entities[0]);
                 int maxChunkCapacity = TypeManager.GetTypeInfo<EcsTestSharedCompWithMaxChunkCapacity>().MaximumChunkCapacity;
                 int expectedChunkCount = (numEntities + maxChunkCapacity - 1) / maxChunkCapacity;
@@ -901,7 +1166,9 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < entities.Length; ++i)
                 {
                     FastAssert.IsTrue(m_Manager.HasComponent<EcsTestSharedCompWithMaxChunkCapacity>(entities[i]));
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     FastAssert.AreEqual(17, m_Manager.GetSharedComponentManaged<EcsTestSharedCompWithMaxChunkCapacity>(entities[i]).Value);
+                    #pragma warning restore 0618
                     FastAssert.AreEqual(i, m_Manager.GetComponentData<EcsTestData>(entities[i]).value);
                 }
             }
@@ -925,7 +1192,9 @@ namespace Unity.Entities.Tests
                 m_Manager.AddComponent(entities, typeof(EcsTestSharedCompWithMaxChunkCapacity));
 
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestSharedCompWithMaxChunkCapacity>(entities[0]));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsTestSharedCompWithMaxChunkCapacity>(entities[0]).Value);
+                #pragma warning restore 0618
             }
         }
 
@@ -935,17 +1204,23 @@ namespace Unity.Entities.Tests
             Entity e = m_Manager.CreateEntity();
 
             m_Manager.AddComponentData(e, new EcsTestData(42));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, new SharedData1(17));
             m_Manager.AddSharedComponentManaged(e, new SharedData2(34));
+            #pragma warning restore 0618
 
             Assert.IsTrue(m_Manager.HasComponent<SharedData1>(e));
             Assert.IsTrue(m_Manager.HasComponent<SharedData2>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(17, m_Manager.GetSharedComponentManaged<SharedData1>(e).value);
             Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData2>(e).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<SharedData1>(e);
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(e));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(34, m_Manager.GetSharedComponentManaged<SharedData2>(e).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<SharedData2>(e);
             Assert.IsFalse(m_Manager.HasComponent<SharedData2>(e));
@@ -1019,19 +1294,25 @@ namespace Unity.Entities.Tests
             var e1 = m_Manager.CreateEntity(typeof(SharedData1));
             var e2 = m_Manager.CreateEntity(typeof(SharedData1), typeof(EcsTestData));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e0, new SharedData1 {value = 0});
             m_Manager.SetSharedComponentManaged(e1, new SharedData1 {value = 1});
             m_Manager.SetSharedComponentManaged(e2, new SharedData1 {value = 2});
+            #pragma warning restore 0618
 
             var c0 = m_Manager.GetChunk(e0);
             var c1 = m_Manager.GetChunk(e1);
             var c2 = m_Manager.GetChunk(e2);
             var query = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<SharedData1>(), ComponentType.ReadWrite<EcsTestData>());
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(query, new SharedData1 {value = 10});
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(10, m_Manager.GetSharedComponentManaged<SharedData1>(e0).value);
             Assert.AreEqual(1, m_Manager.GetSharedComponentManaged<SharedData1>(e1).value);
             Assert.AreEqual(10, m_Manager.GetSharedComponentManaged<SharedData1>(e2).value);
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<SharedData1>(noShared));
 
             // This is not required but describes current behaviour,
@@ -1105,7 +1386,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(typeof(SharedData1), sharedComponentValue.GetType());
             Assert.AreEqual(0, ((SharedData1)sharedComponentValue).value);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e, new SharedData1(17));
+            #pragma warning restore 0618
 
             sharedComponentValue = m_Manager.GetSharedComponentData(e, typeIndex);
             Assert.AreEqual(typeof(SharedData1), sharedComponentValue.GetType());
@@ -1117,11 +1400,15 @@ namespace Unity.Entities.Tests
         {
             var archetype = m_Manager.CreateArchetype(typeof(EcsStringSharedComponent), typeof(EcsTestData));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new EcsStringSharedComponent { Value = "1" });
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new EcsStringSharedComponent { Value = 1.ToString() });
+            #pragma warning restore 0618
 
             List<EcsStringSharedComponent> uniques = new List<EcsStringSharedComponent>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(uniques);
+            #pragma warning restore 0618
 
             Assert.AreEqual(2, uniques.Count);
         }
@@ -1166,12 +1453,16 @@ namespace Unity.Entities.Tests
         {
             var archetype = m_Manager.CreateArchetype(typeof(CustomEquality), typeof(EcsTestData));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new CustomEquality { Foo = 0x01 });
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new CustomEquality { Foo = 0x2201 });
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new CustomEquality { Foo = 0x3201 });
+            #pragma warning restore 0618
 
             List<CustomEquality> uniques = new List<CustomEquality>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(uniques);
+            #pragma warning restore 0618
 
             Assert.AreEqual(2, uniques.Count);
         }
@@ -1184,7 +1475,9 @@ namespace Unity.Entities.Tests
             int RefCount1 = 0;
             var entity = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
+            #pragma warning restore 0618
             Assert.AreEqual(1, RefCount1);
 
             world.Dispose();
@@ -1202,7 +1495,9 @@ namespace Unity.Entities.Tests
             int RefCount1 = 0;
             var entity = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
+            #pragma warning restore 0618
             world2.EntityManager.MoveEntitiesFrom(world.EntityManager);
             world.Dispose();
             Assert.AreEqual(1, RefCount1);
@@ -1219,7 +1514,9 @@ namespace Unity.Entities.Tests
             int RefCount1 = 0;
             var entity = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
+            #pragma warning restore 0618
             var entities = new NativeArray<Entity>(1, Allocator.Temp);
             entities[0] = entity;
             world2.EntityManager.CopyEntitiesFrom(world.EntityManager, entities);
@@ -1239,7 +1536,9 @@ namespace Unity.Entities.Tests
             int RefCount1 = 0;
             var entity = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
+            #pragma warning restore 0618
             var entities = new NativeArray<Entity>(1, Allocator.Temp);
             entities[0] = entity;
             world2.EntityManager.CopyEntitiesFrom(world.EntityManager, entities);
@@ -1261,8 +1560,10 @@ namespace Unity.Entities.Tests
             var entity = world.EntityManager.CreateEntity();
             var entity2 = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
             world.EntityManager.AddSharedComponentManaged(entity2, refcountedComp);
+            #pragma warning restore 0618
             world.EntityManager.RemoveComponent(entity, ComponentType.ReadWrite<EcsTestSharedCompWithRefCount>());
 
             Assert.AreEqual(1, RefCount1);
@@ -1272,7 +1573,9 @@ namespace Unity.Entities.Tests
             /*
              * incidentally, check that being IRefcounted doesn't force a component to be treated as a managed shared component
              */
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<EcsTestSharedCompWithRefCount>()));
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -1285,8 +1588,10 @@ namespace Unity.Entities.Tests
             var entity = world.EntityManager.CreateEntity();
             var entity2 = world.EntityManager.CreateEntity();
             var refcountedComp = new EcsTestSharedCompWithRefCount(&RefCount1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.AddSharedComponentManaged(entity, refcountedComp);
             world.EntityManager.AddSharedComponentManaged(entity2, refcountedComp);
+            #pragma warning restore 0618
             world.EntityManager.RemoveComponent(entity, ComponentType.ReadWrite<EcsTestSharedCompWithRefCount>());
             world.EntityManager.RemoveComponent(entity2, ComponentType.ReadWrite<EcsTestSharedCompWithRefCount>());
 

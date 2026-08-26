@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
 using VerifyCS =
     Unity.Entities.SourceGenerators.Test.CSharpSourceGeneratorVerifier<
@@ -31,23 +31,14 @@ namespace Unity.Entities.SourceGenerators
 
                 partial class MultipleUserWrittenSystemPartsWithGeneratedQueriesSystem : SystemBase
                 {
-                    public void UseBulkOperations()
-                    {
-                        Entities.WithAll<EcsTestData3>().DestroyEntity(); // Query 2
-                        Entities.WithNone<EcsTestData2>().WithAll<EcsTestData>().DestroyEntity(); // Same as Query 1
-                    }
-                }
-
-                partial class MultipleUserWrittenSystemPartsWithGeneratedQueriesSystem : SystemBase
-                {
                     public void UseIdiomaticCSharpForEachs()
                     {
-                        // Query 3
+                        // Query 2
                         foreach (var _ in SystemAPI.Query<RefRO<EcsTestData4>>())
                         {
                         }
-                        // Same as Query 2
-                        foreach (var _ in SystemAPI.Query<RefRO<EcsTestData3>>())
+                        // Same as Query 1
+                        foreach (var _ in SystemAPI.Query<RefRO<EcsTestData>>().WithNone<EcsTestData2>())
                         {
                         }
                     }

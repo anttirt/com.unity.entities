@@ -202,7 +202,7 @@ namespace Unity.Entities
 
         void RegisterPrefabForBaking(GameObject prefab)
         {
-            if (!_BakedEntities._GameObjectToEntity.ContainsKey(prefab.GetInstanceID()))
+            if (!_BakedEntities._GameObjectToEntity.ContainsKey(prefab.GetEntityId()))
                 _BakedEntities.CreateEntityForPrefab(prefab);
         }
 #endif

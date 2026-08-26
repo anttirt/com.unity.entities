@@ -21,7 +21,7 @@ namespace Unity.Entities
     /// with significantly less boilerplate code.
     /// </remarks>
     /// <example>
-    /// <code lang="csharp" source="../../DocCodeSamples.Tests/JobEntityExamples.cs" region="SimpleSample" title="IJobEntity Example"/>
+    /// <code source="../DocCodeSamples.Tests/JobEntityExamples.cs" region="SimpleSample" title="IJobEntity Example" language="csharp"/>
     /// </example>
     /// <seealso cref="IJobChunk"/>
     public interface IJobEntity {}

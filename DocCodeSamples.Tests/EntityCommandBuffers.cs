@@ -144,26 +144,6 @@ namespace Doc.CodeSamples.Tests
         public void OnUpdate(ref SystemState state)
         {
             {
-                #region ecb_multi_playback
-
-                // ... in a system update
-
-                EntityCommandBuffer ecb =
-                    new EntityCommandBuffer(Allocator.TempJob, PlaybackPolicy.MultiPlayback);
-
-                // ... record commands
-
-                ecb.Playback(state.EntityManager);
-
-                // Additional playbacks are OK because this ECB is MultiPlayback.
-                ecb.Playback(state.EntityManager);
-
-                ecb.Dispose();
-
-                #endregion
-            }
-
-            {
                 #region ecb_from_ecbsystem
 
                 // ... in a system.
@@ -185,24 +165,28 @@ namespace Doc.CodeSamples.Tests
             }
 
             {
-                #region ecb_deferred_entities
+                #region ecb_created_entities
 
                 // ... in a system
 
                 EntityCommandBuffer ecb = new EntityCommandBuffer(Allocator.TempJob);
 
-                Entity placeholderEntity = ecb.CreateEntity();
+                // CreateEntity returns a real entity reference immediately.
+                // The entity has no chunk yet — that is assigned during Playback.
+                Entity newEntity = ecb.CreateEntity();
 
-                // Valid to use placeholderEntity in later commands of same ECB.
-                ecb.AddComponent<FooComp>(placeholderEntity);
+                // Valid to use newEntity in later commands on the same buffer.
+                ecb.AddComponent<FooComp>(newEntity);
 
-                // The real entity is created, and
-                // FooComp is added to the real entity.
+                // Before Playback: EntityManager access throws because the
+                // entity has no chunk yet.
+                // state.EntityManager.AddComponent<BarComp>(newEntity); // throws
+
                 ecb.Playback(state.EntityManager);
 
-                // Exception! The placeholderEntity has no meaning outside
-                // the ECB which created it, even after playback.
-                state.EntityManager.AddComponent<BarComp>(placeholderEntity);
+                // After Playback: the entity has a chunk and the same
+                // reference works directly with EntityManager.
+                state.EntityManager.AddComponent<BarComp>(newEntity);
 
                 ecb.Dispose();
 
@@ -210,7 +194,7 @@ namespace Doc.CodeSamples.Tests
             }
 
             {
-                #region ecb_deferred_remapping
+                #region ecb_entity_references
 
                 // ... in a system
 
@@ -219,20 +203,17 @@ namespace Doc.CodeSamples.Tests
                 // For all entities with a FooComp component...
                 foreach (var (f, e) in SystemAPI.Query<FooComp>().WithEntityAccess())
                 {
-                    // In playback, an actual entity will be created
-                    // that corresponds to this placeholder entity.
-                    Entity placeholderEntity = ecb.CreateEntity();
+                    // CreateEntity returns a real entity reference immediately.
+                    Entity newEntity = ecb.CreateEntity();
 
                     // (Assume BarComp has an Entity field called TargetEnt.)
-                    BarComp bar = new BarComp { TargetEnt = placeholderEntity };
-
-                    // In playback, TargetEnt will be assigned the
-                    // actual Entity that corresponds to placeholderEntity.
+                    // The reference can be stored in component data directly.
+                    BarComp bar = new BarComp { TargetEnt = newEntity };
                     ecb.AddComponent(e, bar);
                 }
 
-                // After playback, each entity with FooComp now has a
-                // BarComp component whose TargetEnt references a new entity.
+                // After playback, each entity with FooComp has a BarComp
+                // whose TargetEnt references the corresponding new entity.
                 ecb.Playback(state.EntityManager);
 
                 ecb.Dispose();

@@ -28,14 +28,6 @@ namespace Unity.Entities.Tests
         public int MovementSpeed;
     }
 
-#pragma warning disable 0618 // Disable Aspects obsolete warnings
-    internal readonly partial struct CharacterAspect : IAspect
-    {
-        readonly RefRW<Character> m_Character;
-        public ref Character Character => ref m_Character.ValueRW;
-    }
-#pragma warning restore 0618
-
     internal struct EcsTestData : IComponentData, IGetValue
     {
         public int value;
@@ -229,6 +221,14 @@ namespace Unity.Entities.Tests
         public float Value2;
     }
 
+    internal struct EcsTestFloatDataWithDebugOnAdded : IComponentData, IDebugOnAdded
+    {
+        public float Value0;
+
+        public static void OnAdded(Entity entity, in EcsTestFloatDataWithDebugOnAdded component)
+        {
+        }
+    }
 
     internal struct EcsTestSharedComp : ISharedComponentData
     {
@@ -432,6 +432,7 @@ namespace Unity.Entities.Tests
         }
     }
 
+    #pragma warning disable EA0017 // intentionally managed shared components
     internal struct EcsTestSharedCompManaged : ISharedComponentData, IEquatable<EcsTestSharedCompManaged>
     {
         public string value;
@@ -480,6 +481,7 @@ namespace Unity.Entities.Tests
             return HashCode.Combine(Value, ManagedValue);
         }
     }
+    #pragma warning restore EA0017
 
     [MaximumChunkCapacity(127)]
     struct EcsTestSharedCompWithMaxChunkCapacity : ISharedComponentData
@@ -763,6 +765,7 @@ namespace Unity.Entities.Tests
         }
     }
 
+    #pragma warning disable EA0017 // intentionally a managed shared component
     internal struct EcsStringSharedComponent : ISharedComponentData, IEquatable<EcsStringSharedComponent>
     {
         public string Value;
@@ -777,6 +780,7 @@ namespace Unity.Entities.Tests
             return Value.GetHashCode();
         }
     }
+    #pragma warning restore EA0017
 
     internal struct EcsTestGeneric<T> : IComponentData
         where T : struct
@@ -818,6 +822,12 @@ namespace Unity.Entities.Tests
             value2 = inValue2;
             nullField = null;
         }
+    }
+
+    internal class EcsTestManagedDataCyclicEntityRef : IComponentData
+    {
+        public Entity RefToDeferred;
+        public EcsTestManagedDataCyclicEntityRef Self;
     }
 
     internal class EcsTestManagedDataEntityCollection : IComponentData
@@ -1019,16 +1029,4 @@ namespace Unity.Entities.Tests
             ecsTestData = new EcsTestData {value = 10};
         }
     }
-
-#pragma warning disable 0618 // Disable Aspects obsolete warnings
-    internal readonly partial struct EcsTestAspect0RO : IAspect
-    {
-        public readonly RefRO<EcsTestData> EcsTestData;
-    }
-
-    internal readonly partial struct EcsTestAspect0RW : IAspect
-    {
-        public readonly RefRW<EcsTestData> EcsTestData;
-    }
-#pragma warning restore 0618
 }

@@ -2,14 +2,9 @@ using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor.UIElements
 {
-#if UNITY_2023_3_OR_NEWER
     [UxmlElement]
-#endif
     partial class SearchField : TextField
     {
-#if !UNITY_2023_3_OR_NEWER
-        internal new class UxmlFactory : UxmlFactory<SearchField, UxmlTraits> { }
-#endif
         static VisualElementTemplate s_SearchFieldTemplate = PackageResources.LoadTemplate("ActiveBuildConfiguration/search-field");
 
         public SearchField()

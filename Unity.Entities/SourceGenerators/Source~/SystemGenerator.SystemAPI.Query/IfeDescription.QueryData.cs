@@ -101,10 +101,6 @@ public partial class IfeDescription
         // `typeSymbol` refers to the symbol for `MyResult`
         (QueryType QueryType, bool IsTypeEnableable) TryGetIfeQueryType(ITypeSymbol typeSymbol, Location errorLocation)
         {
-            // `MyResult` is an aspect
-            if (typeSymbol.IsAspect())
-                return (QueryType.Aspect, false);
-
             // `MyResult` is a shared component
             if (typeSymbol.IsSharedComponent())
                 return (typeSymbol.IsUnmanagedType ? QueryType.UnmanagedSharedComponent : QueryType.ManagedSharedComponent, false);

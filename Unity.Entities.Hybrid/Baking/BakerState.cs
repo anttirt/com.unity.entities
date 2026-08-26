@@ -2,6 +2,7 @@
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities.Baking;
+using UnityEngine;
 
 namespace Unity.Entities
 {
@@ -24,7 +25,7 @@ namespace Unity.Entities
         internal Entity                                PrimaryEntity;
 
 #if UNITY_EDITOR
-        internal UnsafeParallelHashSet<int>                    ReferencedPrefabs;
+        internal UnsafeParallelHashSet<EntityId>                    ReferencedPrefabs;
 #endif
 
         internal BakeDependencies.RecordedDependencies Dependencies;
@@ -37,7 +38,7 @@ namespace Unity.Entities
             Entities.Add(entity);
             PrimaryEntity = entity;
 #if UNITY_EDITOR
-            ReferencedPrefabs = new UnsafeParallelHashSet<int>(1, allocator);
+            ReferencedPrefabs = new UnsafeParallelHashSet<EntityId>(1, allocator);
 #endif
             Dependencies = new BakeDependencies.RecordedDependencies(0, allocator);
 

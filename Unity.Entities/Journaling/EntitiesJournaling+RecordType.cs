@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 namespace Unity.Entities
 {
     partial class EntitiesJournaling
@@ -20,7 +20,9 @@ namespace Unity.Entities
             DisableComponent,
             SetComponentData,
             SetSharedComponentData,
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SetComponentObject,
+            #pragma warning restore 0618
             SetBuffer,
             GetComponentDataRW,
             GetComponentObjectRW,

@@ -26,7 +26,6 @@ namespace Unity.Entities.Editor
             Tabs = new ITabContent[]
             {
                 new SystemQueriesTab(content.World, Content.SystemProxy),
-                new SystemRelationshipsTab(new SystemEntities(Content.World, Content.SystemProxy), new SystemDependencies(Content.World, Content.SystemProxy)),
                 new SystemDependenciesTab(Content.SystemProxy)
             };
         }

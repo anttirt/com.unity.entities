@@ -7,12 +7,17 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Profiling;
 using Unity.Transforms;
+using UnityEngine;
 using Random = Unity.Mathematics.Random;
 
 namespace Unity.Entities.Editor.PerformanceTests
 {
+
     class WorldGenerator : IDisposable
     {
+
+        static EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
+
         // Minimum set to be picked up by ParentSystem + GUID for tracking entities after changes
         static readonly ComponentType[] k_BasicArchetype = { typeof(EntityGuid), typeof(LocalToWorld), typeof(LocalTransform) };
         static readonly ComponentType[][] k_ArchetypeVariants =
@@ -97,9 +102,9 @@ namespace Unity.Entities.Editor.PerformanceTests
 
             using (k_CloneWorldMarker.Auto())
             {
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
                 clone.EntityManager.CopyAndReplaceEntitiesFrom(m_World.EntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
             }
 
             m_Clones.Add(clone);
@@ -332,7 +337,7 @@ namespace Unity.Entities.Editor.PerformanceTests
             public EntityCommandBuffer.ParallelWriter CommandBuffer;
 
             public void Execute(int index)
-                => CommandBuffer.SetComponent(index, Entities[index], new EntityGuid(Entities[index].Index, 0, 0, (uint)index));
+                => CommandBuffer.SetComponent(index, Entities[index], new EntityGuid(CreateTestEntityId((uint)Entities[index].Index), EntityId.None, 0, (uint)index));
         }
 
         [BurstCompile]

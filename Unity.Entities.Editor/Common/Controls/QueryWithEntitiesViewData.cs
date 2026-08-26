@@ -6,21 +6,23 @@ namespace Unity.Entities.Editor
 {
     class QueryWithEntitiesViewData
     {
-        const int k_MaxEntityDisplayCount = 5;
+        const int k_DefaultMaxEntityDisplayCount = 5;
 
         public readonly World World;
         public readonly SystemProxy SystemProxy;
         public readonly EntityQuery Query;
         public readonly int QueryOrder;
+        public readonly int MaxEntityDisplayCount;
 
         int m_LastVersion;
 
-        public QueryWithEntitiesViewData(World world, EntityQuery query, SystemProxy systemProxy = default, int queryOrder = 0)
+        public QueryWithEntitiesViewData(World world, EntityQuery query, SystemProxy systemProxy = default, int queryOrder = 0, int maxEntityDisplayCount = k_DefaultMaxEntityDisplayCount)
         {
             World = world;
             SystemProxy = systemProxy;
             Query = query;
             QueryOrder = queryOrder;
+            MaxEntityDisplayCount = maxEntityDisplayCount;
         }
 
         public int TotalEntityCount { get; private set; }
@@ -51,7 +53,7 @@ namespace Unity.Entities.Editor
 
             using var entities = query.ToEntityArray(Allocator.Temp);
             TotalEntityCount = entities.Length;
-            for (var i = 0; i < Math.Min(entities.Length, k_MaxEntityDisplayCount); i++)
+            for (var i = 0; i < Math.Min(entities.Length, MaxEntityDisplayCount); i++)
             {
                 Entities.Add(new EntityViewData(World, entities[i]));
             }

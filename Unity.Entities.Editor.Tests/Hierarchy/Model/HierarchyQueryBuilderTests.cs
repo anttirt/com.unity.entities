@@ -95,6 +95,11 @@ namespace Unity.Entities.Editor.Tests
             var values = Enum.GetValues(typeof(TypeManager.TypeCategory));
             foreach (var value in values)
             {
+#if !ENABLE_TRANSFORMREF
+                // TransformData has no registered types unless TransformRef is enabled.
+                if ((TypeManager.TypeCategory)value == TypeManager.TypeCategory.TransformData)
+                    continue;
+#endif
                 yield return value;
             }
         }

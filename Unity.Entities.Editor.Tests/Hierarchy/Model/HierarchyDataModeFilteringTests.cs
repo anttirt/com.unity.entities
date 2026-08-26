@@ -15,6 +15,8 @@ namespace Unity.Entities.Editor.Tests
         World m_World;
         HierarchyNodeStore m_HierarchyNodeStore;
 
+        EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
+
         [SetUp]
         public void SetUp()
         {
@@ -29,38 +31,35 @@ namespace Unity.Entities.Editor.Tests
             m_HierarchyNodeStore.Dispose();
         }
 
-        void BuildTestHierarchy(bool isSubSceneOpened, out HierarchyNodeStore.Immutable nodes, out NativeParallelHashSet<HierarchyNodeHandle> expandedNodes, out HierarchyNodeHandle subSceneNode, out HierarchyNodeHandle dynamicSubSceneNode)
+        void BuildTestHierarchy(bool isSubSceneOpened, out HierarchyNodeStore.Immutable nodes, out NativeParallelHashSet<HierarchyNodeHandle> expandedNodes, out HierarchyNodeHandle subSceneNode, out HierarchyNodeHandle dynamicSubSceneNode, out (int entityA, int entityB, int entityC, int entityD, int loadedEntity) entityIndices)
         {
-            var scene = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.Scene, 1));
+            var scene = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.Scene, EntityId.FromULong(1)));
             subSceneNode = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.SubScene, 2), scene);
             m_HierarchyNodeStore.SetSortIndex(scene, 1);
             m_HierarchyNodeStore.SetSortIndex(subSceneNode, 1);
             if (isSubSceneOpened)
             {
-                var goA = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.GameObject, 3), subSceneNode);
-                var goB = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.GameObject, 4), subSceneNode);
+                var goA = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.GameObject, EntityId.FromULong(3)), subSceneNode);
+                var goB = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.GameObject, EntityId.FromULong(4)), subSceneNode);
                 m_HierarchyNodeStore.SetSortIndex(goA, 1);
                 m_HierarchyNodeStore.SetSortIndex(goB, 2);
             }
 
             var emptyArchetype = m_World.EntityManager.CreateArchetype();
-            var entities = m_World.EntityManager.CreateEntity(emptyArchetype, 11, Allocator.Temp);
+            var entities = m_World.EntityManager.CreateEntity(emptyArchetype, 5, Allocator.Temp);
+            var entityAEntity = entities[0];
+            var entityBEntity = entities[1];
+            var entityCEntity = entities[2];
+            var entityDEntity = entities[3];
+            var loadedEntityEntity = entities[4];
+            entityIndices = (entityAEntity.Index, entityBEntity.Index, entityCEntity.Index, entityDEntity.Index, loadedEntityEntity.Index);
 
-            // This test relies on entities having specific indices.
-            // But it also requires those entities to effectively exists.
-            // As long as it runs in an empty world, it should be fine.
-            // The following loop makes sure of that.
-            for (int i = 0; i < entities.Length; i++)
-            {
-                Assert.AreEqual(entities[i].Index, i);
-            }
-
-            var entityA = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entities[5]), subSceneNode);
-            var entityB = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entities[6]), subSceneNode);
-            var entityC = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entities[7]));
-            var entityD = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entities[8]));
+            var entityA = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entityAEntity), subSceneNode);
+            var entityB = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entityBEntity), subSceneNode);
+            var entityC = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entityCEntity));
+            var entityD = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entityDEntity));
             dynamicSubSceneNode = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.SubScene, 9), HierarchyNodeHandle.Root);
-            m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(entities[10]), dynamicSubSceneNode);
+            m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromEntity(loadedEntityEntity), dynamicSubSceneNode);
             m_HierarchyNodeStore.SetSortIndex(entityA, 3);
             m_HierarchyNodeStore.SetSortIndex(entityB, 4);
             m_HierarchyNodeStore.SetSortIndex(entityC, 2);
@@ -78,12 +77,12 @@ namespace Unity.Entities.Editor.Tests
                     "-- 2", // subScene
                     "--- 3", // goA
                     "--- 4", // goB
-                    "--- 5", // entityA
-                    "--- 6", // entityB
-                    "- 7", // entityC
-                    "- 8", // entityD
+                    $"--- {entityAEntity.Index}", // entityA
+                    $"--- {entityBEntity.Index}", // entityB
+                    $"- {entityCEntity.Index}", // entityC
+                    $"- {entityDEntity.Index}", // entityD
                     "- 9", // dynamic subScene
-                    "-- 10", // loaded entity
+                    $"-- {loadedEntityEntity.Index}", // loaded entity
                 });
             }
             else
@@ -93,12 +92,12 @@ namespace Unity.Entities.Editor.Tests
                     "0", // root
                     "- 1", // scene
                     "-- 2", // subScene
-                    "--- 5", // entityA
-                    "--- 6", // entityB
-                    "- 7", // entityC
-                    "- 8", // entityD
+                    $"--- {entityAEntity.Index}", // entityA
+                    $"--- {entityBEntity.Index}", // entityB
+                    $"- {entityCEntity.Index}", // entityC
+                    $"- {entityDEntity.Index}", // entityD
                     "- 9", // dynamic subScene
-                    "-- 10", // loaded entity
+                    $"-- {loadedEntityEntity.Index}", // loaded entity
                 });
             }
 
@@ -109,107 +108,107 @@ namespace Unity.Entities.Editor.Tests
         {
             yield return new TestCaseData( /*isPlaymode*/false, /*isSubSceneOpened*/ true, DataMode.Authoring, new[]
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 3", // goA
-                "-- 4", // goB
+                "-- 3:0", // goA
+                "-- 4:0", // goB
             }).SetName("BuildExpandedNodes_EditMode_OpenedSubScene_Authoring");
             yield return new TestCaseData( /*isPlaymode*/false, /*isSubSceneOpened*/ true, DataMode.Runtime, new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_EditMode_OpenedSubScene_Runtime");
             yield return new TestCaseData( /*isPlaymode*/false, /*isSubSceneOpened*/ false, DataMode.Authoring, new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
             }).SetName("BuildExpandedNodes_EditMode_ClosedSubScene_Authoring");
             yield return new TestCaseData( /*isPlaymode*/false, /*isSubSceneOpened*/ false, DataMode.Runtime, new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_EditMode_ClosedSubScene_Runtime");
 
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ true, DataMode.Authoring,  new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 3", // goA
-                "-- 4", // goB
+                "-- 3:0", // goA
+                "-- 4:0", // goB
             }).SetName("BuildExpandedNodes_PlayMode_OpenedSubScene_Authoring");
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ true, DataMode.Mixed, new[]
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 3", // goA
-                "-- 4", // goB
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- 3:0", // goA
+                "-- 4:0", // goB
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_PlayMode_OpenedSubScene_Mixed");
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ true, DataMode.Runtime,  new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_PlayMode_OpenedSubScene_Runtime");
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ false, DataMode.Authoring,  new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
             }).SetName("BuildExpandedNodes_PlayMode_ClosedSubScene_Authoring");
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ false, DataMode.Mixed, new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_PlayMode_ClosedSubScene_Mixed");
             yield return new TestCaseData( /*isPlaymode*/true, /*isSubSceneOpened*/ false, DataMode.Runtime, new []
             {
-                " 1", // scene
+                " 1:0", // scene
                 "- 2", // subScene
-                "-- 5", // entityA
-                "-- 6", // entityB
-                " 7", // entityC
-                " 8", // entityD
+                "-- {entityA}", // entityA
+                "-- {entityB}", // entityB
+                " {entityC}", // entityC
+                " {entityD}", // entityD
                 " 9", // dynamic subScene
-                "- 10", // loaded entity
+                "- {loadedEntity}", // loaded entity
             }).SetName("BuildExpandedNodes_PlayMode_ClosedSubScene_Runtime");
         }
 
         [Test, TestCaseSource(nameof(GetTestCases))]
         public unsafe void BuildExpandedNodes([Values] bool isPlaymode, [Values] bool isSubSceneOpened, [Values(DataMode.Authoring, DataMode.Mixed, DataMode.Runtime)] DataMode dataMode, string[] expectedNodes)
         {
-            BuildTestHierarchy(isSubSceneOpened, out var nodes, out var expandedNodes, out var subSceneNode, out var dynamicSubSceneNode);
+            BuildTestHierarchy(isSubSceneOpened, out var nodes, out var expandedNodes, out var subSceneNode, out var dynamicSubSceneNode, out var entityIndices);
             var subSceneStateMap = new NativeParallelHashMap<HierarchyNodeHandle, bool>(1, AllocatorManager.TempJob);
             subSceneStateMap.Add(subSceneNode, isSubSceneOpened);
             subSceneStateMap.Add(dynamicSubSceneNode, false);
@@ -236,9 +235,20 @@ namespace Unity.Entities.Editor.Tests
                 for (var i = 0; i < filteredNodes.Length; i++)
                 {
                     var node = nodes[filteredNodes[i]];
-                    resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.Index}";
+                    if(node.Handle.Kind == NodeKind.GameObject ||  node.Handle.Kind == NodeKind.Scene)
+                        resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.ToEntityId()}";
+                    else
+                        resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.ToEntity().Index}";
                 }
-                Assert.That(resultNodes, Is.EquivalentTo(expectedNodes));
+                var resolvedExpected = expectedNodes
+                    .Select(s => s
+                        .Replace("{entityA}", entityIndices.entityA.ToString())
+                        .Replace("{entityB}", entityIndices.entityB.ToString())
+                        .Replace("{entityC}", entityIndices.entityC.ToString())
+                        .Replace("{entityD}", entityIndices.entityD.ToString())
+                        .Replace("{loadedEntity}", entityIndices.loadedEntity.ToString()))
+                    .ToArray();
+                Assert.That(resultNodes, Is.EquivalentTo(resolvedExpected));
             }
             finally
             {
@@ -261,16 +271,16 @@ namespace Unity.Entities.Editor.Tests
             for (var i = 0; i < subSceneGameObjects.Length; i++)
             {
                 subSceneGameObjects[i] = new GameObject();
-                m_World.EntityManager.SetComponentData(subSceneEntities[i], new EntityGuid(subSceneGameObjects[i].GetInstanceID(), 0, 0, 0));
+                m_World.EntityManager.SetComponentData(subSceneEntities[i], new EntityGuid(subSceneGameObjects[i].GetEntityId(), EntityId.None, 0, 0));
             }
 
             // create an entity not matching a gameobject
-            m_World.EntityManager.SetComponentData(subSceneEntities[3], new EntityGuid(1, 0, 0, 0));
+            m_World.EntityManager.SetComponentData(subSceneEntities[3], new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
             // create a prefab entity
             m_World.EntityManager.AddComponent<Prefab>(subSceneEntities[4]);
 
             // create node hierarchy
-            var scene = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.Scene, 1));
+            var scene = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.Scene, EntityId.FromULong(1)));
             var subSceneNode = m_HierarchyNodeStore.AddNode(new HierarchyNodeHandle(NodeKind.SubScene, 2), scene);
             m_HierarchyNodeStore.SetSortIndex(scene, 1);
             m_HierarchyNodeStore.SetSortIndex(subSceneNode, 1);
@@ -295,9 +305,9 @@ namespace Unity.Entities.Editor.Tests
                 "0", // root
                 "- 1 ", // scene
                 "-- 2", // subScene
-                $"--- {subSceneGameObjects[0].GetInstanceID()}", // go
-                $"--- {subSceneGameObjects[1].GetInstanceID()}", // go
-                $"--- {subSceneGameObjects[2].GetInstanceID()}", // go
+                $"--- {EntityId.ToULong(subSceneGameObjects[0].GetEntityId())}", // go
+                $"--- {EntityId.ToULong(subSceneGameObjects[1].GetEntityId())}", // go
+                $"--- {EntityId.ToULong(subSceneGameObjects[2].GetEntityId())}", // go
                 $"--- {subSceneEntities[0].Index}", // e
                 $"--- {subSceneEntities[1].Index}", // e
                 $"--- {subSceneEntities[2].Index}", // e
@@ -331,15 +341,19 @@ namespace Unity.Entities.Editor.Tests
                 for (var i = 0; i < filteredNodes.Length; i++)
                 {
                     var node = nodes[filteredNodes[i]];
-                    resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.Index}";
+
+                    if(node.Handle.Kind == NodeKind.GameObject ||  node.Handle.Kind == NodeKind.Scene)
+                        resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.ToEntityId()}";
+                    else
+                        resultNodes[i] = $"{new string('-', node.Depth)} {node.Handle.ToEntity().Index}";
                 }
                 Assert.That(resultNodes, Is.EquivalentTo(new[]
                 {
-                    " 1", // scene
+                    " 1:0", // scene
                     "- 2", // subScene
-                    $"-- {subSceneGameObjects[0].GetInstanceID()}", // go
-                    $"-- {subSceneGameObjects[1].GetInstanceID()}", // go
-                    $"-- {subSceneGameObjects[2].GetInstanceID()}", // go
+                    $"-- {subSceneGameObjects[0].GetEntityId()}", // go
+                    $"-- {subSceneGameObjects[1].GetEntityId()}", // go
+                    $"-- {subSceneGameObjects[2].GetEntityId()}", // go
                     $"-- {subSceneEntities[3].Index}", // go not matching go in subscene
                 }));
             }

@@ -12,6 +12,7 @@ public enum EntityQueryOptions
     FilterWriteGroup = 4,
     IgnoreComponentEnabledState = 8,
     IncludeSystems = 16,
+    IncludeMetaChunks = 32
 }
 
 

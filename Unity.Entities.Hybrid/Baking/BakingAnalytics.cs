@@ -3,14 +3,14 @@
 using System;
 using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
-using UnityEngine;
 using UnityEngine.Analytics;
 
 namespace Unity.Entities
 {
     [InitializeOnLoad]
-    static class BakingAnalytics
+    static partial class BakingAnalytics
     {
         static bool s_EventsRegistered = false;
         const int k_MaxEventsPerHour = 1000;
@@ -48,9 +48,16 @@ namespace Unity.Entities
             s_ProjectComplexityData.prefabs_count = prefabCount;
         }
 
+        [OnCodeUnloading]
+        static void OnCodeUnloading()
+        {
+            if (s_BakeTypeIndices.IsCreated)
+                s_BakeTypeIndices.Dispose();
+        }
+
         static BakingAnalytics()
         {
-            s_BakeTypeIndices = new NativeList<TypeIndex>(Allocator.Persistent);// de-allocate
+            s_BakeTypeIndices = new NativeList<TypeIndex>(Allocator.Persistent);
             s_ProjectComplexityData = new ProjectComplexityData()
             {
                 default_components_count = 0,
@@ -60,32 +67,11 @@ namespace Unity.Entities
                 prefabs_count = 0,
                 skinned_mesh_renderer_component_count = 0,
             };
-
-            AppDomain.CurrentDomain.DomainUnload += (_, __) => { s_BakeTypeIndices.Dispose(); };
         }
 
         static bool EnableAnalytics()
         {
-#if !UNITY_2023_2_OR_NEWER
-            if (!s_EventsRegistered)
-            {
-                k_SkinnedMeshRendererTypeIndex = TypeManager.GetTypeIndex(typeof(SkinnedMeshRenderer));
-                AnalyticsResult resultComplexity = EditorAnalytics.RegisterEventWithLimit(k_EventNameComplexity, k_MaxEventsPerHour,
-                    k_MaxNumberOfElements, k_VendorKey);
-                AnalyticsResult resultIncremental = EditorAnalytics.RegisterEventWithLimit(k_EventNameIncremental, k_MaxEventsPerHour,
-                    k_MaxNumberOfElements, k_VendorKey);
-                AnalyticsResult resultOpen = EditorAnalytics.RegisterEventWithLimit(k_EventNameOpen, k_MaxEventsPerHour,
-                    k_MaxNumberOfElements, k_VendorKey);
-                AnalyticsResult resultImporter = EditorAnalytics.RegisterEventWithLimit(k_EventNameImporter, k_MaxEventsPerHour,
-                    k_MaxNumberOfElements, k_VendorKey);
-
-                if (resultComplexity == AnalyticsResult.Ok ||resultIncremental == AnalyticsResult.Ok ||
-                    resultOpen == AnalyticsResult.Ok || resultImporter == AnalyticsResult.Ok)
-                    s_EventsRegistered = true;
-            }
-#else
             s_EventsRegistered = true;
-#endif
 
             return s_EventsRegistered;
         }
@@ -188,42 +174,24 @@ namespace Unity.Entities
             s_ProjectComplexityData.skinned_mesh_renderer_component_count = skinnedMeshRendererComponentCount;
 
             // collect max every playmode enter, send when project is closed
-#if !UNITY_2023_2_OR_NEWER
-            EditorAnalytics.SendEventWithLimit(k_EventNameComplexity, s_ProjectComplexityData);
-#else
             EditorAnalytics.SendAnalytic(new ProjectComplexityAnalytic(s_ProjectComplexityData));
-#endif
         }
 
         static void SendIncrementalBakingPerformanceEvents(float elapsedMs)
         {
-#if !UNITY_2023_2_OR_NEWER
-            EditorAnalytics.SendEventWithLimit(k_EventNameIncremental, new PerformanceData(){elapsedMs = elapsedMs});
-#else
             EditorAnalytics.SendAnalytic(new IncrementalAnalytic(new PerformanceData(){elapsedMs = elapsedMs}));
-#endif
         }
         static void SendOpenSubScenePerformanceEvents(float elapsedMs)
         {
-#if !UNITY_2023_2_OR_NEWER
-            EditorAnalytics.SendEventWithLimit(k_EventNameOpen, new PerformanceData(){elapsedMs = elapsedMs});
-#else
             EditorAnalytics.SendAnalytic(new OpenAnalytic(new PerformanceData(){elapsedMs = elapsedMs}));
-#endif
         }
         static void SendBackgroundImporterPerformanceEvents(float elapsedMs)
         {
-#if !UNITY_2023_2_OR_NEWER
-            EditorAnalytics.SendEventWithLimit(k_EventNameImporter, new PerformanceData(){elapsedMs = elapsedMs});
-#else
             EditorAnalytics.SendAnalytic(new ImporterAnalytic(new PerformanceData(){elapsedMs = elapsedMs}));
-#endif
         }
 
         class ProjectComplexityData
-#if UNITY_2023_2_OR_NEWER
             : IAnalytic.IData
-#endif
         {
             public int default_components_count;
             public int custom_bakers_count;
@@ -244,14 +212,11 @@ namespace Unity.Entities
         }
 
         class PerformanceData
-#if UNITY_2023_2_OR_NEWER
             : IAnalytic.IData
-#endif
         {
             public float elapsedMs;
         }
 
-#if UNITY_2023_2_OR_NEWER
         abstract class BakingAnalytic<T> : IAnalytic where T : class, IAnalytic.IData
         {
             readonly T _data;
@@ -289,7 +254,6 @@ namespace Unity.Entities
         {
             public ImporterAnalytic(PerformanceData data) : base(data) {}
         }
-#endif
     }
 }
 #endif // ENABLE_CLOUD_SERVICES_ANALYTICS

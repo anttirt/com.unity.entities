@@ -17,16 +17,20 @@ namespace Unity.Entities.Tests
             linkedBuf.Add(e0);
             linkedBuf.Add(e1);
             linkedBuf.Add(e2);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e0, new EcsTestDataEntity { value0 = 0, value1 = external});
             m_Manager.SetComponentData(e1, new EcsTestDataEntity { value0 = 1, value1 = Entity.Null});
             m_Manager.SetComponentData(e2, new EcsTestDataEntity { value0 = 2, value1 = e1});
+            #pragma warning restore 0618
 
             for (int i = 3; i < count; i++)
             {
                 var e = m_Manager.CreateEntity(typeof(EcsTestDataEntity), typeof(Prefab));
                 linkedBuf = m_Manager.GetBuffer<LinkedEntityGroup>(e0);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(e, new EcsTestDataEntity { value0 = i, value1 = linkedBuf[i - 1].Value});
+                #pragma warning restore 0618
 
                 linkedBuf.Add(e);
             }
@@ -42,17 +46,23 @@ namespace Unity.Entities.Tests
             FastAssert.AreEqual(count, output.Length);
 
             FastAssert.AreNotEqual(srcLinked[0], output[0]);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             FastAssert.AreEqual(0, m_Manager.GetComponentData<EcsTestDataEntity>(output[0]).value0);
             FastAssert.AreEqual(external, m_Manager.GetComponentData<EcsTestDataEntity>(output[0]).value1);
+            #pragma warning restore 0618
 
             FastAssert.AreNotEqual(srcLinked[1], output[1]);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             FastAssert.AreEqual(1, m_Manager.GetComponentData<EcsTestDataEntity>(output[1]).value0);
             FastAssert.AreEqual(Entity.Null, m_Manager.GetComponentData<EcsTestDataEntity>(output[1]).value1);
+            #pragma warning restore 0618
 
             for (int i = 2; i < count; i++)
             {
                 FastAssert.AreNotEqual(srcLinked[i], output[i]);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var component = m_Manager.GetComponentData<EcsTestDataEntity>(output[i]);
+                #pragma warning restore 0618
                 FastAssert.AreEqual(i, component.value0);
                 FastAssert.AreEqual(output[i - 1], component.value1);
             }
@@ -140,9 +150,11 @@ namespace Unity.Entities.Tests
                 m_Manager.CopyEntitiesInternal(inputs, outputs);
                 Assert.IsTrue(m_Manager.HasComponent<Prefab>(outputs[1]));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(outputs[1], m_Manager.GetComponentData<EcsTestDataEntity>(outputs[0]).value1);
                 Assert.AreEqual(external, m_Manager.GetComponentData<EcsTestDataEntity>(outputs[1]).value1);
                 Assert.AreEqual(1, m_Manager.GetComponentData<EcsTestDataEntity>(outputs[1]).value0);
+                #pragma warning restore 0618
                 Assert.AreNotEqual(a, outputs[0]);
                 Assert.AreNotEqual(a, outputs[1]);
             }
@@ -218,16 +230,20 @@ namespace Unity.Entities.Tests
             linkedBuf.Add(e0);
             linkedBuf.Add(e1);
             linkedBuf.Add(e2);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e0, new EcsTestManagedDataEntity { value0 = 0.ToString(), value1 = external });
             m_Manager.SetComponentData(e1, new EcsTestManagedDataEntity { value0 = 1.ToString(), value1 = Entity.Null });
             m_Manager.SetComponentData(e2, new EcsTestManagedDataEntity { value0 = 2.ToString(), value1 = e1 });
+            #pragma warning restore 0618
 
             for (int i = 3; i < count; i++)
             {
                 var e = m_Manager.CreateEntity(typeof(EcsTestManagedDataEntity), typeof(Prefab));
                 linkedBuf = m_Manager.GetBuffer<LinkedEntityGroup>(e0);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(e, new EcsTestManagedDataEntity { value0 = i.ToString(), value1 = linkedBuf[i - 1].Value });
+                #pragma warning restore 0618
 
                 linkedBuf.Add(e);
             }
@@ -243,17 +259,23 @@ namespace Unity.Entities.Tests
             FastAssert.AreEqual(count, output.Length);
 
             FastAssert.AreNotEqual(srcLinked[0], output[0]);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             FastAssert.AreEqual("0", m_Manager.GetComponentData<EcsTestManagedDataEntity>(output[0]).value0);
             FastAssert.AreEqual(external, m_Manager.GetComponentData<EcsTestManagedDataEntity>(output[0]).value1);
+            #pragma warning restore 0618
 
             FastAssert.AreNotEqual(srcLinked[1], output[1]);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             FastAssert.AreEqual("1", m_Manager.GetComponentData<EcsTestManagedDataEntity>(output[1]).value0);
             FastAssert.AreEqual(Entity.Null, m_Manager.GetComponentData<EcsTestManagedDataEntity>(output[1]).value1);
+            #pragma warning restore 0618
 
             for (int i = 2; i < count; i++)
             {
                 FastAssert.AreNotEqual(srcLinked[i], output[i]);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var component = m_Manager.GetComponentData<EcsTestManagedDataEntity>(output[i]);
+                #pragma warning restore 0618
                 FastAssert.AreEqual(i.ToString(), component.value0);
                 FastAssert.AreEqual(output[i - 1], component.value1);
             }
@@ -265,8 +287,10 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEntity), typeof(EcsTestDataEntity2));
             var entity = m_Manager.CreateEntity(archetype);
             var unrelated = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, new EcsTestDataEntity { value1 = entity });
             m_Manager.SetComponentData(entity, new EcsTestDataEntity2 { value1 = entity, value2 = unrelated });
+            #pragma warning restore 0618
 
             if (withLinkedEntityGroup)
             {
@@ -274,24 +298,21 @@ namespace Unity.Entities.Tests
             }
 
             var instance = m_Manager.Instantiate(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(instance, m_Manager.GetComponentData<EcsTestDataEntity>(instance).value1);
             Assert.AreEqual(instance, m_Manager.GetComponentData<EcsTestDataEntity2>(instance).value1);
             Assert.AreEqual(unrelated, m_Manager.GetComponentData<EcsTestDataEntity2>(instance).value2);
-
-            // At time of writing, ECB return placeholder entities for creation and instantiation
-            // So this little dance is required to get the proper instance out of the ECB
-            var deferredEntityReferenceForECB = m_Manager.CreateEntity();
+            #pragma warning restore 0618
 
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             var ecbInstance = ecb.Instantiate(entity);
-            ecb.AddComponent(deferredEntityReferenceForECB, new EcsTestDataEntity{ value1 = ecbInstance});
             ecb.Playback(m_Manager);
 
-            ecbInstance = m_Manager.GetComponentData<EcsTestDataEntity>(deferredEntityReferenceForECB).value1;
-
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(ecbInstance, m_Manager.GetComponentData<EcsTestDataEntity>(ecbInstance).value1);
             Assert.AreEqual(ecbInstance, m_Manager.GetComponentData<EcsTestDataEntity2>(ecbInstance).value1);
             Assert.AreEqual(unrelated, m_Manager.GetComponentData<EcsTestDataEntity2>(ecbInstance).value2);
+            #pragma warning restore 0618
         }
 
         [Test]

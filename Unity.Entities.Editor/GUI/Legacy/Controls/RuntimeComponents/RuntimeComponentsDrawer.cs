@@ -52,6 +52,8 @@ namespace Unity.Editor.Legacy
         /// </summary>
         PropertyPath m_Path = new PropertyPath();
 
+        readonly UniqueReferenceExcludeAdapter m_UniqueRefExclude = new UniqueReferenceExcludeAdapter();
+
         /// <summary>
         /// Invoked when the user clicks the deselect component button.
         /// </summary>
@@ -59,6 +61,7 @@ namespace Unity.Editor.Legacy
 
         public RuntimeComponentsDrawer()
         {
+            AddAdapter(m_UniqueRefExclude);
             AddAdapter(this);
         }
 
@@ -102,6 +105,7 @@ namespace Unity.Editor.Legacy
 
             var target = m_Targets.First();
 
+            m_UniqueRefExclude.PrepareForNewRootVisit();
             PropertyContainer.Accept(this, ref target);
         }
 
@@ -309,7 +313,9 @@ namespace Unity.Editor.Legacy
 
         static string GetComponentCategory(TypeIndex t)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (t.IsManagedComponent) return "(Managed)";
+            #pragma warning restore 0618
             if (t.IsSharedComponentType) return "(Shared)";
             return t.IsBuffer ? "(Buffer)" : string.Empty;
         }

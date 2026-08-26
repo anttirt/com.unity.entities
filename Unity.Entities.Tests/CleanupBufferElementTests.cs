@@ -59,7 +59,9 @@ namespace Unity.Entities.Tests
             m_Manager.SetComponentData(entity, new EcsTestData(1));
             var buffer = m_Manager.GetBuffer<EcsIntCleanupElement>(entity);
             buffer.Add(2);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(3));
+            #pragma warning restore 0618
 
             VerifyComponentCount<EcsTestData>(1);
 
@@ -92,7 +94,9 @@ namespace Unity.Entities.Tests
                 m_Manager.SetComponentData(entity, new EcsTestData(i));
                 var buffer = m_Manager.GetBuffer<EcsIntCleanupElement>(entity);
                 buffer.Add(2);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(i % 7));
+                #pragma warning restore 0618
             }
 
             VerifyComponentCount<EcsTestData>(512);
@@ -147,7 +151,9 @@ namespace Unity.Entities.Tests
                 m_Manager.SetComponentData(entity, new EcsTestData(i));
                 var buffer = m_Manager.GetBuffer<EcsIntCleanupElement>(entity);
                 buffer.Add(i);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(i % 7));
+                #pragma warning restore 0618
             }
 
             VerifyComponentCount<EcsTestData>(512);

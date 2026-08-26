@@ -44,6 +44,11 @@ namespace Unity.Entities.Tests
             }
         }
 
+        internal unsafe struct MyEntityPtrComponent : IComponentData
+        {
+            Entity* entityPtr;
+        }
+
         /*
          * this exercises the type traversal logic in the typemanager ILPP; it catches a bug
          * that only triggered when one of the members of the tuple implemented IEquatable<T>
@@ -62,6 +67,7 @@ namespace Unity.Entities.Tests
 
         //this catches a bug that would cause the ilpp to stack overflow trying to
         //incorrectly traverse the layout of managed ISCD for no reason
+        #pragma warning disable EA0017 // intentionally a managed shared component
         internal struct TestStructISCDWithCircularClassReference : ISharedComponentData, IEquatable<TestStructISCDWithCircularClassReference>
         {
             ClassWithCircularSelfReference field;
@@ -77,6 +83,7 @@ namespace Unity.Entities.Tests
             }
 
         }
+        #pragma warning restore EA0017
 #endif
 
         public struct TestTypeWithFunkyIEQOverride : ISharedComponentData, IEquatable<TestTypeWithFunkyIEQOverride>
@@ -152,6 +159,28 @@ namespace Unity.Entities.Tests
 
         [AttributeWithStringArgument(null)]
         partial class SystemWithAttributeWithNullString : SystemBase
+        {
+            protected override void OnCreate()
+            {
+                throw new NotImplementedException();
+            }
+            protected override void OnUpdate()
+            {
+                throw new NotImplementedException();
+            }
+            protected override void OnDestroy()
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        [WorldSystemFilter(WorldSystemFilterFlags.All,ChildDefaultFilterFlags = WorldSystemFilterFlags.ClientSimulation)]
+        partial class SystemGroup_With_NonDefault_ChildDefaultFilterFlags : ComponentSystemGroup
+        {
+        }
+
+        [UpdateInGroup(typeof(SystemGroup_With_NonDefault_ChildDefaultFilterFlags))]
+        partial class System_Inheriting_WorldSystemFilterFlags : SystemBase
         {
             protected override void OnCreate()
             {
@@ -354,6 +383,13 @@ namespace Unity.Entities.Tests
         public void TypeWithGuid_HasCorrectSize()
         {
             Assert.AreEqual(Marshal.SizeOf<TestTypeWithGuid>(), TypeManager.GetTypeInfo<TestTypeWithGuid>().TypeSize);
+        }
+
+        [Test]
+        public unsafe void ComponentWithEntityPtr_DoesNotHaveEntityOffset()
+        {
+            var offsetPtr = TypeManager.GetEntityOffsets(TypeManager.GetTypeIndex<MyEntityPtrComponent>(), out var count);
+            Assert.AreEqual(0, count);
         }
 
         [Test]
@@ -774,6 +810,72 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public void GetSystemType_ReturnsCorrectType()
+        {
+            var index = TypeManager.GetSystemTypeIndex<PresentationSystemGroup>();
+            var type = TypeManager.GetSystemType(index);
+            Assert.AreEqual(typeof(PresentationSystemGroup), type);
+        }
+
+        [Test]
+        public void GetSystemTypeIndices_DefaultExcludesDisabledSystems()
+        {
+            // Test_CreateOrder_A is in this assembly which has [assembly: DisableAutoCreation]
+            // It should not appear in the default result (which excludes Disabled systems)
+            var types = TypeManager.GetSystemTypeIndices(); // default excludedFlags = Disabled
+            Assert.AreEqual(-1, types.IndexOf(TypeManager.GetSystemTypeIndex<Test_CreateOrder_A>()));
+        }
+
+        [Test]
+        public void GetSystemTypeIndices_CanRetrieveDisabledSystems()
+        {
+            // Disabled systems can be retrieved by passing excludedFlags: 0.
+            // Filter by requiredFlags: Editor to safely narrow the result to only systems in this test class.
+            // Without this filter, GetSystemTypeIndices would include CircularSystem1/CircularSystem2 from
+            // ComponentSystemOrderingTests, which have intentional circular dependencies and fail during sorting.
+            var types = TypeManager.GetSystemTypeIndices(WorldSystemFilterFlags.All, WorldSystemFilterFlags.Editor, excludedFlags: 0);
+            Assert.AreNotEqual(-1, types.IndexOf(TypeManager.GetSystemTypeIndex<Test_CreateOrder_A>()));
+        }
+
+        [Test]
+        public void GetSystemTypeIndices_RespectsExplicitDisableAutoCreation()
+        {
+            // ExplicitlyDisabledSystemForTesting is defined in Unity.Entities.Tests.ExplicitlyDisabledSystem assembly,
+            // which does NOT have [assembly: DisableAutoCreation]. Its [DisableAutoCreation] is explicit on the type.
+            // This tests that explicit type-level [DisableAutoCreation] attributes are properly honored by the filtering logic.
+            var systemIndex = TypeManager.GetSystemTypeIndex<ExplicitlyDisabledSystemForTesting>();
+
+            // Should not appear in default result (excludedFlags defaults to Disabled)
+            var typesDefault = TypeManager.GetSystemTypeIndices();
+            Assert.AreEqual(-1, typesDefault.IndexOf(systemIndex));
+
+            // Should appear when opting in with excludedFlags: 0.
+            // Filter by requiredFlags: Editor to isolate this system and avoid circular dependencies.
+            var typesIncludeDisabled = TypeManager.GetSystemTypeIndices(
+                WorldSystemFilterFlags.All,
+                WorldSystemFilterFlags.Editor,
+                excludedFlags: 0);
+            Assert.AreNotEqual(-1, typesIncludeDisabled.IndexOf(systemIndex));
+        }
+
+        [WorldSystemFilter(WorldSystemFilterFlags.LocalSimulation)]
+        partial class NonEditorTaggedSystem : SystemBase { protected override void OnUpdate() { } }
+
+        [Test]
+        public void GetSystemTypeIndices_RequiredFlags_ExcludesNonMatchingSystems()
+        {
+            // This aims to test against the early-out in FilterSystemType skipping the RequiredFlags check
+            // when OptionalFlags == All && ExcludedFlags == 0. A system without the Editor flag
+            // must not appear in the result when Editor is required.
+            var types = TypeManager.GetSystemTypeIndices(
+                WorldSystemFilterFlags.All,
+                WorldSystemFilterFlags.Editor,
+                excludedFlags: 0);
+            Assert.AreEqual(-1, types.IndexOf(TypeManager.GetSystemTypeIndex<NonEditorTaggedSystem>()),
+                "RequiredFlags=Editor should exclude systems without the Editor flag");
+        }
+
+        [Test]
         [Conditional("DEBUG")]
         public void TestGetSystemName()
         {
@@ -811,17 +913,27 @@ namespace Unity.Entities.Tests
             var disableAttributes = TypeManager.GetSystemAttributes(typeof(DisabledSystem), typeof(DisableAutoCreationAttribute));
             Assert.AreEqual(1, disableAttributes.Length);
 
+
+
             // Annoyingly we cannot test this without adding a new dependent assembly to this test assembly. This is because all systems are disabled (rightfully so)
             // for this test assembly via [assembly: DisableAutoCreation] so we cannot check that a child system defined in this assembly is _not_ disabled
             //var inheritedDisableAttributes = TypeManager.GetSystemAttributes(typeof(ChildOfDisabledSystem), typeof(DisableAutoCreationAttribute));
             //Assert.AreEqual(0, inheritedDisableAttributes.Length); // we should not inherit DisableAutoCreation attributes
         }
 
+
         [Test]
         public void TestIsComponentSystemGroup()
         {
             Assert.IsTrue(!TypeManager.IsSystemAGroup(typeof(TestComponentSystem)));
             Assert.IsTrue(TypeManager.IsSystemAGroup(typeof(TestComponentSystemGroup)));
+        }
+
+        [Test]
+        public void TestGetSystemFilterFlags()
+        {
+            var filterflags = TypeManager.GetSystemFilterFlags(typeof(System_Inheriting_WorldSystemFilterFlags));
+            Assert.AreEqual(WorldSystemFilterFlags.ClientSimulation, filterflags);
         }
 
         [WorldSystemFilter(WorldSystemFilterFlags.Default)]
@@ -888,6 +1000,13 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(WorldSystemFilterFlags.ClientSimulation, TypeManager.GetSystemFilterFlags(typeof(Test_SecondLevelExplicitSystem)));
         }
 
+        // Uncomment to verify that ILPP throws an exception for UpdateInGroup cycles
+        // (a system group that is marked as UpdateInGroup itself, causing infinite recursion)
+        /*
+        [UpdateInGroup(typeof(Test_CyclicSystemGroup))]
+        partial class Test_CyclicSystemGroup : ComponentSystemGroup { }
+        */
+
         [CreateAfter(typeof(Test_CreateOrder_B))]
         [WorldSystemFilter(WorldSystemFilterFlags.Editor)]
         partial class Test_CreateOrder_C : SystemBase { protected override void OnUpdate() { } }
@@ -898,12 +1017,15 @@ namespace Unity.Entities.Tests
         partial class Test_CreateOrder_A : SystemBase { protected override void OnUpdate() { } }
 
         [Test]
-        [Ignore("Fix Filter Flags to allow disabled systems to be found outside of All queries - DOTS-5966")]
         public void GetSystemsRespectsCreateBeforeCreateAfter()
         {
-            // All systems in the test assembly are disabled by default. If we fetch disabled systems we will trip on intentionally
-            // broken systems, so we instead stuff our disabled systems into the Editor world filter which will exclude the broken systems
-            var allTypes = TypeManager.GetSystemTypeIndices(WorldSystemFilterFlags.All, WorldSystemFilterFlags.Editor | WorldSystemFilterFlags.Disabled);
+            // All systems in the test assembly are disabled by default. To retrieve disabled systems, pass excludedFlags: 0.
+            // We filter by requiredFlags: Editor to narrow the result to test systems. Some disabled systems in this assembly
+            // throw from OnCreate, but since we only check IndexOf (not instantiate), they're harmless in the result.
+            var allTypes = TypeManager.GetSystemTypeIndices(
+                WorldSystemFilterFlags.All,
+                WorldSystemFilterFlags.Editor,
+                excludedFlags: 0);
 
             var indexOfA = allTypes.IndexOf(TypeManager.GetSystemTypeIndex<Test_CreateOrder_A>());
             var indexOfB = allTypes.IndexOf(TypeManager.GetSystemTypeIndex<Test_CreateOrder_B>());
@@ -1090,6 +1212,7 @@ namespace Unity.Entities.Tests
             int a;
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         struct ManagedSharedComponent : ISharedComponentData, IEquatable<ManagedSharedComponent>
         {
             private string a;
@@ -1109,18 +1232,27 @@ namespace Unity.Entities.Tests
                 return (a != null ? a.GetHashCode() : 0);
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         public void SharedComponent_ManagedFlagCorrectlySet()
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedType(TypeManager.GetTypeIndex<ManagedSharedComponent>()));
+            #pragma warning restore 0618
             Assert.IsTrue(TypeManager.IsSharedComponentType(TypeManager.GetTypeIndex<ManagedSharedComponent>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<ManagedSharedComponent>()));
+            #pragma warning restore 0618
 
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedType(TypeManager.GetTypeIndex<UnmanagedSharedComponent>()));
+            #pragma warning restore 0618
             Assert.IsTrue(TypeManager.IsSharedComponentType(TypeManager.GetTypeIndex<UnmanagedSharedComponent>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<UnmanagedSharedComponent>()));
+            #pragma warning restore 0618
         }
 
         struct OptionalEnableableComponent : IComponentData, IEnableableComponent
@@ -1481,7 +1613,6 @@ namespace Unity.Entities.Tests
             public string Str2;
         }
 
-#if UNITY_2022_3_11F1_OR_NEWER
         class CircularReferenceB : IComponentData
         {
             CircularReferenceA m_A1;
@@ -1565,7 +1696,6 @@ namespace Unity.Entities.Tests
                 TypeHash.CalculateStableTypeHash(typeof(CircularReferenceA), new Dictionary<Type, ulong>()),
                 TypeManager.GetTypeInfo(TypeManager.GetTypeIndex<CircularReferenceA>()).StableTypeHash);
         }
-#endif
 
         [DisableAutoTypeRegistration]
         [TypeManager.TypeOverrides(hasNoEntityReferences:true, hasNoBlobReferences:true, hasNoUnityObjectReferences:true)]

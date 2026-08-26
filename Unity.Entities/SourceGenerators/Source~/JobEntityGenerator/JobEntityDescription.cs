@@ -26,7 +26,6 @@ public struct ParameterTypeInJobEntityExecuteMethod
 public partial class JobEntityDescription : ISourceGeneratorDiagnosable
 {
     readonly List<ParameterTypeInJobEntityExecuteMethod> m_ComponentTypesInExecuteMethod;
-    readonly List<ParameterTypeInJobEntityExecuteMethod> m_AspectTypesInExecuteMethod;
     readonly INamedTypeSymbol m_JobEntityTypeSymbol;
     readonly bool m_CheckUserDefinedQueryForScheduling;
     readonly JobEntityParam[] _userExecuteMethodParams;
@@ -69,7 +68,6 @@ public partial class JobEntityDescription : ISourceGeneratorDiagnosable
         var userExecuteMethod = userExecuteMethods[0];
 
         m_ComponentTypesInExecuteMethod = new List<ParameterTypeInJobEntityExecuteMethod>();
-        m_AspectTypesInExecuteMethod = new List<ParameterTypeInJobEntityExecuteMethod>();
 
         // Generate JobEntityParams
         var queryInfo = QueryInfo.Default();
@@ -363,46 +361,6 @@ public partial class JobEntityDescription : ISourceGeneratorDiagnosable
                         return null;
                     }
 
-                    // Aspects
-                    if (typeSymbol.IsAspect())
-                    {
-                        if (IsLessAccessibleThan(typeSymbol, m_JobEntityTypeSymbol))
-                        {
-                            JobEntityGeneratorErrors.SGJE0023(
-                                this,
-                                parameterSymbol.Locations[0],
-                                typeSymbol.ToFullName(),
-                                Enum.GetName(typeof(Accessibility), typeSymbol.DeclaredAccessibility),
-                                m_JobEntityTypeSymbol.ToFullName(),
-                                Enum.GetName(typeof(Accessibility), m_JobEntityTypeSymbol.DeclaredAccessibility));
-                            Invalid = true;
-                            return null;
-                        }
-
-                        if (parameterSymbol.RefKind == RefKind.In || parameterSymbol.RefKind == RefKind.Ref
-                                                                  || parameterSymbol.RefKind == RefKind.RefReadOnly)
-                        {
-                            JobEntityGeneratorErrors.SGJE0021(this, parameterSymbol.Locations.Single(), typeSymbol.Name);
-                            Invalid = true;
-                            return null;
-                        }
-
-                        var typeHandle = _queriesAndHandles.GetOrCreateTypeHandleField(typeSymbol, parameterSymbol.IsReadOnly());
-                        var jobEntityParameter = new JobEntityParam_Aspect(parameterSymbol, typeHandle);
-                        queryAllTypes.Add(new Query
-                        {
-                            IsReadOnly = jobEntityParameter.IsReadOnly,
-                            Type = QueryType.All,
-                            TypeSymbol = jobEntityParameter.TypeSymbol
-                        });
-                        m_AspectTypesInExecuteMethod.Add(new ParameterTypeInJobEntityExecuteMethod
-                        {
-                            IsReadOnly = jobEntityParameter.IsReadOnly,
-                            TypeSymbol = jobEntityParameter.TypeSymbol,
-                        });
-                        return jobEntityParameter;
-                    }
-
                     // Error handling
                     if (typeSymbol.InheritsFromInterface("Unity.Entities.IBufferElementData"))
                     {
@@ -641,6 +599,7 @@ public partial class JobEntityDescription : ISourceGeneratorDiagnosable
                     "FilterWriteGroup" => EntityQueryOptions.FilterWriteGroup,
                     "IgnoreComponentEnabledState" => EntityQueryOptions.IgnoreComponentEnabledState,
                     "IncludeSystems" => EntityQueryOptions.IncludeSystems,
+                    "IncludeMetaChunks" => EntityQueryOptions.IncludeMetaChunks,
                     _ => throw new ArgumentOutOfRangeException()
                 };
             }
@@ -865,21 +824,6 @@ public class JobEntityParam_DynamicBuffer : JobEntityParam
             RefKind.In => $"in {executeArgumentName}",
             _ => executeArgumentName
         };
-    }
-}
-
-public class JobEntityParam_Aspect : JobEntityParam
-{
-    internal JobEntityParam_Aspect(IParameterSymbol parameterSymbol, string typeHandleFieldName) : base(parameterSymbol, typeHandleFieldName)
-    {
-        // Per chunk
-        var variableName = $"{TypeHandleFieldName}Array";
-        VariableDeclarationAtStartOfExecuteMethod = $"var {variableName} = __TypeHandle.{TypeHandleFieldName}.Resolve(chunk);";
-
-        // Per entity
-        var executeMethodArgument = $"{variableName}Array";
-        ExecuteMethodArgumentSetup = $"var {executeMethodArgument} = {variableName}[entityIndexInChunk];";
-        ExecuteMethodArgumentValue = executeMethodArgument;
     }
 }
 

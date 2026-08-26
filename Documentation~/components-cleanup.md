@@ -10,7 +10,7 @@ Cleanup components are like regular components, but when you destroy an entity t
 |---|---|
 | [Introducing cleanup components](components-cleanup-introducing.md)| Understand cleanup components and their use cases.|
 | [Create a cleanup component](components-cleanup-create.md) | Create a new cleanup component to use in your application.  |
-| [Cleanup shared components](components-cleanup-shared.md)|Cleanup shared components are managed shared components that have the destruction semantics of a cleanup component.|
+| [Cleanup shared components](components-cleanup-shared.md)|Cleanup shared components are shared components that have the destruction semantics of a cleanup component.|
 
 ## Additional resources
 

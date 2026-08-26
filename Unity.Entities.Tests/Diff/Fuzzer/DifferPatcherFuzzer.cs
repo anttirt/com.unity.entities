@@ -155,6 +155,8 @@ namespace Unity.Entities.Tests.Fuzzer
 
     static class DifferPatcherFuzzerCommands
     {
+
+        static EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
         delegate T SampleCommand<T>(DifferPatcherFuzzer state, ref Random rng);
         static CommandGenerator MakeCommand<T>(string commandId, SampleCommand<ICommand> sampler) where T : ICommand
             => new CommandGenerator
@@ -196,7 +198,7 @@ namespace Unity.Entities.Tests.Fuzzer
             (DifferPatcherFuzzer state, ref Random rng) =>
             {
                 int id = state.NextId++;
-                return new CreateEntityCommand {Guid = new EntityGuid(id, 0, 0, 0)};
+                return new CreateEntityCommand {Guid = new EntityGuid(CreateTestEntityId((uint)id), EntityId.None, 0, 0)};
             });
 
         ///////////////////////////////////////////

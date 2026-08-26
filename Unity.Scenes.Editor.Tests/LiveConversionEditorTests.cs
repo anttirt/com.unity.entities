@@ -9,6 +9,7 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Entities.Conversion;
 using Unity.Entities.Hybrid.Baking;
+using Unity.Entities.Hybrid.Tests;
 using Unity.Entities.Hybrid.Tests.Baking;
 using Unity.Entities.TestComponents;
 using Unity.Entities.Tests;
@@ -61,7 +62,7 @@ namespace Unity.Scenes.Editor.Tests
             return mat;
         }
 
-        public void OneTimeSetUp()
+        public virtual void OneTimeSetUp()
         {
             if (!LiveConversionTest.OneTimeSetUp())
                 return;
@@ -71,7 +72,7 @@ namespace Unity.Scenes.Editor.Tests
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
         }
 
-        public void OneTimeTearDown()
+        public virtual void OneTimeTearDown()
         {
             LiveConversionTest.OneTimeTearDown();
 
@@ -80,15 +81,18 @@ namespace Unity.Scenes.Editor.Tests
         }
 
         [SetUp]
-        public void SetUp()
+        public virtual void SetUp()
         {
             LiveConversionTest.SetUp();
             m_TestMaterial = CreateBasicMaterial();
         }
 
         [TearDown]
-        public void TearDown()
+        public virtual void TearDown()
         {
+            Undo.ClearAll();
+            if (!EditorApplication.isPlaying)
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
             AssetDatabase.DeleteAsset(s_MaterialAssetPath);
         }
 
@@ -129,7 +133,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return new EnterPlayMode();
 
             {
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 Assert.IsTrue(subScene.IsLoaded);
             }
         }
@@ -144,7 +148,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return new EnterPlayMode();
 
             {
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 Assert.IsFalse(subScene.IsLoaded);
             }
         }
@@ -159,7 +163,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return new EnterPlayMode();
 
             {
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 Assert.IsFalse(subScene.IsLoaded);
                 SubSceneUtility.EditScene(subScene);
                 yield return null;
@@ -192,8 +196,10 @@ namespace Unity.Scenes.Editor.Tests
                 var w = GetLiveConversionWorld(mode);
 
                 var subSceneQuery = w.EntityManager.CreateEntityQuery(ComponentType.ReadWrite<SubScene>());
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var subScenes = subSceneQuery.ToComponentArray<SubScene>();
-                var subSceneObjects = Object.FindObjectsByType<SubScene>(FindObjectsSortMode.None);
+                #pragma warning restore 0618
+                var subSceneObjects = Object.FindObjectsByType<SubScene>();
                 foreach (var subScene in subSceneObjects)
                     Assert.Contains(subScene, subScenes);
 
@@ -232,9 +238,11 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var subSceneQuery = w.EntityManager.CreateEntityQuery(ComponentType.ReadWrite<SubScene>());
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Contains(subScene, subSceneQuery.ToComponentArray<SubScene>(), "SubScene was not loaded");
+                #pragma warning restore 0618
 
                 var componentQuery =
                     w.EntityManager.CreateEntityQuery(ComponentType
@@ -290,7 +298,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var testTagQuery =
                     w.EntityManager.CreateEntityQuery(ComponentType
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
@@ -340,7 +348,7 @@ namespace Unity.Scenes.Editor.Tests
                 var w = GetLiveConversionWorld(mode);
                 var manager = w.EntityManager;
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
 
                 var sceneEntity = SceneSystem.GetSceneEntity(w.Unmanaged, subScene.SceneGUID);
                 var sectionEntity = manager.GetBuffer<ResolvedSectionEntity>(sceneEntity)[0].SectionEntity;
@@ -374,7 +382,7 @@ namespace Unity.Scenes.Editor.Tests
 
                 manager.AddComponent<DisableLiveConversion>(sceneInstance);
 
-                var authoring = Object.FindFirstObjectByType<TestComponentAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentAuthoring>();
 
                 Undo.RecordObject(authoring, "Change component value");
                 authoring.IntValue = 117;
@@ -405,7 +413,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var testTagQuery =
                     w.EntityManager.CreateEntityQuery(ComponentType
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
@@ -544,7 +552,7 @@ namespace Unity.Scenes.Editor.Tests
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
                 Assert.AreEqual(1, testTagQuery.CalculateEntityCount(), "Expected a game object to be converted");
 
-                var go = Object.FindFirstObjectByType<TestComponentAuthoring>().gameObject;
+                var go = Object.FindAnyObjectByType<TestComponentAuthoring>().gameObject;
                 var scene = SceneManager.GetActiveScene();
                 Undo.MoveGameObjectToScene(go, scene, "Move out of subscene");
 
@@ -590,7 +598,7 @@ namespace Unity.Scenes.Editor.Tests
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
                 Assert.AreEqual(2, testTagQuery.CalculateEntityCount(), "Expected a game object to be converted");
 
-                var go = Object.FindFirstObjectByType<TestComponentAuthoring>().gameObject;
+                var go = Object.FindAnyObjectByType<TestComponentAuthoring>().gameObject;
                 if (go.transform.parent != null)
                     go = go.transform.parent.gameObject;
                 Undo.DestroyObjectImmediate(go);
@@ -625,7 +633,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var go = new GameObject("TestGameObject");
                 var authoring = go.AddComponent<TestConditionalComponentAuthoring>();
 
@@ -679,7 +687,7 @@ namespace Unity.Scenes.Editor.Tests
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
                 Assert.AreEqual(1, testTagQuery.CalculateEntityCount(), "Expected a game object to be converted");
 
-                var subscene = Object.FindFirstObjectByType<SubScene>();
+                var subscene = Object.FindAnyObjectByType<SubScene>();
 
                 subscene.enabled = false;
                 yield return UpdateEditorAndWorld(w);
@@ -712,7 +720,7 @@ namespace Unity.Scenes.Editor.Tests
                         .ReadWrite<TestComponentAuthoring.UnmanagedTestComponent>());
                 Assert.AreEqual(1, testTagQuery.CalculateEntityCount(), "Expected a game object to be converted");
 
-                var subscene = Object.FindFirstObjectByType<SubScene>();
+                var subscene = Object.FindAnyObjectByType<SubScene>();
 
                 subscene.gameObject.SetActive(false);
                 yield return UpdateEditorAndWorld(w);
@@ -736,7 +744,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var go = new GameObject("TestGameObject");
                 Undo.MoveGameObjectToScene(go, subScene.EditingScene, "Test Move");
                 Undo.IncrementCurrentGroup();
@@ -786,7 +794,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 var go = new GameObject("TestGameObject");
                 go.AddComponent<TestComponentAuthoring>();
                 Undo.MoveGameObjectToScene(go, subScene.EditingScene, "Test Move");
@@ -844,7 +852,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(mode);
 
-                var authoring = Object.FindFirstObjectByType<TestComponentAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentAuthoring>();
                 Assert.AreEqual(authoring.IntValue, 15);
 
                 var testTagQuery =
@@ -913,11 +921,7 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.That(entities.Select(e => w.EntityManager.GetComponentData<TestComponentAuthoring.UnmanagedTestComponent>(e).IntValue), Is.EquivalentTo(new[] { 1, 2 }));
             }
 
-#if !UNITY_2023_2_OR_NEWER
-            var parent = Object.FindObjectsOfType<TestComponentAuthoring>(true).Single(c => c.IntValue == 1).gameObject;
-#else
-            var parent = Object.FindObjectsByType<TestComponentAuthoring>(FindObjectsInactive.Include, FindObjectsSortMode.None).Single(c => c.IntValue == 1).gameObject;
-#endif
+            var parent = Object.FindObjectsByType<TestComponentAuthoring>(FindObjectsInactive.Include).Single(c => c.IntValue == 1).gameObject;
 
             Undo.RecordObject(parent, "ReEnableObject");
             parent.SetActive(true);
@@ -956,7 +960,7 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(1, queryWithoutDisabled.CalculateEntityCount(),
                     "Expected a game object to be converted");
 
-                var go = Object.FindFirstObjectByType<TestComponentAuthoring>().gameObject;
+                var go = Object.FindAnyObjectByType<TestComponentAuthoring>().gameObject;
                 Undo.RecordObject(go, "DisableObject");
                 go.SetActive(false);
                 Undo.FlushUndoRecordObjects();
@@ -1169,7 +1173,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return GetEnterPlayMode(mode);
 
             {
-                var authoring = Object.FindFirstObjectByType<TestComponentAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentAuthoring>();
                 Assert.AreEqual(authoring.IntValue, 15);
                 Assert.AreEqual(authoring.Material, m_TestMaterial);
 
@@ -1197,7 +1201,7 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(2, testTagQuery.GetSingleton<TestComponentAuthoring.UnmanagedTestComponent>().IntValue,
                     "Expected a component value to change");
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
                 Assert.IsNotNull(subScene);
 
                 subScene.gameObject.SetActive(false);
@@ -1242,7 +1246,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
 
-                var authoring = Object.FindFirstObjectByType<TestComponentWithBlobAssetAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentWithBlobAssetAuthoring>();
 
                 var testTagQuery =
                     w.EntityManager.CreateEntityQuery(ComponentType
@@ -1335,7 +1339,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
 
-                var authoring = Object.FindFirstObjectByType<TestComponentAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentAuthoring>();
                 Assert.AreEqual(authoring.IntValue, 3);
 
                 var testTagQuery = w.EntityManager.CreateEntityQuery(ComponentType
@@ -1412,7 +1416,7 @@ namespace Unity.Scenes.Editor.Tests
                 var manager = w.EntityManager;
 
                 var sceneSystem = w.GetExistingSystem<SceneSystem>();
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
 
                 var sceneEntity = SceneSystem.GetSceneEntity(w.Unmanaged, subScene.SceneGUID);
                 Assert.AreNotEqual(Entity.Null, sceneEntity);
@@ -1437,7 +1441,7 @@ namespace Unity.Scenes.Editor.Tests
                 //this emulates an async scene not yet fully loaded
                 manager.GetBuffer<ResolvedSectionEntity>(sceneInstance).Clear();
 
-                var authoring = Object.FindFirstObjectByType<TestComponentAuthoring>();
+                var authoring = Object.FindAnyObjectByType<TestComponentAuthoring>();
 
                 //Change the authoring component value in order to force the LiveConversion patcher to run
                 //Expect no errors
@@ -1574,7 +1578,7 @@ namespace Unity.Scenes.Editor.Tests
                 // In the editor, undoing the deletion would restore the reference, but this doesn't immediately work
                 // in code. So we're doing it manually for now.
                 var b = GameObject.Find("B");
-                var assets = Object.FindObjectsByType<DependsOnAssetTransitiveTestScriptableObject>(FindObjectsSortMode.None);
+                var assets = Object.FindObjectsByType<DependsOnAssetTransitiveTestScriptableObject>();
 
                 // Make sure we find the right asset
                 DependsOnAssetTransitiveTestScriptableObject asset = null;
@@ -2090,7 +2094,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var e = GetTargetEntity(w);
                 Assert.That(w.EntityManager.GetName(e), Is.EqualTo("TestGameObject"));
-                var go = Object.FindFirstObjectByType<TestComponentAuthoring>().gameObject;
+                var go = Object.FindAnyObjectByType<TestComponentAuthoring>().gameObject;
 
                 Undo.RecordObject(go, "Renaming");
                 go.name = "The renamed GameObject";
@@ -2230,7 +2234,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
 
-                var roots = Object.FindFirstObjectByType<SubScene>().EditingScene.GetRootGameObjects();
+                var roots = Object.FindAnyObjectByType<SubScene>().EditingScene.GetRootGameObjects();
                 var stack = new Stack<GameObject>(roots);
                 var objs = new List<Transform>();
                 while (stack.Count > 0)
@@ -2373,7 +2377,8 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(16, GetCompanionComponent().Value);
 
                 CompanionComponentTestAuthoring GetCompanionComponent() =>
-                    w.EntityManager.GetComponentObject<CompanionComponentTestAuthoring>(testQuery.GetSingletonEntity());
+                    CompanionComponentTestFixture.AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(
+                        w.EntityManager, testQuery.GetSingletonEntity());
             }
         }
 
@@ -2428,7 +2433,74 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(16, GetCompanionComponent().Value);
 
                 CompanionComponentTestAuthoring GetCompanionComponent() =>
-                    w.EntityManager.GetComponentObject<CompanionComponentTestAuthoring>(testQuery.GetSingletonEntity());
+                    CompanionComponentTestFixture.AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(
+                        w.EntityManager, testQuery.GetSingletonEntity());
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator IncrementalConversion_WithCompanionComponent_ChangeDoesNotLeakOldCompanionGameObject()
+        {
+            // Companion GameObjects live in a hidden preview scene; Resources.FindObjectsOfTypeAll
+            // captures them whereas Object.FindObjectsByType is not guaranteed to traverse it.
+            static int CountCompanions() =>
+                Resources.FindObjectsOfTypeAll<CompanionComponentTestAuthoring>().Length;
+
+            var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
+
+            {
+                var subScene = CreateEmptySubScene("TestSubScene", true);
+                var a = new GameObject("A");
+                SetTransformUsageFlags(a, TransformUsageFlags.Dynamic);
+                a.AddComponent<CompanionComponentTestAuthoring>().Value = 16;
+                SceneManager.MoveGameObjectToScene(a, subScene.EditingScene);
+            }
+
+            yield return GetEnterPlayMode(TestWithEditorLiveConversion.Mode.Edit);
+            {
+                var a = GameObject.Find("A");
+                var authoring = a.GetComponent<CompanionComponentTestAuthoring>();
+                var testQuery = w.EntityManager.CreateEntityQuery(typeof(CompanionLink));
+                Assume.That(testQuery.CalculateEntityCount(), Is.EqualTo(1),
+                    "expected one companion entity after initial bake");
+                var entity = testQuery.GetSingletonEntity();
+
+                // Snapshot the post-bake count rather than predict it (scene-management quirks make
+                // an exact prediction brittle). What we care about is invariance across re-bakes.
+                int countAfterFirstBake = CountCompanions();
+
+                var oldCompanion = CompanionComponentTestFixture
+                    .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entity).gameObject;
+
+                Undo.RecordObject(authoring, "Change value");
+                authoring.Value = 7;
+                Undo.FlushUndoRecordObjects();
+                yield return UpdateEditorAndWorld(w);
+
+                var newCompanion = CompanionComponentTestFixture
+                    .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entity).gameObject;
+                Assert.IsTrue(oldCompanion == null,
+                    "re-bake should destroy the previous companion GameObject — prior instance is leaking");
+                Assert.AreNotSame(oldCompanion, newCompanion,
+                    "new companion GameObject should be a different instance");
+                Assert.AreEqual(countAfterFirstBake, CountCompanions(),
+                    "re-bake should leave the same number of companion instances — a higher count means the old clone was not destroyed");
+
+                // Second re-bake to confirm the cleanup is not a one-shot.
+                var secondCompanion = newCompanion;
+                Undo.RecordObject(authoring, "Change value again");
+                authoring.Value = 99;
+                Undo.FlushUndoRecordObjects();
+                yield return UpdateEditorAndWorld(w);
+
+                var thirdCompanion = CompanionComponentTestFixture
+                    .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entity).gameObject;
+                Assert.IsTrue(secondCompanion == null,
+                    "second re-bake should destroy the previously-active companion GameObject");
+                Assert.AreNotSame(secondCompanion, thirdCompanion,
+                    "third companion GameObject should be a different instance");
+                Assert.AreEqual(countAfterFirstBake, CountCompanions(),
+                    "second re-bake should still leave the same number of companion instances");
             }
         }
 
@@ -2474,7 +2546,8 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(16, GetCompanionComponent().Value);
 
                 CompanionComponentTestAuthoring GetCompanionComponent() =>
-                    w.EntityManager.GetComponentObject<CompanionComponentTestAuthoring>(testQuery.GetSingletonEntity());
+                    CompanionComponentTestFixture.AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(
+                        w.EntityManager, testQuery.GetSingletonEntity());
             }
         }
 
@@ -2516,21 +2589,21 @@ namespace Unity.Scenes.Editor.Tests
 
             foreach (var entity in entities)
             {
-                var companion = w.EntityManager.GetComponentData<CompanionLink>(entity).Companion.Value;
-                var value = companion.GetComponent<CompanionComponentTestAuthoring>().Value;
+                var matched = CompanionComponentTestFixture
+                    .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entity);
 
-                switch(value)
+                switch(matched.Value)
                 {
                     case 123:
                     {
                         entityA = entity;
-                        runtimeA = companion;
+                        runtimeA = matched.gameObject;
                         break;
                     }
                     case 567:
                     {
                         entityB = entity;
-                        runtimeB = companion;
+                        runtimeB = matched.gameObject;
                         break;
                     }
                 }
@@ -2577,8 +2650,10 @@ namespace Unity.Scenes.Editor.Tests
             // excessive since we only changed one of the two but that's a separate problem.
             // In terms of correctness, refreshing our references to both GameObjects is valid.
 
-            runtimeA = w.EntityManager.GetComponentData<CompanionLink>(entityA).Companion;
-            runtimeB = w.EntityManager.GetComponentData<CompanionLink>(entityB).Companion;
+            runtimeA = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entityA).gameObject;
+            runtimeB = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<CompanionComponentTestAuthoring>(w.EntityManager, entityB).gameObject;
 
             // Ensure the transform changes have not been reverted on the companion GameObjects.
 
@@ -2639,7 +2714,7 @@ namespace Unity.Scenes.Editor.Tests
             {
                 var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
 
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
 
                 DependsOnComponentTestAuthoring.Versions.Clear();
                 Console.WriteLine($"Running fuzz test with seed {seed} and the following actions:");
@@ -3035,7 +3110,7 @@ namespace Unity.Scenes.Editor.Tests
 
             {
                 var w = GetLiveConversionWorld(TestWithEditorLiveConversion.Mode.Edit);
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
 
                 DependsOnComponentTestAuthoring.Versions.Clear();
                 Console.WriteLine($"Running test with {commands.Count} commands");
@@ -3719,28 +3794,39 @@ namespace Unity.Scenes.Editor.Tests
 
     [TestFixture]
     // Unstable on Linux: DOTS-5341
-    [UnityPlatform(exclude = new[] {RuntimePlatform.LinuxEditor})]
-    class LiveLinkBakingEditorTests : LiveBakingAndConversionBase
+    [UnityPlatform(exclude = new[] {
+		RuntimePlatform.LinuxEditor,
+		RuntimePlatform.WindowsEditor })] // Disabled for Instability https://jira.unity3d.com/browse/UUM-140461
+    partial class LiveLinkBakingEditorTests : LiveBakingAndConversionBase
     {
-        static List<Type> PreviousAdditionalBakingSystems;
+        List<Type> PreviousAdditionalBakingSystems;
 
         [SetUp]
-        public new void SetUp()
+        public override void SetUp()
         {
             base.SetUp();
             PreviousAdditionalBakingSystems = new List<Type>(LiveConversionSettings.AdditionalConversionSystems);
         }
 
         [TearDown]
-        public void Teardown()
+        public override void TearDown()
         {
-            //base.TearDown();
-            LiveConversionSettings.AdditionalConversionSystems.Clear();
-            LiveConversionSettings.AdditionalConversionSystems.AddRange(PreviousAdditionalBakingSystems);
+            try
+            {
+                if (PreviousAdditionalBakingSystems != null)
+                {
+                    LiveConversionSettings.AdditionalConversionSystems.Clear();
+                    LiveConversionSettings.AdditionalConversionSystems.AddRange(PreviousAdditionalBakingSystems);
+                }
+            }
+            finally
+            {
+                base.TearDown();
+            }
         }
 
         [OneTimeSetUp]
-        public new void OneTimeSetUp()
+        public override void OneTimeSetUp()
         {
             this.LiveConversionTest.IsBakingEnabled = true;
             base.OneTimeSetUp();
@@ -3750,7 +3836,7 @@ namespace Unity.Scenes.Editor.Tests
         }
 
         [OneTimeTearDown]
-        public new void OneTimeTearDown()
+        public override void OneTimeTearDown()
         {
             base.OneTimeTearDown();
             LiveConversionSettings.AdditionalConversionSystems.Clear();
@@ -7326,6 +7412,75 @@ namespace Unity.Scenes.Editor.Tests
             }
         }
 
+        // Fix for UUM-122684: Adding/Deleting an empty GameObject to a subscene should not trigger
+        // a rebake of a baker that uses GetComponents and has a prefab reference.
+        // This was caused by AddGameObject not clearing existing component data, leading to
+        // duplicate entries that caused hash mismatches during dependency validation.
+        [UnityTest]
+        public IEnumerator IncrementalBaking_GetComponentsWithPrefabReference_AddUnrelatedGameObject_NoRebake([Values]Mode mode)
+        {
+            // Create a prefab
+            var prefabPath = LiveConversionTest.Assets.GetNextPath("TestPrefab.prefab");
+            var prefabSource = new GameObject("PrefabSource");
+            prefabSource.AddComponent<BoxCollider>();
+            var prefabObject = PrefabUtility.SaveAsPrefabAsset(prefabSource, prefabPath);
+            Object.DestroyImmediate(prefabSource);
+
+            GameObject root = null;
+            SubScene subScene;
+            {
+                subScene = CreateSubSceneFromObjects("TestSubScene", true, () =>
+                {
+                    root = new GameObject("TestGameObject");
+                    // Add a collider so GetComponents returns something
+                    root.AddComponent<BoxCollider>();
+                    // Add the authoring component that references the prefab and calls GetComponents
+                    var authoring = root.AddComponent<TestGetComponentsWithPrefabReferenceAuthoring>();
+                    authoring.Prefab = prefabObject;
+                    return new List<GameObject> { root };
+                });
+            }
+
+            yield return GetEnterPlayMode(mode);
+
+            {
+                var w = GetLiveConversionWorld(mode);
+
+                yield return UpdateEditorAndWorld(w);
+
+                var bakingSystem = GetBakingSystem(w, subScene.SceneGUID);
+                Assert.IsNotNull(bakingSystem);
+
+                var bakingComponent = root.GetComponent<TestGetComponentsWithPrefabReferenceAuthoring>();
+
+                // Add an unrelated empty GameObject to the subscene
+                var unrelatedGO = new GameObject("UnrelatedGameObject");
+                SceneManager.MoveGameObjectToScene(unrelatedGO, subScene.EditingScene);
+                Undo.RegisterCreatedObjectUndo(unrelatedGO, "Create unrelated object");
+
+                yield return UpdateEditorAndWorld(w);
+
+                // The baker should NOT have rebaked since the unrelated GO doesn't affect GetComponents result
+                Assert.IsFalse(bakingSystem.DidBake(bakingComponent), "Baker should not rebake when adding an unrelated GameObject");
+
+                // Also test renaming the unrelated GO
+                Undo.RecordObject(unrelatedGO, "Rename object");
+                unrelatedGO.name = "RenamedUnrelatedGameObject";
+                Undo.FlushUndoRecordObjects();
+
+                yield return UpdateEditorAndWorld(w);
+
+                Assert.IsFalse(bakingSystem.DidBake(bakingComponent), "Baker should not rebake when renaming an unrelated GameObject");
+
+                // Also test deleting the unrelated GO
+                Undo.DestroyObjectImmediate(unrelatedGO);
+
+                yield return UpdateEditorAndWorld(w);
+
+                Assert.IsFalse(bakingSystem.DidBake(bakingComponent), "Baker should not rebake when deleting an unrelated GameObject");
+            }
+        }
+
         [UnityTest]
         public IEnumerator IncrementalBaking_GetParent([Values]Mode mode)
         {
@@ -7358,7 +7513,7 @@ namespace Unity.Scenes.Editor.Tests
                 var worldBaking = GetBakingWorld(w, subScene.SceneGUID);
 
                 // Pre-test to check the components were added correctly
-                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetParentBaker.IntElement>().Build(worldBaking.EntityManager);
+                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetParentBaker.EntityIdElement>().Build(worldBaking.EntityManager);
                 Assert.AreEqual(1, query.CalculateEntityCount(), "Components were not correctly added to the entities");
 
                 using var entities = query.ToEntityArray(Allocator.TempJob);
@@ -7367,13 +7522,13 @@ namespace Unity.Scenes.Editor.Tests
                 for (int index = 0; index < depth; ++index)
                 {
                     // Check that the parent is the expected one
-                    var buffer = worldBaking.EntityManager.GetBuffer<GetParentBaker.IntElement>(entities[0]);
+                    var buffer = worldBaking.EntityManager.GetBuffer<GetParentBaker.EntityIdElement>(entities[0]);
                     Assert.AreEqual(lastChild.transform.parent != null ? 1 : 0, buffer.Length, "Expected buffer with size to match");
 
                     if (lastChild.transform.parent != null)
                     {
                         var parentTransforms = lastChild.GetComponentsInParent<Transform>();
-                        Assert.AreEqual(parentTransforms[1].gameObject.GetInstanceID(), buffer[0].Value, $"Expected the parent instance ID {parentTransforms[1].gameObject.GetInstanceID()} on iteration {index}");
+                        Assert.AreEqual(parentTransforms[1].gameObject.GetEntityId(), buffer[0].Value, $"Expected the parent instance ID {parentTransforms[1].gameObject.GetEntityId()} on iteration {index}");
 
                         // Check that moving the parent doesn't trigger baking
                         Undo.RecordObject(lastChild.transform.parent, "Change component value");
@@ -7427,7 +7582,7 @@ namespace Unity.Scenes.Editor.Tests
                 var worldBaking = GetBakingWorld(w, subScene.SceneGUID);
 
                 // Pre-test to check the components were added correctly
-                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetParentsBaker.IntElement>().Build(worldBaking.EntityManager);
+                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetParentsBaker.EntityIdElement>().Build(worldBaking.EntityManager);
                 Assert.AreEqual(1, query.CalculateEntityCount(), "Components were not correctly added to the entities");
 
                 using var entities = query.ToEntityArray(Allocator.TempJob);
@@ -7436,14 +7591,14 @@ namespace Unity.Scenes.Editor.Tests
                 for (int index = 0; index < depth; ++index)
                 {
                     // Check that the parent is the expected one
-                    var buffer = worldBaking.EntityManager.GetBuffer<GetParentsBaker.IntElement>(entities[0]);
+                    var buffer = worldBaking.EntityManager.GetBuffer<GetParentsBaker.EntityIdElement>(entities[0]);
                     var parentTransforms = lastChild.GetComponentsInParent<Transform>();
                     Assert.AreEqual(parentTransforms.Length - 1, buffer.Length, "Expected buffer with size to match");
 
                     if (lastChild.transform.parent != null)
                     {
                         for (int bufferIndex = 0; bufferIndex < buffer.Length; bufferIndex++)
-                            Assert.AreEqual(parentTransforms[bufferIndex + 1].gameObject.GetInstanceID(), buffer[bufferIndex].Value, $"Expected the parent instance ID {parentTransforms[1].gameObject.GetInstanceID()} on iteration {index} - {bufferIndex}");
+                            Assert.AreEqual(parentTransforms[bufferIndex + 1].gameObject.GetEntityId(), buffer[bufferIndex].Value, $"Expected the parent instance ID {parentTransforms[1].gameObject.GetEntityId()} on iteration {index} - {bufferIndex}");
 
                         // Check that moving the parent doesn't trigger baking
                         Undo.RecordObject(lastChild.transform.parent, "Change component value");
@@ -7567,7 +7722,7 @@ namespace Unity.Scenes.Editor.Tests
                 var worldBaking = GetBakingWorld(w, subScene.SceneGUID);
 
                 // Pre-test to check the components were added correctly
-                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetChildBaker.IntElement>().Build(worldBaking.EntityManager);
+                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetChildBaker.EntityIdElement>().Build(worldBaking.EntityManager);
                 Assert.AreEqual(1, query.CalculateEntityCount(), "Components were not correctly added to the entities");
 
                 using var entities = query.ToEntityArray(Allocator.TempJob);
@@ -7576,14 +7731,14 @@ namespace Unity.Scenes.Editor.Tests
                 for (int index = 0; index < depth; ++index)
                 {
                     // Check that the parent is the expected one
-                    var buffer = worldBaking.EntityManager.GetBuffer<GetChildBaker.IntElement>(entities[0]);
+                    var buffer = worldBaking.EntityManager.GetBuffer<GetChildBaker.EntityIdElement>(entities[0]);
                     int expectedChildCount = bakingComponent.transform.childCount > 0 ? 1 : 0;
                     Assert.AreEqual(expectedChildCount, buffer.Length, $"Expected the buffer to be size {expectedChildCount}");
 
                     if (expectedChildCount > 0)
                     {
                         Transform firstChild = bakingComponent.transform.GetChild(0);
-                        Assert.AreEqual(firstChild.gameObject.GetInstanceID(), buffer[0].Value, $"Expected GO Instance ID {firstChild.gameObject.GetInstanceID()}");
+                        Assert.AreEqual(firstChild.gameObject.GetEntityId(), buffer[0].Value, $"Expected GO EntityId {firstChild.gameObject.GetEntityId()}");
 
                         // Check that moving the parent doesn't trigger baking
                         Undo.RecordObject(firstChild, "Change component value");
@@ -7639,7 +7794,7 @@ namespace Unity.Scenes.Editor.Tests
                 var worldBaking = GetBakingWorld(w, subScene.SceneGUID);
 
                 // Pre-test to check the components were added correctly
-                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetChildrenBaker.IntElement>().Build(worldBaking.EntityManager);
+                var query = new EntityQueryBuilder(Allocator.Temp).WithAllRW<GetChildrenBaker.EntityIdElement>().Build(worldBaking.EntityManager);
                 Assert.AreEqual(1, query.CalculateEntityCount(), "Components were not correctly added to the entities");
 
                 using var entities = query.ToEntityArray(Allocator.TempJob);
@@ -7658,7 +7813,7 @@ namespace Unity.Scenes.Editor.Tests
                 for (int index = goList.Count - 1; index >= -1; --index)
                 {
                     // Check that the parent is the expected one
-                    var buffer = worldBaking.EntityManager.GetBuffer<GetChildrenBaker.IntElement>(entities[0]);
+                    var buffer = worldBaking.EntityManager.GetBuffer<GetChildrenBaker.EntityIdElement>(entities[0]);
                     int expectedChildCount = goList.Count;
                     Assert.AreEqual(expectedChildCount, buffer.Length, $"Expected the buffer to be size {expectedChildCount}");
 
@@ -7666,7 +7821,7 @@ namespace Unity.Scenes.Editor.Tests
                     {
                         GameObject lastChildGo = goList[index];
                         for (int bufferIndex = 0; bufferIndex < goList.Count; ++bufferIndex)
-                            Assert.AreEqual(goList[bufferIndex].GetInstanceID(), buffer[bufferIndex].Value, $"Expected GO Instance ID {goList[bufferIndex].GetInstanceID()} - Index: {bufferIndex}");
+                            Assert.AreEqual(goList[bufferIndex].GetEntityId(), buffer[bufferIndex].Value, $"Expected GO EntityId {goList[bufferIndex].GetEntityId()} - Index: {bufferIndex}");
 
                         // Check that moving the parent doesn't trigger baking
                         Undo.RecordObject(lastChildGo.transform, "Change component value");
@@ -8525,7 +8680,7 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(componentArray[0].blobReference, componentArray[1].blobReference, "The references do not point to the same Blob Asset");
                 Assert.DoesNotThrow(() => _ = componentArray[0].blobReference.Value, "The Blob Asset Reference is invalid");
 
-                Assert.AreEqual(hash5, componentArray[0].blobHash);
+                Assert.AreEqual(hash5, componentArray[0].blobHash, "Both entities should reference the same blob (hash5); order from ToEntityArray is unspecified");
 
                 // Only one blob should exist (referenced twice)
                 blobAssetStore.GarbageCollection(w.EntityManager);
@@ -8544,6 +8699,7 @@ namespace Unity.Scenes.Editor.Tests
 
                 Assert.AreEqual(2, testBlobAssetQuery.CalculateEntityCount(), "The Blob Asset Reference Component was not added correctly");
 
+                componentArray.Dispose();
                 entityArray = testBlobAssetQuery.ToEntityArray(Allocator.Persistent);
                 componentArray = new NativeArray<BlobAssetReference>(entityArray.Length, Allocator.Persistent)
                 {
@@ -8558,8 +8714,11 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.DoesNotThrow(() => _ = componentArray[0].blobReference.Value, "The original Blob Asset Reference is invalid");
                 Assert.DoesNotThrow(() => _ = componentArray[1].blobReference.Value, "The new Blob Asset Reference is invalid");
 
-                Assert.AreEqual(hash5, componentArray[0].blobHash);
-                Assert.AreEqual(hash1, componentArray[1].blobHash);
+                // ToEntityArray() does not guarantee order.
+                var hashA = componentArray[0].blobHash;
+                var hashB = componentArray[1].blobHash;
+                Assert.IsTrue((hashA == hash5 && hashB == hash1) || (hashA == hash1 && hashB == hash5),
+                    $"Expected exactly {{hash5, hash1}}, got {{{hashA}, {hashB}}}");
 
                 // Only two blobs should exist (referenced once each)
                 blobAssetStore.GarbageCollection(w.EntityManager);
@@ -8578,6 +8737,7 @@ namespace Unity.Scenes.Editor.Tests
 
                 Assert.AreEqual(2, testBlobAssetQuery.CalculateEntityCount(), "The Blob Asset Reference Component was not added correctly");
 
+                componentArray.Dispose();
                 entityArray = testBlobAssetQuery.ToEntityArray(Allocator.Temp);
                 componentArray = new NativeArray<BlobAssetReference>(entityArray.Length, Allocator.Temp)
                 {
@@ -8591,7 +8751,7 @@ namespace Unity.Scenes.Editor.Tests
                 Assert.AreEqual(componentArray[0].blobReference, componentArray[1].blobReference, "The references do not point to the same Blob Asset");
                 Assert.DoesNotThrow(() => _ = componentArray[0].blobReference.Value, "The Blob Asset Reference is invalid");
 
-                Assert.AreEqual(hash1, componentArray[0].blobHash);
+                Assert.AreEqual(hash1, componentArray[0].blobHash, "Both entities should reference the same blob (hash1); order from ToEntityArray is unspecified");
 
                 // Only one blob should exist (referenced twice)
                 blobAssetStore.GarbageCollection(w.EntityManager);
@@ -8952,7 +9112,7 @@ namespace Unity.Scenes.Editor.Tests
                 var manager = w.EntityManager;
 
                 var sceneSystem = w.GetExistingSystem<SceneSystem>();
-                var subScene = Object.FindFirstObjectByType<SubScene>();
+                var subScene = Object.FindAnyObjectByType<SubScene>();
 
                 var sceneEntity = SceneSystem.GetSceneEntity(w.Unmanaged, subScene.SceneGUID);
                 Assert.AreNotEqual(Entity.Null, sceneEntity);

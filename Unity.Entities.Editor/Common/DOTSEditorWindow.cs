@@ -1,6 +1,6 @@
 using System;
 using Unity.Assertions;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -282,6 +282,9 @@ namespace Unity.Entities.Editor
 
             foreach (var category in worldCategories)
             {
+                if (!Enum.IsDefined(typeof(HierarchyWorldFilter), (int)category.Flag))
+                    continue;
+
                 if (showAdvancedWorlds)
                 {
                     menu.AppendAction(category.Name.ToUpper(), null, DropdownMenuAction.Status.Disabled);

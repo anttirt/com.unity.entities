@@ -1,5 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using NUnit.Framework;
+using Unity.Burst;
+using Unity.Collections;
 using Unity.Entities.Tests;
 using Unity.PerformanceTesting;
 
@@ -25,6 +26,29 @@ namespace Unity.Entities.PerformanceTests
                 m_Lookup = GetComponentLookup<EcsTestData>(ReadOnly);
             }
 
+            [BurstCompile]
+            partial struct PerfTestSystemReadOnlyJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                [ReadOnly]
+                public ComponentLookup<EcsTestData> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    data.value0 += Lookup[data.value1].value;
+                }
+            }
+
+            [BurstCompile]
+            partial struct PerfTestSystemJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                public ComponentLookup<EcsTestData> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    data.value0 += Lookup[data.value1].value;
+                }
+            }
+
             protected override void OnUpdate()
             {
                 var lookup = m_Lookup;
@@ -32,25 +56,16 @@ namespace Unity.Entities.PerformanceTests
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            data.value0 += lookup[data.value1].value;
-                        }).Run();
+                        new PerfTestSystemReadOnlyJob{ Lookup = m_Lookup}.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            data.value0 += lookup[data.value1].value;
-                        }).ScheduleParallel();
+                        new PerfTestSystemReadOnlyJob{ Lookup = m_Lookup}.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            data.value0 += lookup[data.value1].value;
-                        }).Schedule();
+                        new PerfTestSystemReadOnlyJob{ Lookup = m_Lookup}.Schedule();
                         CompleteDependency();
                     }
                 }
@@ -58,25 +73,16 @@ namespace Unity.Entities.PerformanceTests
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            lookup[data.value1] = new EcsTestData(5);
-                        }).Run();
+                        new PerfTestSystemJob{ Lookup = m_Lookup}.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithNativeDisableParallelForRestriction(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            lookup[data.value1] = new EcsTestData(5);
-                        }).ScheduleParallel();
+                        new PerfTestSystemJob{ Lookup = m_Lookup}.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            lookup[data.value1] = new EcsTestData(5);
-                        }).Schedule();
+                        new PerfTestSystemJob{ Lookup = m_Lookup}.Schedule();
                         CompleteDependency();
                     }
                 }
@@ -143,35 +149,47 @@ namespace Unity.Entities.PerformanceTests
                 m_Lookup = GetComponentLookup<EcsTestData5>(ReadOnly);
             }
 
+            [BurstCompile]
+            partial struct RunHasComponentReadOnlyJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                [ReadOnly]
+                public ComponentLookup<EcsTestData5> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.HasComponent(data.value1))
+                        data.value0 += Lookup[data.value1].value4;
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunHasComponentJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                public ComponentLookup<EcsTestData5> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.HasComponent(data.value1))
+                        data.value0 += Lookup[data.value1].value4;
+                }
+            }
+
             private void RunHasComponent()
             {
-                var lookup = m_Lookup;
                 if (ReadOnly)
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 += lookup[data.value1].value4;
-                        }).Run();
+                        new RunHasComponentReadOnlyJob { Lookup = m_Lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 += lookup[data.value1].value4;
-                        }).ScheduleParallel();
+                        new RunHasComponentReadOnlyJob { Lookup = m_Lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 += lookup[data.value1].value4;
-                        }).Schedule();
+                        new RunHasComponentReadOnlyJob { Lookup = m_Lookup }.Schedule();
                         CompleteDependency();
                     }
                 }
@@ -179,30 +197,43 @@ namespace Unity.Entities.PerformanceTests
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 = lookup[data.value1].value4;
-                        }).Run();
+                        new RunHasComponentJob { Lookup = m_Lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithNativeDisableParallelForRestriction(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 = lookup[data.value1].value4;
-                        }).ScheduleParallel();
+                        new RunHasComponentJob { Lookup = m_Lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasComponent(data.value1))
-                                data.value0 = lookup[data.value1].value4;
-                        }).Schedule();
+                        new RunHasComponentJob { Lookup = m_Lookup }.Schedule();
                         CompleteDependency();
                     }
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunTryGetComponentReadOnlyJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                [ReadOnly]
+                public ComponentLookup<EcsTestData5> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.TryGetComponent(data.value1, out var componentData))
+                        data.value0 += componentData.value4;
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunTryGetComponentJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                public ComponentLookup<EcsTestData5> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.TryGetComponent(data.value1, out var componentData))
+                        data.value0 += componentData.value4;
                 }
             }
 
@@ -213,28 +244,16 @@ namespace Unity.Entities.PerformanceTests
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 += componentData.value4;
-                        }).Run();
+                        new RunTryGetComponentReadOnlyJob{ Lookup = m_Lookup}.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 += componentData.value4;
-                        }).ScheduleParallel();
+                        new RunTryGetComponentReadOnlyJob{ Lookup = m_Lookup}.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.WithReadOnly(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 += componentData.value4;
-                        }).Schedule();
+                        new RunTryGetComponentReadOnlyJob{ Lookup = m_Lookup}.Schedule();
                         CompleteDependency();
                     }
 
@@ -243,28 +262,16 @@ namespace Unity.Entities.PerformanceTests
                 {
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 = componentData.value4;
-                        }).Run();
+                        new RunTryGetComponentJob{ Lookup = m_Lookup}.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithNativeDisableParallelForRestriction(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 = componentData.value4;
-                        }).ScheduleParallel();
+                        new RunTryGetComponentJob{ Lookup = m_Lookup}.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetComponent(data.value1, out var componentData))
-                                data.value0 = componentData.value4;
-                        }).Schedule();
+                        new RunTryGetComponentJob{ Lookup = m_Lookup}.Schedule();
                         CompleteDependency();
                     }
                 }

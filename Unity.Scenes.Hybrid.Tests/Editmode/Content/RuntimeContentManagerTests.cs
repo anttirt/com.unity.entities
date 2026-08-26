@@ -200,11 +200,11 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 #if false
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromThreads([Values(false, true)] bool usetAssetDB)
+        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromThreads([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            var allids = InitializeCatalogForTest(usetAssetDB);
+            var allids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(allids.Length, 0);
 
             var ids = new List<UntypedWeakReferenceId>();
@@ -268,11 +268,19 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 #if false
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAdditive_GOScenes([Values(false, true)] bool usetAssetDB)
+        public IEnumerator RuntimeContentManager_CanLoadAdditive_GOScenes([Values(false, true)] bool useAssetDB)
         {
+            bool isAppleSilicon = UnityEngine.SystemInfo.processorType.Contains("Apple M");
+            bool isCI = !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CI"));
+
+            if (isAppleSilicon && isCI)
+            {
+                Assert.Ignore("[DOTS-11054] Test silently crashes editor on Apple Silicon in a CI context");
+            }
+
             yield return new EnterPlayMode();
 
-            var ids = InitializeCatalogForTest(usetAssetDB);
+            var ids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(ids.Length, 0);
             ids.Dispose();
 
@@ -308,11 +316,11 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
         }
 
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromJobs([Values(false, true)] bool usetAssetDB)
+        public IEnumerator RuntimeContentManager_CanLoadAndReleaseFromJobs([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            var allids = InitializeCatalogForTest(usetAssetDB);
+            var allids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(allids.Length, 0);
 
             var ids = new List<UntypedWeakReferenceId>();
@@ -373,9 +381,9 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 #if false
         [Test]
-        public void LoadingObjectsCountIsCorrectAfterLoadsAndReleases([Values(false, true)] bool usetAssetDB)
+        public void LoadingObjectsCountIsCorrectAfterLoadsAndReleases([Values(false, true)] bool useAssetDB)
         {
-            var allids = InitializeCatalogForTest(usetAssetDB);
+            var allids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(allids.Length, 0);
 
             var ids = new List<UntypedWeakReferenceId>();
@@ -399,11 +407,11 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 
         [UnityTest]
-        public IEnumerator RuntimeContentManager_CanLoadLocalAssets([Values(false, true)] bool usetAssetDB)
+        public IEnumerator RuntimeContentManager_CanLoadLocalAssets([Values(false, true)] bool useAssetDB)
         {
             yield return new EnterPlayMode();
 
-            var allids = InitializeCatalogForTest(usetAssetDB);
+            var allids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(allids.Length, 0);
 
             var ids = new List<UntypedWeakReferenceId>();
@@ -464,14 +472,16 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 #if false
         [UnityTest]
-#if UNITY_EDITOR_LINUX
-        [Ignore("DOTS-7790 - Ubuntu editor often crashes when running this test")]
-#endif
-        public IEnumerator WeakObjectReference_CanLoadAndRelease([Values(false, true)] bool usetAssetDB)
+        public IEnumerator WeakObjectReference_CanLoadAndRelease([Values(false, true)] bool useAssetDB)
         {
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CI")) && useAssetDB)
+            {
+                Assert.Ignore("[DOTS-11045] Skipping `true` parameter value in CI, as it frequently fails with a `Failed to find artifact load path for id <some GUID>`");
+            }
+
             yield return new EnterPlayMode();
 
-            var ids = InitializeCatalogForTest(usetAssetDB);
+            var ids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(ids.Length, 0);
             WeakObjectReference<UnityEngine.Object> matRef = default;
             matRef.Id = ids[0];
@@ -495,14 +505,16 @@ namespace Unity.Scenes.Hybrid.Tests.Editmode.Content
 
 #if false
         [UnityTest]
-#if UNITY_EDITOR_LINUX
-        [Ignore("DOTS-7790 - Ubuntu editor often crashes when running this test")]
-#endif
-        public IEnumerator WeakObjectReference_CanLoadAndReleaseWithWaitForCompletion([Values(false, true)] bool usetAssetDB)
+        public IEnumerator WeakObjectReference_CanLoadAndReleaseWithWaitForCompletion([Values(false, true)] bool useAssetDB)
         {
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CI")) && useAssetDB)
+            {
+                Assert.Ignore("[DOTS-11045] Skipping `true` parameter value in CI, as it frequently fails with a `Failed to find artifact load path for id <some GUID>`");
+            }
+
             yield return new EnterPlayMode();
 
-            var ids = InitializeCatalogForTest(usetAssetDB);
+            var ids = InitializeCatalogForTest(useAssetDB);
             Assert.Greater(ids.Length, 0);
 
             WeakObjectReference<UnityEngine.Object> matRef = default;

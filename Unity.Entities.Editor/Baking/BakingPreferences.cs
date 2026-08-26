@@ -2,7 +2,7 @@ using Unity.Entities.Conversion;
 using Unity.Entities.UI;
 using Unity.Properties;
 using Unity.Scenes.Editor;
-using Unity.Serialization;
+using Unity.Entities.Serialization;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;

@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using Unity.Collections;
 using UnityEditor;
+using UnityEngine;
 
 namespace Unity.Editor.Bridge
 {
@@ -40,17 +41,17 @@ namespace Unity.Editor.Bridge
 
     readonly struct GameObjectChangeTrackerEvent
     {
-        public readonly int InstanceId;
+        public readonly EntityId EntityId;
         public readonly GameObjectChangeTrackerEventType EventType;
 
-        public GameObjectChangeTrackerEvent(int instanceId, GameObjectChangeTrackerEventType eventType)
+        public GameObjectChangeTrackerEvent(EntityId entityId, GameObjectChangeTrackerEventType eventType)
         {
-            InstanceId = instanceId;
+            EntityId = entityId;
             EventType = eventType;
         }
 
         public override string ToString()
-            => $"GameObjectChangeTrackerEvent(InstanceId: {InstanceId}, EventType: {EventType})";
+            => $"GameObjectChangeTrackerEvent(InstanceId: {EntityId}, EventType: {EventType})";
     }
 
     [Flags]

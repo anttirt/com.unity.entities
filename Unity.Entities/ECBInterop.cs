@@ -70,27 +70,27 @@ namespace Unity.Entities
 
         [BurstMonoInteropMethod]
         internal static unsafe void _ProcessChainChunk(void* walker, int processorType,
-            ECBChainPlaybackState* chainStates, int currentChain, int nextChain)
+            ECBPlaybackState* playbackState, int currentChain, int nextChain)
         {
             if (processorType == (int)EntityCommandBuffer.ECBProcessorType.PlaybackProcessor)
             {
                 var playbackWalker = (EntityCommandBuffer.EcbWalker<EntityCommandBuffer.PlaybackProcessor>*) walker;
-                playbackWalker->ProcessChain(chainStates, currentChain, nextChain);
+                playbackWalker->ProcessChain(playbackState, currentChain, nextChain);
             }
             else if (processorType == (int)EntityCommandBuffer.ECBProcessorType.DebugViewProcessor)
             {
                 var debugViewWalker = (EntityCommandBuffer.EcbWalker<EntityCommandBuffer.DebugViewProcessor>*) walker;
-                debugViewWalker->ProcessChain(chainStates, currentChain, nextChain);
+                debugViewWalker->ProcessChain(playbackState, currentChain, nextChain);
             }
             else if (processorType == (int) EntityCommandBuffer.ECBProcessorType.PlaybackWithTraceProcessor)
             {
                 var playbackWithTraceWalker = (EntityCommandBuffer.EcbWalker<EntityCommandBuffer.PlaybackWithTraceProcessor>*) walker;
-                playbackWithTraceWalker->ProcessChain(chainStates, currentChain, nextChain);
+                playbackWithTraceWalker->ProcessChain(playbackState, currentChain, nextChain);
             }
             else if (processorType == (int) EntityCommandBuffer.ECBProcessorType.PrePlaybackValidationProcessor)
             {
                 var prePlaybackValidationWalker = (EntityCommandBuffer.EcbWalker<EntityCommandBuffer.PrePlaybackValidationProcessor>*) walker;
-                prePlaybackValidationWalker->ProcessChain(chainStates, currentChain, nextChain);
+                prePlaybackValidationWalker->ProcessChain(playbackState, currentChain, nextChain);
             }
         }
 

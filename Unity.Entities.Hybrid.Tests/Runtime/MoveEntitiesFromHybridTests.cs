@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 using NUnit.Framework;
-using Unity.Collections;
-using Unity.Entities.CodeGeneratedJobForEach;
 using UnityEngine;
 
 namespace Unity.Entities.Tests
@@ -61,21 +59,27 @@ namespace Unity.Entities.Tests
             {
                 var comp = obj.AddComponent<TestClassComponentA>();
                 comp.Value = valueA;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentObject(entity, comp);
+                #pragma warning restore 0618
             }
 
             if (valueB != 0)
             {
                 var comp = obj.AddComponent<TestClassComponentB>();
                 comp.Value = valueB;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentObject(entity, comp);
+                #pragma warning restore 0618
             }
 
             if (valueC != 0)
             {
                 var comp = obj.AddComponent<TestClassComponentC>();
                 comp.Value = valueC;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentObject(entity, comp);
+                #pragma warning restore 0618
             }
 
             gameObjects.Add(obj);
@@ -91,7 +95,9 @@ namespace Unity.Entities.Tests
 
                 for (int i = 0; i < entities.Length; ++i)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     result[i] = world.EntityManager.GetComponentObject<T>(entities[i]).ToInt();
+                    #pragma warning restore 0618
                 }
 
                 return result;

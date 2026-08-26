@@ -9,8 +9,8 @@ namespace Unity.Editor.Bridge
 {
     static class EditorSceneManagerBridge
     {
-
-        public static Scene GetSceneByHandle(int handle) => EditorSceneManager.GetSceneByHandle(handle);
+        public static Scene GetSceneByHandle(SceneHandle handle) => EditorSceneManager.GetSceneByHandle(handle);
+        public static Scene GetSceneByEntityId(EntityId entityId) => EditorSceneManager.GetSceneByHandle(SceneHandle.FromRawData(EntityId.ToULong(entityId)));
 
         public static bool IsAuthoringScene(Scene scene) => scene.isSubScene; //TODO: replace by EditorSceneManager.IsAuthoringScene(scene); when non destructive editing PR is in dots/monorepo
 

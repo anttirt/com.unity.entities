@@ -86,7 +86,9 @@ namespace Unity.Entities
                         Property = CreateInstance(typeof(StructChunkComponentProperty<>));
 #endif
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     else if (TypeManager.IsManagedComponent(TypeIndex))
+                    #pragma warning restore 0618
                         Property = CreateInstance(typeof(ClassComponentProperty<>));
 #endif
                     else
@@ -154,13 +156,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetSharedComponentManaged<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetSharedComponentManaged(container.Entity, value);
+                #pragma warning restore 0618
             }
         }
 
@@ -177,13 +183,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetComponentData<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetComponentData(container.Entity, value);
+                #pragma warning restore 0618
             }
         }
 
@@ -201,13 +211,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetComponentData<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetComponentData(container.Entity, value);
+                #pragma warning restore 0618
             }
         }
 #endif
@@ -225,13 +239,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetComponentObject<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetComponentObject(container.Entity, typeof(TComponent), value);
+                #pragma warning restore 0618
             }
         }
 
@@ -248,13 +266,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetChunkComponentData<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetChunkComponentData(entityManager.GetChunk(container.Entity), value);
+                #pragma warning restore 0618
             }
         }
 
@@ -272,13 +294,17 @@ namespace Unity.Entities
             protected override TComponent DoGetValue(ref EntityContainer container)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return entityManager.GetChunkComponentData<TComponent>(container.Entity);
+                #pragma warning restore 0618
             }
 
             protected override void DoSetValue(ref EntityContainer container, TComponent value)
             {
                 var entityManager = container.EntityManager;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.SetChunkComponentData(entityManager.GetChunk(container.Entity), value);
+                #pragma warning restore 0618
             }
         }
 #endif

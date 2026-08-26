@@ -1,5 +1,5 @@
+using Unity.Entities.Serialization;
 using Unity.Properties;
-using Unity.Serialization.Json;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -37,7 +37,7 @@ namespace Unity.Entities.Editor
             {
                 var v = value;
                 m_Menu.AppendAction($"{k_CopyPrefix}{property.Name}",
-                    action => { EditorGUIUtility.systemCopyBuffer = JsonSerialization.ToJson(v); });
+                    action => { EditorGUIUtility.systemCopyBuffer = EntitiesJson.Serialize(v); });
             }
         }
 
@@ -54,13 +54,13 @@ namespace Unity.Entities.Editor
             {
                 var v = value;
                 m_Menu.AddItem(new GUIContent($"{k_CopyPrefix}{property.Name}"), false,
-                    () => { EditorGUIUtility.systemCopyBuffer = JsonSerialization.ToJson(v); });
+                    () => { EditorGUIUtility.systemCopyBuffer = EntitiesJson.Serialize(v); });
             }
         }
 
         public static void AddCopyValue<TValue>(this GenericMenu menu, TValue value)
         {
-            menu.AddItem(new GUIContent($"{k_CopyPrefix}All"), false, () => { EditorGUIUtility.systemCopyBuffer = JsonSerialization.ToJson(value); });
+            menu.AddItem(new GUIContent($"{k_CopyPrefix}All"), false, () => { EditorGUIUtility.systemCopyBuffer = EntitiesJson.Serialize(value); });
             menu.AddSeparator(k_CopyPrefix);
             var visitor = new GenericMenuCopyVisitor(menu);
             PropertyContainer.Accept(visitor, ref value);
@@ -68,7 +68,7 @@ namespace Unity.Entities.Editor
 
         public static void AddCopyValue<TValue>(this DropdownMenu menu, TValue value)
         {
-            menu.AppendAction($"{k_CopyPrefix}All", action => { EditorGUIUtility.systemCopyBuffer = JsonSerialization.ToJson(value); });
+            menu.AppendAction($"{k_CopyPrefix}All", action => { EditorGUIUtility.systemCopyBuffer = EntitiesJson.Serialize(value); });
             menu.AppendSeparator(k_CopyPrefix);
             var visitor = new DropdownMenuCopyVisitor(menu);
             PropertyContainer.Accept(visitor, ref value);

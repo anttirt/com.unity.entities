@@ -14,6 +14,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     partial class PreBakingTestSystem : SystemBase
     {
         public static bool executed = false;
+
         protected override void OnUpdate()
         {
             // BakeGameObjects removes all entities in the world, so adding a component doesn't work to check if

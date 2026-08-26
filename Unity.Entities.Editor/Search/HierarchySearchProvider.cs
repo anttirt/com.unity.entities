@@ -17,7 +17,7 @@ namespace Unity.Entities.Editor
     public static class HierarchySearchProvider
     {
         /// <summary>
-        /// Search Provider type id. 
+        /// Search Provider type id.
         /// </summary>
         public const string type = "nodehierarchy";
         private static readonly Regex s_SharedComponentFilterRegex = new Regex(@"#([\w\.]+)");
@@ -79,7 +79,7 @@ namespace Unity.Entities.Editor
             s_EntityQueryEngine.AddFilter("dm", node => "dummymode", new[] { "=" });
 
             // Tag all hierarchy filters.
-            SearchBridge.SetFilter(s_EntityQueryEngine, "ei", node => node.GetHandle().Index, new[] { "=" })
+            SearchBridge.SetFilter(s_EntityQueryEngine, "ei", node => node.GetHandle().ToEntity().Index, new[] { "=" })
                 .AddOrUpdateProposition(category: null, label: "Entity Index", replacement: "ei=1", help: "Search entities by index");
             s_EntityQueryEngine.AddFilter("c", node => "dummytype", new[] { "=" });
             s_EntityQueryEngine.AddFilter("none", node => "dummytype", new[] { "=" });
@@ -153,7 +153,7 @@ namespace Unity.Entities.Editor
         }
 
         internal class SharedComponentModifierDesc
-        {            
+        {
             public Type componentType => propertyDescs[0].componentInfo.Type;
             internal List<SharedComponentPropertyDesc> propertyDescs;
             internal List<string> propertyValues;
@@ -181,7 +181,7 @@ namespace Unity.Entities.Editor
                     {
                         var property = propertyDescs[i];
                         var strValue = propertyValues[i];
-                        
+
                         if (!SearchUtils.TryConvertValue(property.propertyType, strValue, out var value))
                         {
                             errors += $"Failed to set property {property.propertyName} to value {strValue}";
@@ -200,7 +200,7 @@ namespace Unity.Entities.Editor
             }
 
             public void ModifyQuery(ref EntityQuery query)
-            {                
+            {
                 if (SetupSharedComponent(out var component, out var errors))
                 {
                     SetSharedComponentFilter(ref query, component);
@@ -212,7 +212,7 @@ namespace Unity.Entities.Editor
         {
             try
             {
-                
+
                 var methods = typeof(EntityQuery).GetMethods(BindingFlags.Public | BindingFlags.Instance);
                 var setSharedComponentMethod = methods.Where(m => m.Name == "SetSharedComponentFilter" && m.GetParameters().Length == 1).FirstOrDefault();
                 var genSetSharedComponentMethod = setSharedComponentMethod.MakeGenericMethod(sharedComponent.GetType());
@@ -268,7 +268,7 @@ namespace Unity.Entities.Editor
             }
             return filter;
         }
-        
+
         internal static HierarchyQueryDescriptor CreateHierarchyQueryDescriptor(string query)
         {
             var desc = new HierarchyQueryDescriptor(query);
@@ -352,7 +352,7 @@ namespace Unity.Entities.Editor
             {
                 desc.kind = SearchUtils.ParseEnum<NodeKind>(kindFilter.filterValue);
             }
-            
+
             var unusedFilters = filters.Where(f =>
                 !s_EntityFilters.Contains(f.filterId) &&
                 !s_HierarchyFilters.Contains(f.filterId) &&
@@ -501,7 +501,7 @@ namespace Unity.Entities.Editor
 
             foreach (var p in SearchBridge.GetPropositionsFromListBlockType(typeof(QueryPrefabTypeBlock)))
                 yield return p;
-            
+
             foreach (var p in SearchBridge.GetEnumToggle("Entity Query Options", "Refine entity query",
                 EntityQueryOptions.FilterWriteGroup,
                 EntityQueryOptions.IgnoreComponentEnabledState,
@@ -544,7 +544,7 @@ namespace Unity.Entities.Editor
 
         private static void FrameObjects(UnityEngine.Object[] objects)
         {
-            Selection.instanceIDs = objects.Select(o => o.GetHashCode()).ToArray();
+            Selection.entityIds = objects.Select(o => o.GetEntityId()).ToArray();
             if (SceneView.lastActiveSceneView != null)
                 SceneView.lastActiveSceneView.FrameSelected();
         }
@@ -634,7 +634,7 @@ namespace Unity.Entities.Editor
                         case "depth": return node.GetDepth();
                         case "kind": return node.GetHandle().Kind;
                         case "disabled": return s_Hierarchy.IsDisabled(node.GetHandle());
-                        case "index": return node.GetHandle().Index;
+                        case "index": return node.GetHandle().ToEntity().Index;
                         case "instanceId": return s_Hierarchy.GetInstanceId(node.GetHandle());
                         case "prefab": return s_Hierarchy.GetPrefabType(node.GetHandle());
                     }
@@ -651,11 +651,11 @@ namespace Unity.Entities.Editor
             {
                 yield break;
             }
-            yield return new SearchColumn("Entity/InstanceID", "instanceId", nameof(HierarchyNode));
+            yield return new SearchColumn("Entity/EntityId", "instanceId", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Kind", "kind", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Prefab", "prefab", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Index", "index", nameof(HierarchyNode));
-            yield return new SearchColumn("Entity/InstanceID", "instanceId", nameof(HierarchyNode));
+            yield return new SearchColumn("Entity/EntityId", "instanceId", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Disabled", "disabled", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Child Count", "child_count", nameof(HierarchyNode));
             yield return new SearchColumn("Entity/Depth", "depth", nameof(HierarchyNode));

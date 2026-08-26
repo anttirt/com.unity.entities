@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 #define SOME_DEFINE
 using System;
 using NUnit.Framework;
@@ -22,7 +21,9 @@ namespace Unity.Entities.Tests
         {
             public int SingletonProperty
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 get => SystemAPI.GetSingleton<EcsTestData>().value;
+                #pragma warning restore 0618
                 set => SystemAPI.SetSingleton(new EcsTestData {value = value});
             }
 
@@ -41,7 +42,9 @@ namespace Unity.Entities.Tests
                 Assert.AreEqual(expected: 0, defaultSingletonValue);
 
                 SingletonProperty = 10;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             public void GetSetSingleton()
@@ -49,7 +52,9 @@ namespace Unity.Entities.Tests
                 EntityManager.CreateEntity(typeof(EcsTestData));
 
                 SystemAPI.SetSingleton(new EcsTestData(10));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             public void GetSingletonRW_ByRef_Modifies_Singleton()
@@ -58,10 +63,14 @@ namespace Unity.Entities.Tests
 
                 ref var singleton = ref SystemAPI.GetSingletonRW<EcsTestData>().ValueRW;
                 singleton.value = 10;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
 
                 SystemAPI.GetSingletonRW<EcsTestData>().ValueRW.value = 33;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(33, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
 
                 ref var s1 = ref SystemAPI.GetSingletonRW<EcsTestData>().ValueRW;
                 s1.value = 42;
@@ -82,7 +91,9 @@ namespace Unity.Entities.Tests
 
                 var singleton = SystemAPI.GetSingletonRW<EcsTestData>().ValueRW;
                 singleton.value = 10;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expected, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             public void GetSetSingletonInSystem()
@@ -90,13 +101,17 @@ namespace Unity.Entities.Tests
                 EntityManager.CreateEntity(typeof(SystemBase_TestSystem.SingletonDataInSystem));
 
                 SystemAPI.SetSingleton(new SystemBase_TestSystem.SingletonDataInSystem() { value = 10.0f });
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<SystemBase_TestSystem.SingletonDataInSystem>().value);
+                #pragma warning restore 0618
             }
 
             T GenericMethodWithSingletonAccess<T>(T value) where T : unmanaged, IComponentData
             {
                 SystemAPI.SetSingleton(value);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return SystemAPI.GetSingleton<T>();
+                #pragma warning restore 0618
             }
 
             public void GetSetSingletonWithGenericParameter()
@@ -104,14 +119,18 @@ namespace Unity.Entities.Tests
                 EntityManager.CreateEntity(typeof(EcsTestData));
 
                 GenericMethodWithSingletonAccess(new EcsTestData(10));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             struct TestStruct { }
 
             int SingletonAccessInGenericMethodWithInParameter<T>(in T inArgument) where T: struct
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return SystemAPI.GetSingleton<EcsTestData>().value;
+                #pragma warning restore 0618
             }
 
             public void GetSingletonInGenericMethodWithInParameter()
@@ -125,17 +144,25 @@ namespace Unity.Entities.Tests
             public void SingletonMethodsWithValidFilter_GetsAndSets()
             {
                 var queryWithFilter1 = EntityManager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 queryWithFilter1.SetSharedComponentFilterManaged(new SharedData1(1));
+                #pragma warning restore 0618
                 var queryWithFilter2 = EntityManager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 queryWithFilter2.SetSharedComponentFilterManaged(new SharedData1(2));
+                #pragma warning restore 0618
 
                 var entity1 = EntityManager.CreateEntity(typeof(EcsTestData), typeof(SharedData1));
                 EntityManager.SetComponentData(entity1, new EcsTestData(-1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.SetSharedComponentManaged(entity1, new SharedData1(1));
+                #pragma warning restore 0618
 
                 var entity2 = EntityManager.CreateEntity(typeof(EcsTestData), typeof(SharedData1));
                 EntityManager.SetComponentData(entity2, new EcsTestData(-1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.SetSharedComponentManaged(entity2, new SharedData1(2));
+                #pragma warning restore 0618
 
                 Assert.DoesNotThrow(() => queryWithFilter1.SetSingleton(new EcsTestData(1)));
                 Assert.DoesNotThrow(() => queryWithFilter2.SetSingleton(new EcsTestData(2)));
@@ -143,9 +170,13 @@ namespace Unity.Entities.Tests
                 Assert.DoesNotThrow(() => queryWithFilter1.GetSingletonEntity());
                 Assert.DoesNotThrow(() => queryWithFilter2.GetSingletonEntity());
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data1 = queryWithFilter1.GetSingleton<EcsTestData>();
+                #pragma warning restore 0618
                 Assert.AreEqual(1, data1.value);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data2 = queryWithFilter2.GetSingleton<EcsTestData>();
+                #pragma warning restore 0618
                 Assert.AreEqual(2, data2.value);
 
                 // These need to be reset or the AllSharedComponentReferencesAreFromChunks check will fail
@@ -156,20 +187,32 @@ namespace Unity.Entities.Tests
             public void SingletonMethodsWithInvalidFilter_Throws()
             {
                 var queryWithFilterMissingEntity = EntityManager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 queryWithFilterMissingEntity.SetSharedComponentFilterManaged(new SharedData1(1));
+                #pragma warning restore 0618
                 var queryWithFilterWithAdditionalEntity = EntityManager.CreateEntityQuery(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 queryWithFilterWithAdditionalEntity.SetSharedComponentFilterManaged(new SharedData1(2));
+                #pragma warning restore 0618
 
                 var entity1 = EntityManager.CreateEntity(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.SetSharedComponentManaged(entity1, new SharedData1(2));
+                #pragma warning restore 0618
                 var entity2 = EntityManager.CreateEntity(typeof(EcsTestData), typeof(SharedData1));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.SetSharedComponentManaged(entity2, new SharedData1(2));
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterMissingEntity.GetSingleton<EcsTestData>());
+                #pragma warning restore 0618
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterMissingEntity.SetSingleton(new EcsTestData(1)));
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterMissingEntity.GetSingletonEntity());
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterWithAdditionalEntity.GetSingleton<EcsTestData>());
+                #pragma warning restore 0618
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterWithAdditionalEntity.SetSingleton(new EcsTestData(1)));
                 Assert.Throws<InvalidOperationException>(() => queryWithFilterWithAdditionalEntity.GetSingletonEntity());
 
@@ -183,29 +226,20 @@ namespace Unity.Entities.Tests
                 var entity = EntityManager.CreateEntity(typeof(EcsTestData3), typeof(EcsTestData), typeof(EcsTestData2));
 
                 EntityManager.SetComponentData(entity, new EcsTestData(10));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
 
                 SystemAPI.SetSingleton(new EcsTestData2(100));
                 Assert.AreEqual(100, EntityManager.GetComponentData<EcsTestData2>(entity).value0);
             }
 
-            public void GetSetSingletonInEntitiesForEach()
-            {
-                EntityManager.CreateEntity(typeof(EcsTestData2));
-                EntityManager.CreateEntity(typeof(EcsTestData));
-
-                var query = SystemAPI.QueryBuilder().WithAllRW<EcsTestData>().Build();
-                Entities.WithoutBurst().ForEach((in EcsTestData2 data2) => { query.SetSingleton(new EcsTestData(10)); }).Run();
-                int value = 0;
-                Entities.WithoutBurst().ForEach((in EcsTestData2 data2) => { value = query.GetSingleton<EcsTestData>().value; }).Run();
-
-                Assert.AreEqual(10, value);
-            }
-
             public void GetSetSingletonZeroThrows()
             {
                 Assert.Throws<InvalidOperationException>(() => SystemAPI.SetSingleton(new EcsTestData()));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => SystemAPI.GetSingleton<EcsTestData>());
+                #pragma warning restore 0618
             }
 
             // Throws due to a singleton component only being allowed on a single Entity
@@ -215,7 +249,9 @@ namespace Unity.Entities.Tests
                 EntityManager.CreateEntity(typeof(EcsTestData));
 
                 Assert.Throws<InvalidOperationException>(() => SystemAPI.SetSingleton(new EcsTestData()));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => SystemAPI.GetSingleton<EcsTestData>());
+                #pragma warning restore 0618
             }
 
             public void RequireSingletonWorks()
@@ -231,24 +267,34 @@ namespace Unity.Entities.Tests
 
             public void HasSingletonWorks()
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsFalse(SystemAPI.HasSingleton<EcsTestData>());
+                #pragma warning restore 0618
                 EntityManager.CreateEntity(typeof(EcsTestData));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsTrue(SystemAPI.HasSingleton<EcsTestData>());
+                #pragma warning restore 0618
             }
 
             public void HasSingleton_ReturnsTrueWithEntityWithOnlyComponent()
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsFalse(SystemAPI.HasSingleton<EcsTestData>());
+                #pragma warning restore 0618
 
                 EntityManager.CreateEntity(typeof(EcsTestData));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsTrue(SystemAPI.HasSingleton<EcsTestData>());
+                #pragma warning restore 0618
             }
 
             public void HasSingleton_MoreThanOneInstance_Throws()
             {
                 EntityManager.CreateEntity(typeof(EcsTestData));
                 EntityManager.CreateEntity(typeof(EcsTestData));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => SystemAPI.HasSingleton<EcsTestData>());
+                #pragma warning restore 0618
             }
 
             public void GetSingletonEntityWorks()
@@ -266,7 +312,9 @@ namespace Unity.Entities.Tests
                 var entity = EntityManager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
                 EntityManager.SetComponentData(entity, new EcsTestData() { value = 3 });
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(3, query.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             public void SetSingletonWithExpressionWithPreprocessorTriviaWorks()
@@ -279,32 +327,44 @@ namespace Unity.Entities.Tests
 #endif
                 });
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(3, SystemAPI.GetSingleton<EcsTestData>().value);
+                #pragma warning restore 0618
             }
 
             public void GetSingletonWithGeneric()
             {
                 EntityManager.CreateEntity(typeof(EcsTestGeneric<int>));
                 SystemAPI.SetSingleton(new EcsTestGeneric<int>{ value = 10 });
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(10, SystemAPI.GetSingleton<EcsTestGeneric<int>>().value);
+                #pragma warning restore 0618
             }
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
             public void GetSetSingleton_ManagedComponents()
             {
                 var entity = EntityManager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.AddComponentObject(entity, new EcsTestManagedComponent());
+                #pragma warning restore 0618
 
                 const string kTestVal = "SomeString";
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SystemAPI.ManagedAPI.GetSingleton<EcsTestManagedComponent>().value = kTestVal;
                 Assert.AreEqual(kTestVal, SystemAPI.ManagedAPI.GetSingleton<EcsTestManagedComponent>().value);
+                #pragma warning restore 0618
             }
 
             public void HasSingletonWorks_ManagedComponents()
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsFalse(SystemAPI.ManagedAPI.HasSingleton<EcsTestManagedComponent>());
+                #pragma warning restore 0618
                 EntityManager.CreateEntity(typeof(EcsTestManagedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsTrue(SystemAPI.ManagedAPI.HasSingleton<EcsTestManagedComponent>());
+                #pragma warning restore 0618
             }
 
 #endif
@@ -347,9 +407,6 @@ namespace Unity.Entities.Tests
 
         [Test]
         public void SystemBase_GetSetSingletonMultipleComponents() => TestSystem.GetSetSingletonMultipleComponents();
-
-        [Test]
-        public void SystemBase_GetSetSingletonInEntitiesForEach() => TestSystem.GetSetSingletonInEntitiesForEach();
 
         [Test]
         public void SystemBase_RequireSingletonWorks() => TestSystem.RequireSingletonWorks();

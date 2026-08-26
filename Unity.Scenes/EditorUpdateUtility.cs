@@ -3,10 +3,17 @@ using UnityEngine;
 
 namespace Unity.Scenes
 {
-    internal static class EditorUpdateUtility
+    internal static partial class EditorUpdateUtility
     {
 #if UNITY_EDITOR
         public static bool DidRequest = false;
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            DidRequest = false;
+        }
+
         public static void EditModeQueuePlayerLoopUpdate()
         {
             if (!Application.isPlaying && !DidRequest)

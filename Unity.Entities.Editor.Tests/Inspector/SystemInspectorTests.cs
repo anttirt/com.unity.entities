@@ -1,8 +1,8 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using Unity.Entities.Hybrid.Tests;
 using UnityEditor;
 using UnityEngine.LowLevel;
+using UnityEngine.Pool;
 
 namespace Unity.Entities.Editor.Tests
 {
@@ -22,15 +22,11 @@ namespace Unity.Entities.Editor.Tests
         {
             protected override void OnUpdate()
             {
-                Entities
-                    .ForEach((ref SystemScheduleTestData1 data1, in SystemScheduleTestData2 data2) =>
-                {
-                }).Run();
+                foreach (var (data1, data2) in
+                         SystemAPI.Query<RefRW<SystemScheduleTestData1>, RefRO<SystemScheduleTestData2>>()) { }
 
-                Entities
-                    .WithNone<SystemScheduleTestData2>().ForEach((in SystemScheduleTestData1 data1) =>
-                {
-                }).Run();
+                foreach (var data1 in
+                         SystemAPI.Query<RefRO<SystemScheduleTestData1>>().WithNone<SystemScheduleTestData2>()) { }
             }
         }
 
@@ -80,7 +76,7 @@ namespace Unity.Entities.Editor.Tests
         }
 
         [Test]
-        public void SystemInspector_RelationshipsTab_MatchingEntities()
+        public void SystemInspector_QueriesTab_MatchingEntities()
         {
             var systemEntities = new SystemEntities(m_World, new SystemProxy(m_SystemInspectorTestSystem, m_WorldProxy));
             Assert.That(systemEntities.EntitiesFromQueries.Count, Is.EqualTo(2));
@@ -111,33 +107,20 @@ namespace Unity.Entities.Editor.Tests
         }
 
         [Test]
-        public void SystemInspector_RelationshipsTab_MatchingDependencies()
-        {
-            var systemDependencies = new SystemDependencies(m_World, new SystemProxy(m_SystemInspectorTestSystem1, m_WorldProxy));
-
-            var updateBeforeSystemListViewDataList = systemDependencies.GetUpdateBeforeSystemViewDataList();
-            var updateAfterSystemListViewDataList = systemDependencies.GetUpdateAfterSystemViewDataList();
-
-            Assert.That(updateBeforeSystemListViewDataList.Count, Is.EqualTo(0));
-            Assert.That(updateAfterSystemListViewDataList.Count, Is.EqualTo(1));
-            Assert.That(updateAfterSystemListViewDataList[0].Equals(new SystemDependencyViewData(new SystemProxy(m_SystemInspectorTestSystem2, m_WorldProxy), "System Schedule Test System 2")), Is.True);
-        }
-
-        [Test]
         public void SystemInspector_DependenciesTab_MatchingComponents()
         {
             var systemDependenciesTab = new SystemDependenciesTab(new SystemProxy(m_SystemInspectorTestSystem, m_WorldProxy));
 
-            using var readingComponents = PooledList<ComponentViewData>.Make();
-            using var writingComponents = PooledList<ComponentViewData>.Make();
+            using var _ = ListPool<ComponentViewData>.Get(out var readingComponents);
+            using var __ = ListPool<ComponentViewData>.Get(out var writingComponents);
             systemDependenciesTab.SystemProxy.FillListWithJobDependencyForReadingSystems(readingComponents);
             systemDependenciesTab.SystemProxy.FillListWithJobDependencyForWritingSystems(writingComponents);
 
-            Assume.That(readingComponents.List.Count, Is.EqualTo(1));
-            Assume.That(writingComponents.List.Count, Is.EqualTo(1));
+            Assume.That(readingComponents.Count, Is.EqualTo(1));
+            Assume.That(writingComponents.Count, Is.EqualTo(1));
 
-            Assert.That(readingComponents.List[0].InComponentType, Is.EqualTo(typeof(SystemScheduleTestData2)));
-            Assert.That(writingComponents.List[0].InComponentType, Is.EqualTo(typeof(SystemScheduleTestData1)));
+            Assert.That(readingComponents[0].InComponentType, Is.EqualTo(typeof(SystemScheduleTestData2)));
+            Assert.That(writingComponents[0].InComponentType, Is.EqualTo(typeof(SystemScheduleTestData1)));
         }
     }
 }

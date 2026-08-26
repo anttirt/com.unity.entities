@@ -40,6 +40,16 @@ namespace Unity.Entities.SourceGen.Common
             return sourceText.WithChanges(new TextChange(firstLine.Span, $"#pragma warning disable 0219" + Environment.NewLine + firstLine));
         }
 
+        // Generated code mirrors the user's source and may reference APIs the user has marked
+        // [Obsolete]. The original CS0618 still fires at the user-source call site; suppressing
+        // it file-wide here just prevents the duplicate from firing inside generator-emitted
+        // helper structs that the user can't wrap in pragmas themselves.
+        public static SourceText WithIgnoreObsoleteWarning(this SourceText sourceText)
+        {
+            var firstLine = sourceText.Lines.FirstOrDefault();
+            return sourceText.WithChanges(new TextChange(firstLine.Span, $"#pragma warning disable 0618" + Environment.NewLine + firstLine));
+        }
+
         // Stable version of String.GetHashCode
         public static int GetStableHashCode(string str)
         {

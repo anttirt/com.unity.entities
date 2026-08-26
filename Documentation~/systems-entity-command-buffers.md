@@ -14,24 +14,18 @@ The [methods in `EntityCommandBuffer`](xref:Unity.Entities.EntityCommandBuffer) 
 * `AddComponent<T>(Entity)`: Registers a command that adds a component of type `T` to the entity.
 * `RemoveComponent<T>(EntityQuery)`: Registers a command that removes a component of type `T` from all entities that match the query.
 
-## Temporary entities created by command buffers
+## Entities created by command buffers
 
-The entities returned from `EntityCommandBuffer`'s `CreateEntity()` and `Instantiate()` methods are special;
-they don't fully exist until the command buffer is played back, but they can still be used in subsequent commands
-within the same command buffer. There are two valid uses for temporary entities:
+The `EntityCommandBuffer` methods `CreateEntity` and `Instantiate` return valid `Entity` references at record time. ECS allocates the entity immediately but doesn't assign it a chunk until the `Playback` method runs. As a result:
 
-1. Commands can target temporary entities created by earlier commands in the same buffer. For example, it is valid to
-   call `EntityCommandBuffer.AddComponent<T>(e)` on a temporary entity `e` created earlier in the same buffer.
-2. Unmanaged component values passed into commands can contain references to temporary entities. For example,
-   `EntityCommandBuffer.SetComponent(e2, new Parent{ Value = e})` is valid if `e` or `e2` (or both) are temporary entities
-   from the same command buffer. This includes `IBufferElementData` components (dynamic buffers) which contain entity fields.
+* You can use the returned entity in later commands on the same buffer, for example in `ecb.AddComponent<T>(e)`.
+* You can store the entity reference or pass it to other code, and it stays valid before and after the `Playback` method runs.
+* You can store these entities in the `Entity` fields of component values (including `IBufferElementData`), for example `ecb.SetComponent(e2, new Parent { Value = e })`. Unity stores the references directly, so it doesn't need to remap them during playback.
+* You can't access the entity through `EntityManager` or queries until after the `Playback` method runs, because it has no chunk before then.
 
-During command buffer playback, valid references to temporary entities created earlier in the buffer will be automatically replaced
-with a reference to the corresponding "real" entity. There is no way to determine which "real" entity corresponds to a
-given temporary entity after its command buffer has been played back.
+When you instantiate a prefab with the `Instantiate` method, Unity allocates only the root entity at record time. If the prefab has a `LinkedEntityGroup` buffer (which prefabs with a child hierarchy have automatically), Unity allocates the child entities when the `Playback` method runs, and you can read them from the root's `LinkedEntityGroup` buffer once playback completes.
 
-It is invalid to pass a temporary entity to an `EntityManager` method, or to reference a temporary entity from one command buffer
-in a different command buffer. Both cases will cause an exception to be thrown.
+You can also pass an entity created by one command buffer into the commands of another one. The reference stays valid, but you must call the `Playback` method on the originating buffer before you can access the entity through `EntityManager` or queries. To keep the playback order clear, use a single buffer for each related set of commands.
 
 ## Entity command buffer safety
 

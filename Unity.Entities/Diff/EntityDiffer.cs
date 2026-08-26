@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Unity.Collections;
 using Unity.Collections.NotBurstCompatible;
 using Unity.Jobs;
+using UnityEngine;
 
 #if UNITY_EDITOR
 using System.Text;
@@ -56,7 +57,7 @@ namespace Unity.Entities
                 }
 
                 var dup = duplicates[i];
-                var obj = EditorUtility.InstanceIDToObject(dup.EntityGuid.OriginatingId);
+                var obj = EditorUtility.EntityIdToObject(dup.EntityGuid.OriginatingEntityId);
                 var name = obj != null ? obj.ToString() : "<not found>";
 
                 sb.AppendLine($"guid = {dup.EntityGuid}, count = {dup.DuplicateCount}, obj = {name}");
@@ -152,17 +153,17 @@ namespace Unity.Entities
     /// </remarks>
     unsafe partial class EntityDiffer
     {
-        static string s_GetChangesProfilerMarkerStr = "GetChanges";
+        const string s_GetChangesProfilerMarkerStr = "GetChanges";
 
-        static Profiling.ProfilerMarker s_GetChangesProfilerMarker = new Profiling.ProfilerMarker(s_GetChangesProfilerMarkerStr);
-        static Profiling.ProfilerMarker s_CreateEntityChangeSetProfilerMarker = new Profiling.ProfilerMarker(nameof(CreateEntityChangeSet));
-        static Profiling.ProfilerMarker s_GetEntityNamesProfilerMarker = new Profiling.ProfilerMarker(nameof(GetEntityNames));
-        static Profiling.ProfilerMarker s_GetChangedManagedComponentsProfilerMarker = new Profiling.ProfilerMarker(nameof(GetChangedManagedComponents));
-        static Profiling.ProfilerMarker s_GetChangedSharedComponentsProfilerMarker = new Profiling.ProfilerMarker(nameof(GetChangedSharedComponents));
-        static Profiling.ProfilerMarker s_CopyAndReplaceChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(CopyAndReplaceChunks));
-        static Profiling.ProfilerMarker s_DestroyChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(DestroyChunks));
-        static Profiling.ProfilerMarker s_CloneAndAddChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(CloneAndAddChunks));
-        static Profiling.ProfilerMarker s_GetBlobAssetsWithDistinctHash = new Profiling.ProfilerMarker(nameof(GetBlobAssetsWithDistinctHash));
+        static readonly Profiling.ProfilerMarker s_GetChangesProfilerMarker = new Profiling.ProfilerMarker(s_GetChangesProfilerMarkerStr);
+        static readonly Profiling.ProfilerMarker s_CreateEntityChangeSetProfilerMarker = new Profiling.ProfilerMarker(nameof(CreateEntityChangeSet));
+        static readonly Profiling.ProfilerMarker s_GetEntityNamesProfilerMarker = new Profiling.ProfilerMarker(nameof(GetEntityNames));
+        static readonly Profiling.ProfilerMarker s_GetChangedManagedComponentsProfilerMarker = new Profiling.ProfilerMarker(nameof(GetChangedManagedComponents));
+        static readonly Profiling.ProfilerMarker s_GetChangedSharedComponentsProfilerMarker = new Profiling.ProfilerMarker(nameof(GetChangedSharedComponents));
+        static readonly Profiling.ProfilerMarker s_CopyAndReplaceChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(CopyAndReplaceChunks));
+        static readonly Profiling.ProfilerMarker s_DestroyChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(DestroyChunks));
+        static readonly Profiling.ProfilerMarker s_CloneAndAddChunksProfilerMarker = new Profiling.ProfilerMarker(nameof(CloneAndAddChunks));
+        static readonly Profiling.ProfilerMarker s_GetBlobAssetsWithDistinctHash = new Profiling.ProfilerMarker(nameof(GetBlobAssetsWithDistinctHash));
 
         internal static string[] CollectImportantProfilerMarkerStrings()
         {

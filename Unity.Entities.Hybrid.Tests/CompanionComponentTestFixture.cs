@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Unity.Entities;
 using Unity.Entities.Tests;
 using UnityEngine;
 
@@ -19,6 +20,30 @@ namespace Unity.Entities.Hybrid.Tests
             var go = new GameObject();
             m_GameObjects.Add(go);
             return go;
+        }
+
+        /// <summary>
+        /// Fetches a live companion component for <paramref name="entity"/> via all three readers
+        /// and asserts they return the same instance: the GameObject path via <see cref="CompanionLink"/>,
+        /// the managed entity-store reader, and the unmanaged <see cref="CompanionComponent{T}"/> mirror.
+        /// Use at every test site that reads a companion component, so any drift between the managed
+        /// slot and the unmanaged mirror surfaces immediately.
+        /// </summary>
+        public static T AssertCompanionReadersAgree<T>(EntityManager em, Entity entity) where T : Component
+        {
+            var go = em.GetComponentData<CompanionLink>(entity).Companion.Value;
+            Assert.IsFalse(go == null, "CompanionLink resolves to a null/destroyed GameObject");
+            var viaLink = go.GetComponent<T>();
+            #pragma warning disable 0618 // managed slot is one of the APIs under test.
+            var viaManaged = em.GetComponentObject<T>(entity);
+            #pragma warning restore 0618
+            var viaUnmanaged = em.GetCompanion<T>(entity);
+            Assert.IsNotNull(viaLink, $"CompanionLink GameObject has no {typeof(T).Name} component");
+            Assert.AreSame(viaLink, viaManaged,
+                $"managed-slot {nameof(EntityManager.GetComponentObject)}<{typeof(T).Name}> disagrees with the CompanionLink path");
+            Assert.AreSame(viaLink, viaUnmanaged,
+                $"unmanaged {nameof(CompanionComponentExtensions.GetCompanion)}<{typeof(T).Name}> disagrees with the CompanionLink path");
+            return viaLink;
         }
 
         [SetUp]

@@ -57,7 +57,9 @@ namespace Unity.Entities.Editor
                 HierarchyNodeHandle handle;
                 if (isSubScene)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var subScene = world.EntityManager.GetComponentObject<SubScene>(entity);
+                    #pragma warning restore 0618
                     if (subScene.SceneGUID == default)
                         continue;
 
@@ -194,6 +196,22 @@ namespace Unity.Entities.Editor
                     map[handle] = subScene is not null && subScene.IsLoaded;
             }
             return map;
+        }
+
+        public void RemoveNodesNotInStore(HierarchyNodeStore nodeStore, HierarchyNameStore nameStore)
+        {
+            using var poolHandle = ListPool<Hash128>.Get(out var keysToRemove);
+            foreach (var (sceneGuid, handle) in m_SubScenes)
+            {
+                if (!nodeStore.Exists(handle))
+                    keysToRemove.Add(sceneGuid);
+            }
+
+            foreach (var key in keysToRemove)
+            {
+                nameStore.RemoveName(m_SubScenes[key]);
+                m_SubScenes.Remove(key);
+            }
         }
 
         public void Clear()

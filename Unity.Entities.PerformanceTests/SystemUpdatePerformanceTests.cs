@@ -13,15 +13,6 @@ using Unity.PerformanceTesting;
 
 namespace Unity.Entities.PerformanceTests
 {
-    using static AspectUtils;
-#pragma warning disable CS0618 // Disable Aspects obsolete warnings
-    readonly partial struct PerfTestAspect : IAspect
-    {
-        readonly public RefRW<EcsTestFloatData3> Output;
-        readonly public RefRO<EcsTestFloatData> Input;
-    }
-#pragma warning restore CS0618
-
     [TestFixture]
     [Category("Performance")]
     [BurstCompile]
@@ -549,144 +540,6 @@ namespace Unity.Entities.PerformanceTests
 
 
         [BurstCompile(CompileSynchronously = true)]
-        public partial struct StructSystem_Aspect_foreach : ISystem, ISystemStartStop, ISetLoopMode
-        {
-            // Assign values to these fields post-OnCreate() based on test case settings, before the first Update()
-            public int LoopsPerSystem;
-            public EnabledBitsMode Mode;
-
-            private EntityQuery _Query;
-            PerfTestAspect.TypeHandle _TypeHandle;
-            float singleton;
-
-            public void Set(int loopsPerSystem, EnabledBitsMode mode)
-            {
-                LoopsPerSystem = loopsPerSystem;
-                Mode = mode;
-            }
-            public void OnCreate(ref SystemState state)
-            {
-                _TypeHandle = new PerfTestAspect.TypeHandle(ref state);
-                singleton = 1.0F;
-            }
-
-            public void OnStartRunning(ref SystemState state)
-            {
-                if (Mode == EnabledBitsMode.NoEnableableComponents)
-                    _Query = state.GetEntityQuery(GetRequiredComponents<PerfTestAspect>());
-                else
-                    _Query = state.GetEntityQuery(ComponentType.Combine(GetRequiredComponents<PerfTestAspect>(), new ComponentType[] { ComponentType.ReadOnly<EcsTestDataEnableable>() } ));
-            }
-
-            public void OnStopRunning(ref SystemState state)
-            {
-            }
-
-            [BurstDiscard]
-            static void CheckRunningBurst()
-            {
-                throw new ArgumentException("Not running burst");
-            }
-
-            [BurstCompile(CompileSynchronously = true, DisableSafetyChecks = true)]
-            public void OnUpdate(ref SystemState state)
-            {
-                CheckRunningBurst();
-
-                float s = singleton;
-                for (int i = 0; i != LoopsPerSystem; i++)
-                {
-                    _TypeHandle.Update(ref state);
-                    foreach (var a in PerfTestAspect.Query(_Query, _TypeHandle))
-                    {
-                        ref var output = ref a.Output.ValueRW;
-                        var input = a.Input.ValueRO;
-                        output.Value0  += input.Value + s;
-                        output.Value1  += input.Value + s;
-                        output.Value2  += input.Value + s;
-                    }
-                }
-            }
-        }
-
-        [BurstCompile(CompileSynchronously = true)]
-        public partial struct StructSystem_Aspect_IJobChunk_RunWithoutJobs : ISystem, ISystemStartStop, ISetLoopMode
-        {
-            // Assign values to these fields post-OnCreate() based on test case settings, before the first Update()
-            public int LoopsPerSystem;
-            public EnabledBitsMode Mode;
-
-            private EntityQuery _Query;
-            PerfTestAspect.TypeHandle _TypeHandle;
-            float singleton;
-
-            unsafe struct AspectJob : IJobChunk
-            {
-                public PerfTestAspect.TypeHandle Aspect;
-                public float Singleton;
-
-                public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex, bool useEnabledMask, in v128 chunkEnabledMask)
-                {
-                    var aspects = Aspect.Resolve(chunk);
-                    int count = aspects.Length;
-                    for (var i = 0; i < count; i++)
-                    {
-                        ref var output = ref aspects[i].Output.ValueRW;
-                        var input = aspects[i].Input.ValueRO;
-                        output.Value0  += input.Value + Singleton;
-                        output.Value1  += input.Value + Singleton;
-                        output.Value2  += input.Value + Singleton;
-                    }
-                }
-            }
-
-            public void Set(int loopsPerSystem, EnabledBitsMode mode)
-            {
-                LoopsPerSystem = loopsPerSystem;
-                Mode = mode;
-            }
-            public void OnCreate(ref SystemState state)
-            {
-                _TypeHandle = new PerfTestAspect.TypeHandle(ref state);
-                singleton = 1.0F;
-            }
-
-            public void OnStartRunning(ref SystemState state)
-            {
-                if (Mode == EnabledBitsMode.NoEnableableComponents)
-                    _Query = state.GetEntityQuery(GetRequiredComponents<PerfTestAspect>());
-                else
-                    _Query = state.GetEntityQuery(ComponentType.Combine(GetRequiredComponents<PerfTestAspect>(), new ComponentType[] { ComponentType.ReadOnly<EcsTestDataEnableable>() } ));
-            }
-
-            public void OnStopRunning(ref SystemState state)
-            {
-            }
-
-            [BurstDiscard]
-            static void CheckRunningBurst()
-            {
-                throw new ArgumentException("Not running burst");
-            }
-
-            [BurstCompile(CompileSynchronously = true, DisableSafetyChecks = true)]
-            public void OnUpdate(ref SystemState state)
-            {
-                CheckRunningBurst();
-
-                float s = singleton;
-                for (int i = 0; i != LoopsPerSystem; i++)
-                {
-                    _TypeHandle.Update(ref state);
-
-                    var job = new AspectJob {Singleton = singleton, Aspect = _TypeHandle};
-                    Internal.InternalCompilerInterface.JobChunkInterface.RunByRefWithoutJobs(ref job, _Query);
-                }
-            }
-        }
-
-
-        [BurstCompile(CompileSynchronously = true)]
         public partial struct MyStructScheduleSystem : ISystem, ISystemStartStop, ISetLoopMode
         {
             // Assign values to these fields post-OnCreate() based on test case settings, before the first Update()
@@ -1056,47 +909,6 @@ namespace Unity.Entities.PerformanceTests
                 .CleanUp(() => { m_World.UpdateAllocator.Rewind();})
                 .Run();
         }
-
-        [Performance]
-        [TestCaseSource(nameof(TestCombinations))]
-        public void SystemUpdatePerformance_StructSystem_Aspect_foreach(int iterationCount, int loopsPerSystem, int entityCount, EnabledBitsMode enabledBitsMode)
-        {
-            CreateTestEntities(entityCount, enabledBitsMode);
-
-            var group = m_World.CreateSystemManaged<BenchmarkSystemGroup>();
-            group.CreateUnmanagedSystems<StructSystem_Aspect_foreach>(iterationCount, loopsPerSystem, enabledBitsMode);
-
-            Measure.Method(
-                    () =>
-                    {
-                        group.Update();
-                    })
-                .WarmupCount(1)
-                .MeasurementCount(9)
-                .CleanUp(() => { m_World.UpdateAllocator.Rewind();})
-                .Run();
-        }
-
-        [Performance]
-        [TestCaseSource(nameof(TestCombinations))]
-        public void SystemUpdatePerformance_StructSystem_Aspect_IJobChunkRunWithoutJobs(int iterationCount, int loopsPerSystem, int entityCount, EnabledBitsMode enabledBitsMode)
-        {
-            CreateTestEntities(entityCount, enabledBitsMode);
-
-            var group = m_World.CreateSystemManaged<BenchmarkSystemGroup>();
-            group.CreateUnmanagedSystems<StructSystem_Aspect_IJobChunk_RunWithoutJobs>(iterationCount, loopsPerSystem, enabledBitsMode);
-
-            Measure.Method(
-                    () =>
-                    {
-                        group.Update();
-                    })
-                .WarmupCount(1)
-                .MeasurementCount(9)
-                .CleanUp(() => { m_World.UpdateAllocator.Rewind();})
-                .Run();
-        }
-
 
         [TestCaseSource(nameof(TestCombinations))]
         [Performance]

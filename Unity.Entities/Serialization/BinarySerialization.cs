@@ -14,6 +14,11 @@ namespace Unity.Entities.Serialization
     /// <seealso cref="MemoryBinaryWriter"/>
     public interface BinaryWriter : IDisposable
     {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+        public ref ImHexPatternEntitySceneBinaryWriter ImHexPattern { get; }
+        void OverwriteImHexPattern(ImHexPatternEntitySceneBinaryWriter writer);
+#endif
+
         /// <summary>
         /// Writes the specified number of bytes.
         /// </summary>
@@ -83,6 +88,9 @@ namespace Unity.Entities.Serialization
         /// <typeparam name="T">The type of data to write from the native array.</typeparam>
         public static void WriteArray<T>(this BinaryWriter writer, NativeArray<T> data) where T: struct
         {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            writer.ImHexPattern.WriteArrayOfTypeWithPosition<T>($"{typeof(T).Name}_Array", writer.Position, data.Length);
+#endif
             writer.WriteBytes(data.GetUnsafeReadOnlyPtr(), data.Length * UnsafeUtility.SizeOf<T>());
         }
 
@@ -94,6 +102,9 @@ namespace Unity.Entities.Serialization
         /// <typeparam name="T">The type of data to write from the native list.</typeparam>
         public static void WriteList<T>(this BinaryWriter writer, NativeList<T> data) where T: unmanaged
         {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            writer.ImHexPattern.WriteArrayOfTypeWithPosition<T>($"{typeof(T).Name}_List", writer.Position, data.Length);
+#endif
             writer.WriteBytes(data.GetUnsafePtr(), data.Length * UnsafeUtility.SizeOf<T>());
         }
 
@@ -112,6 +123,11 @@ namespace Unity.Entities.Serialization
             {
                 throw new ArgumentException("index + count must not go beyond the end of the list");
             }
+
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            writer.ImHexPattern.WriteArrayOfTypeWithPosition<T>($"{typeof(T).Name}_List", writer.Position, count);
+#endif
+
             var size = UnsafeUtility.SizeOf<T>();
             writer.WriteBytes((byte*)data.GetUnsafePtr() + size*index, count * size);
         }
@@ -225,7 +241,7 @@ namespace Unity.Entities.Serialization
 
             FilePath = filePath;
             #if UNITY_EDITOR
-            stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            stream = UnityEditor.FileUtil.OpenRead(filePath);
             buffer = new byte[bufferSize];
             #else
             Position = 0;
@@ -289,16 +305,36 @@ namespace Unity.Entities.Serialization
             set => stream.Position = value;
         }
 
-        public StreamBinaryWriter(string fileName, int bufferSize = 65536)
+        public StreamBinaryWriter(string fileName, int bufferSize = 65536, EntityManager entityManager = default)
         {
             stream = File.Open(fileName, FileMode.Create, FileAccess.Write);
             buffer = new byte[bufferSize];
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            m_ImHexPattern = ImHexPatternEntitySceneBinaryWriter.Create(fileName, entityManager: entityManager);
+#endif
         }
 
         public void Dispose()
         {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            ImHexPattern.Dispose();
+#endif
             stream.Dispose();
         }
+
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+        public ref ImHexPatternEntitySceneBinaryWriter ImHexPattern => ref m_ImHexPattern;
+        ImHexPatternEntitySceneBinaryWriter m_ImHexPattern;
+
+        public void OverwriteImHexPattern(ImHexPatternEntitySceneBinaryWriter writer)
+        {
+            var originalName = m_ImHexPattern.fileName;
+            m_ImHexPattern.shouldWriteToDisk = false;
+            m_ImHexPattern.Dispose();
+            m_ImHexPattern = writer;
+            m_ImHexPattern.fileName = originalName;
+        }
+#endif
 
         public void WriteBytes(void* data, int bytes)
         {
@@ -349,6 +385,13 @@ namespace Unity.Entities.Serialization
     /// </code></example>
     public unsafe class MemoryBinaryWriter : BinaryWriter
     {
+        public MemoryBinaryWriter(EntityManager entityManager = default)
+        {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            m_ImHexPattern = ImHexPatternEntitySceneBinaryWriter.Create(nameof(MemoryBinaryWriter), entityManager: entityManager);
+#endif
+        }
+
         NativeList<byte> content = new NativeList<byte>(Allocator.Temp);
 
         /// <summary>
@@ -371,10 +414,27 @@ namespace Unity.Entities.Serialization
         /// </summary>
         public void Dispose()
         {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            ImHexPattern.Dispose();
+#endif
             content.Dispose();
         }
 
         internal NativeArray<byte> GetContentAsNativeArray() => content.AsArray();
+
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+        public ref ImHexPatternEntitySceneBinaryWriter ImHexPattern => ref m_ImHexPattern;
+        ImHexPatternEntitySceneBinaryWriter m_ImHexPattern;
+
+        public void OverwriteImHexPattern(ImHexPatternEntitySceneBinaryWriter writer)
+        {
+            var originalName = m_ImHexPattern.fileName;
+            m_ImHexPattern.shouldWriteToDisk = false;
+            m_ImHexPattern.Dispose();
+            m_ImHexPattern = writer;
+            m_ImHexPattern.fileName = originalName;
+        }
+#endif
 
         /// <summary>
         /// Writes the specified number of bytes and advances the current write position by that number of bytes.

@@ -319,9 +319,9 @@ namespace Unity.Entities
 
             var currentSystemTypeIndex = startingSystemTypeIndex;
             var currentIndexInList = indexInList;
-            
-            
-            while (visitedSoFarTypeIndices.Count < elements.Length)
+            visitedSoFarTypeIndices.Add(currentSystemTypeIndex);
+
+            while (visitedSoFarTypeIndices.Count > 0)
             {
                 var continueflag = false;
                 for (int i = 0; i < elements[currentIndexInList].updateBefore.Length; i++)
@@ -357,15 +357,21 @@ namespace Unity.Entities
                     }
                 }
 
-                if (continueflag) continue;
-                
-                //if we get here, we looked at all the constraints of the current element and we had seen them all before,
-                //and none of them formed a cycle with anything in the path so far. 
-                //so, we have to backtrack.
-                
-                pathSoFarInTypeIndices.RemoveAt(pathSoFarInTypeIndices.Length-1);
-                currentSystemTypeIndex = pathSoFarInTypeIndices[^1];
-                currentIndexInList = LookupSystemElement(currentSystemTypeIndex, lookup);
+                if (!continueflag)
+                {
+                    //if we get here, we looked at all the constraints of the current element and we had seen them all before,
+                    //and none of them formed a cycle with anything in the path so far.
+                    //so, we have to backtrack.
+
+                    if (pathSoFarInTypeIndices.Length > 0)
+                    {
+                        var newCurrentSystemTypeIndex = pathSoFarInTypeIndices[pathSoFarInTypeIndices.Length-1];
+                        pathSoFarInTypeIndices.RemoveAt(pathSoFarInTypeIndices.Length-1);
+                        visitedSoFarTypeIndices.Remove(newCurrentSystemTypeIndex);
+                        currentSystemTypeIndex = newCurrentSystemTypeIndex;
+                        currentIndexInList = LookupSystemElement(currentSystemTypeIndex, lookup);
+                    }
+                }
             }
         }
 

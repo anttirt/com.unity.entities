@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using UnityEngine.SceneManagement;
 using Unity.Content;
 using Unity.Burst;
+using Unity.Scripting.LifecycleManagement;
 using System.Threading;
 #if ENABLE_PROFILER
 using Unity.Profiling;
@@ -24,11 +25,12 @@ namespace Unity.Entities.Content
     /// </summary>
     [GenerateTestsForBurstCompatibility]
     [BurstCompile]
-    public static class RuntimeContentManager
+    public static partial class RuntimeContentManager
     {
         internal const string k_NameSpaceString = "RTC";
         internal const string k_ContentArchiveDirectory = "ContentArchives";
         internal const string k_ContentCatalogFilename = "archive_dependencies.bin";
+        internal const string k_ContentArchiveExtension = ".archive";
         static string ArchivePrefix;
         internal static ContentNamespace Namespace;
 
@@ -50,7 +52,7 @@ namespace Unity.Entities.Content
         /// <param name="archiveId">The archive id.</param>
         /// <returns>The relative path of the archive file.</returns>
         [ExcludeFromBurstCompatTesting("References managed objects")]
-        public static string DefaultArchivePathFunc(string archiveId) => $"{k_ContentArchiveDirectory}/{archiveId}";
+        public static string DefaultArchivePathFunc(string archiveId) => $"{k_ContentArchiveDirectory}/{archiveId}{k_ContentArchiveExtension}";
 
         struct ActiveArchive
         {
@@ -121,7 +123,7 @@ namespace Unity.Entities.Content
         static UnsafeHashMap<ContentFileId, ActiveFile> ActiveFiles;
         static UnsafeHashMap<UntypedWeakReferenceId, ActiveObject> ActiveObjects;
         static UnsafeList<ActiveDependencySet> ActiveDependencySets;
-        static UnsafeHashMap<int, ActiveScene> ActiveScenes;
+        static UnsafeHashMap<ulong, ActiveScene> ActiveScenes;
 
         static int currentGeneration = -1;
 
@@ -157,7 +159,7 @@ namespace Unity.Entities.Content
             ActiveArchives = new UnsafeHashMap<ContentArchiveId, ActiveArchive>(2048, Allocator.Persistent);
             ActiveFiles = new UnsafeHashMap<ContentFileId, ActiveFile>(2048, Allocator.Persistent);
             ActiveObjects = new UnsafeHashMap<UntypedWeakReferenceId, ActiveObject>(2048, Allocator.Persistent);
-            ActiveScenes = new UnsafeHashMap<int, ActiveScene>(1024, Allocator.Persistent);
+            ActiveScenes = new UnsafeHashMap<ulong, ActiveScene>(1024, Allocator.Persistent);
 
             SharedStaticObjectValueCache.Data = new ObjectValueCache(2048);
             SharedStaticObjectLoadQueue.Data = new MultiProducerSingleBulkConsumerQueue<UntypedWeakReferenceId>(2048);
@@ -202,29 +204,28 @@ namespace Unity.Entities.Content
             }
 #endif
             SceneManager.sceneUnloaded += ReleaseSceneResources;
-            
+
             /*
-             * In Editor: RuntimeContentManager cleanup should happen on EditorApplication.quitting 
-             * and on DomainUnload only if EditorApplication.quitting has not been called.
              * In Players: RuntimeContentManager cleanup should happen on DefaultWorldInitialization.DefaultWorldDestroyed
              * This should guarantee that cleanup happens after every user system OnDestroy and Monobehaviour
              * OnDisable/OnDestroy, but not before scripting is half shutdown already.
-             * TODO: We need to verifyso ba that DefaultWorldInitializationProxy's OnDisable is called last of all 
-             * Monobehaviours (due to its script execution order being set to maximum) because this doesn't happen in the editor.
              */
-#if UNITY_EDITOR
-            AppDomain.CurrentDomain.DomainUnload += OnShutdown;
-            UnityEditor.EditorApplication.quitting += () => { Cleanup(out _); };
-#else
+#if !UNITY_EDITOR
             DefaultWorldInitialization.DefaultWorldDestroyed += () => { RuntimeContentManager.Cleanup(out _); };
 #endif
         }
 
+        [OnCodeUnloading]
+        static void OnCodeUnloading()
+        {
+            Cleanup(out _);
+        }
+
         static void ReleaseSceneResources(Scene scene)
         {
-            if (ActiveScenes.TryGetValue(scene.handle, out var sceneInstance))
+            if (ActiveScenes.TryGetValue(scene.handle.GetRawData(), out var sceneInstance))
             {
-                ActiveScenes.Remove(scene.handle);
+                ActiveScenes.Remove(scene.handle.GetRawData());
                 if (!Catalog.TryGetSceneLocation(sceneInstance.SceneId, out var fileId, out var sceneName))
                     throw new Exception($"Invalid scene location: {sceneInstance.SceneId}");
 
@@ -235,11 +236,6 @@ namespace Unity.Entities.Content
                 //dependencies of scenes must be deferred a frame to avoid releasing too early.
                 SharedStaticDeferredSceneUnloads.Data.Add(new DeferredSceneDependencyUnload { DependencyIndex = depIndex, FileIds = deps });
             }
-        }
-
-        private static void OnShutdown(object _, EventArgs __)
-        {
-            Cleanup(out var unreleasedObjectCount);
         }
 
         /// <summary>
@@ -379,8 +375,6 @@ namespace Unity.Entities.Content
             }
 
             SceneManager.sceneUnloaded -= ReleaseSceneResources;
-            AppDomain.CurrentDomain.DomainUnload -= OnShutdown;
-            AppDomain.CurrentDomain.ProcessExit -= OnShutdown;
             return unreleasedObjectCount == 0;
         }
 
@@ -1070,9 +1064,59 @@ namespace Unity.Entities.Content
                 depSet.Files.Length,
                 archive.Archive.JobHandle);
 
-            ActiveScenes.Add(sceneFile.Scene.handle, new ActiveScene { SceneFile = sceneFile, SceneId = sceneId });
+            ActiveScenes.Add(sceneFile.Scene.handle.GetRawData(), new ActiveScene { SceneFile = sceneFile, SceneId = sceneId });
             return sceneFile.Scene;
         }
+
+        /// <summary>
+        /// Marks a scene to integrate at the end of the frame.  This will return immediately but the scene will not be active until the next update.
+        /// </summary>
+        /// <param name="scene">The scene to integrate.  This scene is expected to have been loaded with the autoIntegrate parameter set to false.</param>
+        /// <returns>True if the scene file is valid and it has a status of SceneLoadingStatus.WaitingForIntegrate.</returns>
+        [ExcludeFromBurstCompatTesting("References managed engine API and static data")]
+        public static bool IntegrateSceneAtEndOfFrame(ref Scene scene)
+        {
+            if (!ActiveScenes.TryGetValue(scene.handle.GetRawData(), out var sceneInstance))
+            {
+#if UNITY_EDITOR
+                return OverrideLoader.IntegrateSceneAtEndOfFrame(ref scene);
+#endif
+                throw new Exception($"Unable to find scene {scene} to integrate - make sure that it has been loaded with LoadSceneAync first.");
+            }
+            if (!sceneInstance.SceneFile.IsValid)
+                throw new Exception($"Invalid file for scene {scene}.  This may indicate that the build data is incorrect.");
+
+            if (sceneInstance.SceneFile.Status != SceneLoadingStatus.WaitingForIntegrate)
+            {
+                Debug.LogError($"Attempting to integrate a scene that is not ready - current state is {sceneInstance.SceneFile.Status}, but needs to be {SceneLoadingStatus.WaitingForIntegrate}.");
+                return false;
+            }
+
+            sceneInstance.SceneFile.IntegrateAtEndOfFrame();
+            return true;
+        }
+
+        /// <summary>
+        /// Gets the scene loading status.  This will be unique for each instance of a scene, even if loaded from the same scene file.
+        /// </summary>
+        /// <param name="scene">The scene to get the status from.</param>
+        /// <returns>The current status of the scene.</returns>
+        [ExcludeFromBurstCompatTesting("References managed engine API and static data")]
+        public static SceneLoadingStatus GetSceneLoadingStatus(ref Scene scene)
+        {
+            if (!ActiveScenes.TryGetValue(scene.handle.GetRawData(), out var sceneInstance))
+            {
+#if UNITY_EDITOR
+                return OverrideLoader.GetSceneLoadingStatus(ref scene);
+#endif
+                throw new Exception($"Unable to find scene {scene} to check status - make sure that it has been loaded with LoadSceneAync first.");
+            }
+            if (!sceneInstance.SceneFile.IsValid)
+                throw new Exception($"Invalid file for scene {scene}.  This may indicate that the build data is incorrect.");
+
+            return sceneInstance.SceneFile.Status;
+        }
+
 
         /// <summary>
         /// Release a scene.  If the reference count goes to zero, the scene will be unloaded.
@@ -1087,13 +1131,13 @@ namespace Unity.Entities.Content
 #if ENABLE_PROFILER
             RuntimeContentManagerProfiler.RecordUnloadSceneRequest();
 #endif
-            if (!ActiveScenes.TryGetValue(scene.handle, out var sceneInstance))
+            if (!ActiveScenes.TryGetValue(scene.handle.GetRawData(), out var sceneInstance))
             {
 #if UNITY_EDITOR
                 OverrideLoader.UnloadScene(ref scene);
                 return;
 #endif
-                throw new Exception($"Invalid scene: {scene}");
+                throw new Exception($"Unable to find scene {scene} to unload - make sure that it has been loaded with LoadSceneAync first.");
             }
             sceneInstance.SceneFile.UnloadAtEndOfFrame();
             scene = default;
@@ -1286,6 +1330,8 @@ namespace Unity.Entities.Content
             ObjectLoadingStatus GetInstanceLoadStatus(InstanceHandle handle);
             UnityEngine.Object GetInstance(InstanceHandle handle);
             void ReleaseInstance(InstanceHandle handle);
+            bool IntegrateSceneAtEndOfFrame(ref Scene scene);
+            SceneLoadingStatus GetSceneLoadingStatus(ref Scene scene);
         }
 
         internal static IAlternativeLoader OverrideLoader;

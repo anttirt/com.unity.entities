@@ -14,23 +14,26 @@ namespace Unity.Entities.Editor.Tests
 
         public static void AssertImmutableIsSequenceEqualTo(HierarchyNodeStore.Immutable buffer, string[] expectedNodes)
         {
-            var nodesFromImmutable = new (int, int)[buffer.Count];
+            var nodesFromImmutable = new (int, ulong)[buffer.Count];
             for (var i = 0; i < buffer.Count; i++)
             {
                 var n = buffer.GetNode(i);
-                nodesFromImmutable[i] = (n.GetDepth() + 1, n.GetHandle().Index);
+                if(n.GetHandle().Kind == NodeKind.GameObject || n.GetHandle().Kind == NodeKind.Scene)
+                    nodesFromImmutable[i] = (n.GetDepth() + 1, n.GetHandle().ToULong());
+                else
+                    nodesFromImmutable[i] = (n.GetDepth() + 1, (ulong)n.GetHandle().ToEntity().Index);
             }
 
-            var nodesFromExpectation = new (int, int)[expectedNodes.Length];
+            var nodesFromExpectation = new (int, ulong)[expectedNodes.Length];
             for (var i = 0; i < expectedNodes.Length; i++)
             {
                 var match = k_ExpectedNodePattern.Match(expectedNodes[i]);
-                nodesFromExpectation[i] = (match.Groups["depth"].Value.Length, int.Parse(match.Groups["id"].Value));
+                nodesFromExpectation[i] = (match.Groups["depth"].Value.Length, (ulong)long.Parse(match.Groups["id"].Value));
             }
 
             Assert.That(Enumerable.SequenceEqual(nodesFromImmutable, nodesFromExpectation), Is.True, () => $"Expected {Environment.NewLine}{Print(nodesFromExpectation)} but was {Environment.NewLine}{Print(nodesFromImmutable)}{Environment.NewLine}");
 
-            static string Print((int, int)[] nodes)
+            static string Print((int, ulong)[] nodes)
             {
                 var sb = new StringBuilder();
                 foreach (var (depth, id) in nodes)

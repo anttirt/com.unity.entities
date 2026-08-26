@@ -49,7 +49,9 @@ namespace Unity.Entities.Tests
 
             m_Manager.SetComponentData(entity, new EcsTestData(1));
             m_Manager.SetComponentData(entity, new EcsCleanup1(2));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(3));
+            #pragma warning restore 0618
 
             VerifyComponentCount<EcsTestData>(1);
 
@@ -81,7 +83,9 @@ namespace Unity.Entities.Tests
 
                 m_Manager.SetComponentData(entity, new EcsTestData(i));
                 m_Manager.SetComponentData(entity, new EcsCleanup1(i));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(i % 7));
+                #pragma warning restore 0618
             }
 
             VerifyComponentCount<EcsTestData>(512);
@@ -135,7 +139,9 @@ namespace Unity.Entities.Tests
 
                 m_Manager.SetComponentData(entity, new EcsTestData(i));
                 m_Manager.SetComponentData(entity, new EcsCleanup1(i));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(i % 7));
+                #pragma warning restore 0618
             }
 
             VerifyComponentCount<EcsTestData>(512);
@@ -338,7 +344,9 @@ namespace Unity.Entities.Tests
             var entity1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp), typeof(EcsCleanup1));
             m_Manager.SetComponentData(entity1, new EcsTestData(1));
             m_Manager.SetComponentData(entity1, new EcsCleanup1(101));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity1, new EcsTestSharedComp(42));
+            #pragma warning restore 0618
             m_Manager.DestroyEntity(entity1);
             var chunkBefore = m_Manager.GetChunk(entity1);
             var entity2 = entity1;
@@ -348,7 +356,9 @@ namespace Unity.Entities.Tests
                 entity2 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp), typeof(EcsCleanup1));
                 m_Manager.SetComponentData(entity2, new EcsTestData(i));
                 m_Manager.SetComponentData(entity2, new EcsCleanup1(i + 100));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp(42));
+                #pragma warning restore 0618
                 m_Manager.DestroyEntity(entity2);
             }
 
@@ -367,7 +377,9 @@ namespace Unity.Entities.Tests
         public void CleanupSharedKeepsValueAfterDestroy()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new CleanupShared { Value = 123 });
+            #pragma warning restore 0618
             m_Manager.DestroyEntity(entity);
             EntitiesAssert.ContainsOnly(m_Manager, EntityMatch.Exact<CleanupEntity>(new CleanupShared { Value = 123 }));
         }

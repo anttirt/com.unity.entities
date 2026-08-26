@@ -1,6 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities.Tests;
 using Unity.PerformanceTesting;
@@ -30,6 +30,33 @@ namespace Unity.Entities.PerformanceTests
                     RunTryGetBuffer();
             }
 
+            [BurstCompile]
+            partial struct RunHasBufferReadOnlyJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                [ReadOnly]
+                public BufferLookup<EcsIntElement4> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if (Lookup.HasBuffer(data.value1))
+                    {
+                        data.value0 += Lookup[data.value1].Length;
+                    }
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunHasBufferJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                public BufferLookup<EcsIntElement4> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.HasBuffer(data.value1))
+                        data.value0 += Lookup[data.value1].Length;
+                }
+            }
+
             private void RunHasBuffer()
             {
                 if (ReadOnly)
@@ -37,28 +64,16 @@ namespace Unity.Entities.PerformanceTests
                     var lookup = GetBufferLookup<EcsIntElement4>();
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 += lookup[data.value1][0].Value3;
-                        }).Run();
+                        new RunHasBufferReadOnlyJob { Lookup = lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 += lookup[data.value1][0].Value3;
-                        }).ScheduleParallel();
+                        new RunHasBufferReadOnlyJob { Lookup = lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 += lookup[data.value1][0].Value3;
-                        }).Schedule();
+                        new RunHasBufferReadOnlyJob { Lookup = lookup }.Schedule();
                         CompleteDependency();
                     }
 
@@ -69,30 +84,45 @@ namespace Unity.Entities.PerformanceTests
 
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 = lookup[data.value1][0].Value3;
-                        }).Run();
+                        new RunHasBufferJob { Lookup = lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithNativeDisableParallelForRestriction(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 = lookup[data.value1][0].Value3;
-                        }).ScheduleParallel();
+                        new RunHasBufferJob { Lookup = lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.HasBuffer(data.value1))
-                                data.value0 = lookup[data.value1][0].Value3;
-                        }).Schedule();
+                        new RunHasBufferJob { Lookup = lookup }.Schedule();
                         CompleteDependency();
                     }
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunTryGetBufferReadOnlyJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                [ReadOnly]
+                public BufferLookup<EcsIntElement4> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if (Lookup.TryGetBuffer(data.value1, out var buffer))
+                    {
+                        data.value0 += buffer.Length;
+                    }
+                }
+            }
+
+            [BurstCompile]
+            partial struct RunTryGetBufferJob : IJobEntity
+            {
+                [NativeDisableParallelForRestriction]
+                public BufferLookup<EcsIntElement4> Lookup;
+                void Execute(ref EcsTestDataEntity data)
+                {
+                    if(Lookup.TryGetBuffer(data.value1, out var buffer))
+                        data.value0 += buffer.Length;
                 }
             }
 
@@ -103,59 +133,34 @@ namespace Unity.Entities.PerformanceTests
                     var lookup = GetBufferLookup<EcsIntElement4>(true);
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 += buffer[0].Value3;
-                        }).Run();
+                        new RunTryGetBufferReadOnlyJob { Lookup = lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 += buffer[0].Value3;
-                        }).ScheduleParallel();
+                        new RunTryGetBufferReadOnlyJob { Lookup = lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 += buffer[0].Value3;
-                        }).Schedule();
+                        new RunTryGetBufferReadOnlyJob { Lookup = lookup }.Schedule();
                         CompleteDependency();
                     }
-
                 }
                 else
                 {
                     var lookup = GetBufferLookup<EcsIntElement4>(false);
                     if (Schedule == ScheduleMode.Run)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 = buffer[0].Value3;
-                        }).Run();
+                        new RunTryGetBufferJob { Lookup = lookup }.Run();
                     }
                     else if (Schedule == ScheduleMode.Parallel)
                     {
-                        Entities.WithNativeDisableParallelForRestriction(lookup).ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 = buffer[0].Value3;
-                        }).ScheduleParallel();
+                        new RunTryGetBufferJob { Lookup = lookup }.ScheduleParallel();
                         CompleteDependency();
                     }
                     else if (Schedule == ScheduleMode.Single)
                     {
-                        Entities.ForEach((ref EcsTestDataEntity data) =>
-                        {
-                            if(lookup.TryGetBuffer(data.value1, out var buffer))
-                                data.value0 = buffer[0].Value3;
-                        }).Schedule();
+                        new RunTryGetBufferJob { Lookup = lookup }.Schedule();
                         CompleteDependency();
                     }
                 }

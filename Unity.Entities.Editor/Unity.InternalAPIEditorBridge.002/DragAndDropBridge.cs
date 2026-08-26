@@ -5,9 +5,9 @@ namespace Unity.Editor.Bridge
 {
     static class DragAndDropBridge
     {
-        public static DragAndDropVisualMode DropOnHierarchyWindow(int dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+        public static DragAndDropVisualMode DropOnHierarchyWindow(EntityId dropTargetEntityId, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
         {
-            return DragAndDrop.DropOnHierarchyWindow(dropTargetInstanceID, dropMode, parentForDraggedObjects, perform);
+            return DragAndDrop.DropOnHierarchyWindow(dropTargetEntityId, dropMode, parentForDraggedObjects, perform);
         }
     }
 }

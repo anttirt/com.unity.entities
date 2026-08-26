@@ -49,7 +49,12 @@ public partial class SystemApiContextSyntaxWalker : CSharpSyntaxWalker, IModuleS
         _isWalkingNestedInvocation = false;
 
         // Begin depth-first traversal of the candidate node
+        VisitLeadingTrivia(candidateSyntax.Node.GetFirstToken());
         Visit(candidateSyntax.Node);
+        if (_hasWrittenSyntax)
+        {
+            VisitTrailingTrivia(candidateSyntax.Node.GetFirstToken());
+        }
 
         for (int i = 0; i < _numClosingBracketsForNestedSystemApiInvocations; i++)
             _writer.Write(")");
@@ -171,6 +176,19 @@ public partial class SystemApiContextSyntaxWalker : CSharpSyntaxWalker, IModuleS
 
         if (triviaKind == SyntaxKind.EndOfLineTrivia)
             _writer.WriteLine();
+
+        // Preserve user-authored #pragma warning disable/restore so suppressions
+        // wrapping source-gen-rewritten code survive into the generated method.
+        // The trailing newline is absorbed inside the directive's structured trivia,
+        // so emit one explicitly — pragmas must end their line. Also emit a leading
+        // newline because the pragma's leading whitespace can land mid-expression
+        // (e.g. inside a rewritten invocation's argument list), and pragmas must
+        // begin a line.
+        else if (triviaKind == SyntaxKind.PragmaWarningDirectiveTrivia)
+        {
+            _writer.WriteLine();
+            _writer.WriteLine(trivia.ToString());
+        }
 
         else if (triviaKind != SyntaxKind.DisabledTextTrivia &&
                  triviaKind != SyntaxKind.PreprocessingMessageTrivia &&

@@ -1,4 +1,5 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -234,7 +235,8 @@ namespace Unity.Entities.Editor
             if (world == null || system == default)
                 return;
 
-            var worldProxy = s_WorldProxyManager.GetWorldProxyForGivenWorld(world);
+            if (!s_WorldProxyManager.TryGetWorldProxy(world, out var worldProxy))
+                return;
             var systemProxy = new SystemProxy(system, world, worldProxy);
             ContentUtilities.ShowSystemInspectorContent(systemProxy);
         }
@@ -579,4 +581,5 @@ namespace Unity.Entities.Editor
     }
 
 }
+#pragma warning restore 0618
 #endif

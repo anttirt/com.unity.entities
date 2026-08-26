@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
 using Unity.Burst;
@@ -195,12 +194,18 @@ namespace Unity.Entities.Tests
 
         public partial class DeltaProcessComponentSystem : SystemBase
         {
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct DeltaProcessJob : IJobEntity
             {
-                Entities.ForEach((ref EcsTestData2 output, in EcsTestData input) =>
+                void Execute(ref EcsTestData input, ref EcsTestData2 output)
                 {
                     output.value0 += input.value + 100;
-                }).Schedule();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                new DeltaProcessJob().Schedule();
             }
         }
 
@@ -234,12 +239,19 @@ namespace Unity.Entities.Tests
 
         public partial class DeltaProcessComponentSystemUsingRun : SystemBase
         {
-            protected override void OnUpdate()
+            [WithChangeFilter(typeof(EcsTestData))]
+            [BurstCompile]
+            partial struct DeltaProcessJob : IJobEntity
             {
-                Entities.WithChangeFilter<EcsTestData>().ForEach((ref EcsTestData2 output, in EcsTestData input) =>
+                void Execute(ref EcsTestData2 output, in EcsTestData input)
                 {
                     output.value0 += input.value + 100;
-                }).Run();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                new DeltaProcessJob().Run();
             }
         }
 
@@ -273,26 +285,54 @@ namespace Unity.Entities.Tests
         {
             public EcsTestSharedComp m_sharedComp;
 
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct ModifyJob : IJobEntity
             {
-                Entities.WithSharedComponentFilter(m_sharedComp).ForEach((ref EcsTestData data) =>
+                void Execute(ref EcsTestData data)
                 {
                     data = new EcsTestData(100);
-                }).Schedule();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                var query = SystemAPI.QueryBuilder().WithAll<EcsTestData, EcsTestSharedComp>().Build();
+                query.SetSharedComponentFilter(m_sharedComp);
+                Dependency = new ModifyJob().Schedule(query, Dependency);
             }
         }
 
         public partial class DeltaModifyComponentSystem1Comp : SystemBase
         {
+            [WithChangeFilter(typeof(EcsTestData))]
+            [BurstCompile]
+            partial struct SetValueToZeroJob : IJobEntity
+            {
+                void Execute(ref EcsTestData output)
+                {
+                    output.value = 0;
+                }
+            }
+
+            [WithChangeFilter(typeof(EcsTestData))]
+            [BurstCompile]
+            partial struct AddToValueJob : IJobEntity
+            {
+                void Execute(ref EcsTestData output)
+                {
+                    output.value += 150;
+                }
+            }
+
             protected override void OnUpdate()
             {
                 if (LastSystemVersion == 0)
                 {
-                    Entities.WithChangeFilter<EcsTestData>().ForEach((ref EcsTestData output) => { output.value = 0; }).Schedule();
+                    new SetValueToZeroJob().Schedule();
                 }
                 else
                 {
-                    Entities.WithChangeFilter<EcsTestData>().ForEach((ref EcsTestData output) => { output.value += 150; }).Schedule();
+                    new AddToValueJob().Schedule();
                 }
             }
         }
@@ -314,7 +354,9 @@ namespace Unity.Entities.Tests
             modifySystem.m_sharedComp = new EcsTestSharedComp(456);
             for (int i = 123; i < entities.Length; i += 345)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], modifySystem.m_sharedComp);
+                #pragma warning restore 0618
             }
 
             modifySystem.Update();
@@ -322,7 +364,9 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value == 456)
+                #pragma warning restore 0618
                 {
                     FastAssert.AreEqual(250, m_Manager.GetComponentData<EcsTestData>(entity).value);
                 }
@@ -338,13 +382,21 @@ namespace Unity.Entities.Tests
         {
             public EcsTestSharedComp m_sharedComp;
 
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct ModifyJob : IJobEntity
             {
-                Entities.WithSharedComponentFilter(m_sharedComp).ForEach((ref EcsTestData data, ref EcsTestData2 data2) =>
+                void Execute(ref EcsTestData data, ref EcsTestData2 data2)
                 {
                     data = new EcsTestData(100);
                     data2 = new EcsTestData2(102);
-                }).Schedule();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                var query = SystemAPI.QueryBuilder().WithAll<EcsTestData, EcsTestData2, EcsTestSharedComp>().Build();
+                query.SetSharedComponentFilter(m_sharedComp);
+                new ModifyJob().Schedule(query);
             }
         }
 
@@ -358,33 +410,53 @@ namespace Unity.Entities.Tests
 
             public Variant variant;
 
+            [BurstCompile]
+            partial struct Job1 : IJobEntity
+            {
+                void Execute(ref EcsTestData output, ref EcsTestData2 output2)
+                {
+                    output.value = 0;
+                    output2.value0 = 0;
+                }
+            }
+
+            [WithChangeFilter(typeof(EcsTestData))]
+            [BurstCompile]
+            partial struct Job2 : IJobEntity
+            {
+                void Execute(ref EcsTestData output, ref EcsTestData2 output2)
+                {
+                    output.value += 150;
+                    output2.value0 += 152;
+                }
+            }
+
+            [WithChangeFilter(typeof(EcsTestData2))]
+            [BurstCompile]
+            partial struct Job3 : IJobEntity
+            {
+                void Execute(ref EcsTestData output, ref EcsTestData2 output2)
+                {
+                    output.value += 150;
+                    output2.value0 += 152;
+                }
+            }
+
             protected override void OnUpdate()
             {
                 if (LastSystemVersion == 0)
                 {
-                    Entities.ForEach((ref EcsTestData output, ref EcsTestData2 output2) =>
-                    {
-                        output.value = 0;
-                        output2.value0 = 0;
-                    }).Schedule();
+                    new Job1().Schedule();
                 }
                 else
                 {
                     switch (variant)
                     {
                         case Variant.FirstComponentChanged:
-                            Entities.WithChangeFilter<EcsTestData>().ForEach((ref EcsTestData output, ref EcsTestData2 output2) =>
-                            {
-                                output.value += 150;
-                                output2.value0 += 152;
-                            }).Schedule();
+                            new Job2().Schedule();
                             return;
                         case Variant.SecondComponentChanged:
-                            Entities.WithChangeFilter<EcsTestData2>().ForEach((ref EcsTestData output, ref EcsTestData2 output2) =>
-                            {
-                                output.value += 150;
-                                output2.value0 += 152;
-                            }).Schedule();
+                            new Job3().Schedule();
                             return;
                     }
                     throw new NotImplementedException();
@@ -412,7 +484,9 @@ namespace Unity.Entities.Tests
             modifSystem.m_sharedComp = new EcsTestSharedComp(456);
             for (int i = 123; i < entities.Length; i += 345)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], modifSystem.m_sharedComp);
+                #pragma warning restore 0618
             }
 
             modifSystem.Update();
@@ -420,7 +494,9 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value == 456)
+                #pragma warning restore 0618
                 {
                     FastAssert.AreEqual(250, m_Manager.GetComponentData<EcsTestData>(entity).value);
                     FastAssert.AreEqual(254, m_Manager.GetComponentData<EcsTestData2>(entity).value0);
@@ -438,16 +514,24 @@ namespace Unity.Entities.Tests
         {
             public EcsTestSharedComp m_sharedComp;
 
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3)
+                {
+                    data = new EcsTestData(100);
+                    data2 = new EcsTestData2(102);
+                    data3 = new EcsTestData3(103);
+                }
+            }
+
+
             protected override void OnUpdate()
             {
-                Entities
-                    .WithSharedComponentFilter(m_sharedComp)
-                    .ForEach((ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3) =>
-                    {
-                        data = new EcsTestData(100);
-                        data2 = new EcsTestData2(102);
-                        data3 = new EcsTestData3(103);
-                    }).Schedule();
+                var query= SystemAPI.QueryBuilder()
+                    .WithAll<EcsTestData, EcsTestData2, EcsTestData3, EcsTestSharedComp>().Build();
+                query.SetSharedComponentFilter(m_sharedComp);
+                new Job().Schedule(query);
             }
         }
 
@@ -462,51 +546,50 @@ namespace Unity.Entities.Tests
 
             public Variant variant;
 
+            [BurstCompile]
+            partial struct ClearComponentJob : IJobEntity
+            {
+                void Execute(ref EcsTestData output, ref EcsTestData2 output2, ref EcsTestData3 output3)
+                {
+                    output.value = 0;
+                    output2.value0 = 0;
+                    output3.value0 = 0;
+                }
+            }
+
+            [BurstCompile]
+            partial struct ChangeComponentJob : IJobEntity
+            {
+                void Execute(ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3)
+                {
+                    data.value += 150;
+                    data2.value0 += 152;
+                    data3.value0 += 153;
+                }
+            }
+
             protected override void OnUpdate()
             {
                 if (LastSystemVersion == 0)
                 {
-                    Entities.ForEach((ref EcsTestData output, ref EcsTestData2 output2, ref EcsTestData3 output3) =>
-                    {
-                        output.value = 0;
-                        output2.value0 = 0;
-                        output3.value0 = 0;
-                    }).Schedule();
-
+                    new ClearComponentJob().Schedule();
                     return;
                 }
 
+                var query = SystemAPI.QueryBuilder().WithAll<EcsTestData, EcsTestData2, EcsTestData3>().Build();
                 switch (variant)
                 {
                     case Variant.FirstComponentChanged:
-                        Entities
-                            .WithChangeFilter<EcsTestData>()
-                            .ForEach((ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3) =>
-                            {
-                                data.value += 150;
-                                data2.value0 += 152;
-                                data3.value0 += 153;
-                            }).Schedule();
+                        query.SetChangedVersionFilter(typeof(EcsTestData));
+                        new ChangeComponentJob().Schedule(query);
                         return;
                     case Variant.SecondComponentChanged:
-                            Entities
-                                .WithChangeFilter<EcsTestData2>()
-                                .ForEach((ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3) =>
-                                {
-                                    data.value += 150;
-                                    data2.value0 += 152;
-                                    data3.value0 += 153;
-                                }).Schedule();
+                        query.SetChangedVersionFilter(typeof(EcsTestData2));
+                        new ChangeComponentJob().Schedule(query);
                         return;
                     case Variant.ThirdComponentChanged:
-                        Entities
-                            .WithChangeFilter<EcsTestData3>()
-                            .ForEach((ref EcsTestData data, ref EcsTestData2 data2, ref EcsTestData3 data3) =>
-                            {
-                                data.value += 150;
-                                data2.value0 += 152;
-                                data3.value0 += 153;
-                            }).Schedule();
+                        query.SetChangedVersionFilter(typeof(EcsTestData3));
+                        new ChangeComponentJob().Schedule(query);
                         return;
                 }
 
@@ -533,7 +616,9 @@ namespace Unity.Entities.Tests
             modifySystem.m_sharedComp = new EcsTestSharedComp(456);
             for (int i = 123; i < entities.Length; i += 345)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], modifySystem.m_sharedComp);
+                #pragma warning restore 0618
             }
 
             modifySystem.Update();
@@ -541,7 +626,9 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value == 456)
+                #pragma warning restore 0618
                 {
                     FastAssert.AreEqual(250, m_Manager.GetComponentData<EcsTestData>(entity).value);
                     FastAssert.AreEqual(254, m_Manager.GetComponentData<EcsTestData2>(entity).value0);
@@ -558,12 +645,18 @@ namespace Unity.Entities.Tests
 
         partial class ChangeFilter1TestSystem : SystemBase
         {
+            [WithChangeFilter(typeof(EcsTestData2))]
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData output, in EcsTestData2 output2)
+                {
+                    output.value = output2.value0;
+                }
+            }
             protected override void OnUpdate()
             {
-                Entities
-                    .WithChangeFilter<EcsTestData2>()
-                    .ForEach((ref EcsTestData output, in EcsTestData2 output2) => { output.value = output2.value0; })
-                    .Schedule();
+                new Job().Schedule();
             }
         }
 
@@ -597,16 +690,19 @@ namespace Unity.Entities.Tests
 
         partial class ChangeFilter2TestSystem : SystemBase
         {
+            [WithChangeFilter(typeof(EcsTestData2))]
+            [WithChangeFilter(typeof(EcsTestData3))]
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData output, in EcsTestData2 output2, in EcsTestData3 output3)
+                {
+                    output.value = output2.value0 + output3.value0;
+                }
+            }
             protected override void OnUpdate()
             {
-                Entities
-                    .WithChangeFilter<EcsTestData2>()
-                    .WithChangeFilter<EcsTestData3>()
-                    .ForEach((ref EcsTestData output, in EcsTestData2 output2, in EcsTestData3 output3) =>
-                    {
-                        output.value = output2.value0 + output3.value0;
-                    })
-                    .Schedule();
+                new Job().Schedule();
             }
         }
 
@@ -713,15 +809,20 @@ namespace Unity.Entities.Tests
 
         partial class ReactiveSystem : SystemBase
         {
+            [WithChangeFilter(typeof(EcsTestData))]
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData data)
+                {
+                    data.value++;
+                }
+            }
+
             public JobHandle LastDependency;
             protected override void OnUpdate()
             {
-                Entities
-                    .WithChangeFilter<EcsTestData>()
-                    .ForEach((ref EcsTestData data) =>
-                    {
-                        data.value++;
-                    }).Schedule();
+                new Job().Schedule();
 
                 LastDependency = Dependency;
             }
@@ -843,6 +944,7 @@ namespace Unity.Entities.Tests
         {
             private EntityQuery _query;
 
+            [BurstCompile]
             public partial struct IncrementTestDataJob : IJobEntity
             {
                 public float deltaTime;

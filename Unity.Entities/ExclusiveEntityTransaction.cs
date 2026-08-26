@@ -172,9 +172,12 @@ namespace Unity.Entities
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.GetSharedComponentManaged{T}(Entity)"/>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public T GetSharedComponentManaged<T>(Entity entity) where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return m_Manager.GetSharedComponentManaged<T>(entity);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.GetSharedComponent{T}(Entity)"/>
@@ -193,15 +196,21 @@ namespace Unity.Entities
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.SetSharedComponentManaged{T}(Entity,T)"/>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public void SetSharedComponentManaged<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, componentData);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.SetSharedComponentManaged{T}(NativeArray{Entity},T)"/>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public void SetSharedComponentManaged<T>(NativeArray<Entity> entities, T componentData) where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entities, componentData);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.SetSharedComponent{T}(Entity,T)"/>
@@ -220,7 +229,9 @@ namespace Unity.Entities
         internal void AddSharedComponentManaged<T>(NativeArray<ArchetypeChunk> chunks, T componentData)
             where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(chunks, componentData);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.AddSharedComponent{T}(NativeArray{ArchetypeChunk},T)"/>
@@ -242,15 +253,21 @@ namespace Unity.Entities
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.AddSharedComponentManaged{T}(Entity,T)"/>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public bool AddSharedComponentManaged<T>(Entity entity, T componentData)  where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return m_Manager.AddSharedComponentManaged(entity, componentData);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.AddSharedComponentManaged{T}(NativeArray{Entity},T)"/>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public void AddSharedComponentManaged<T>(NativeArray<Entity> entities, T componentData)  where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entities, componentData);
+            #pragma warning restore 0618
         }
 
         /// <inheritdoc cref="Unity.Entities.EntityManager.AddSharedComponent{T}(Entity,T)"/>
@@ -311,11 +328,5 @@ namespace Unity.Entities
             return m_Manager.IsComponentEnabled<T>(entity);
         }
 
-#if ENTITY_STORE_V1
-        internal void AllocateConsecutiveEntitiesForLoading(int count)
-        {
-            m_Manager.AllocateConsecutiveEntitiesForLoading(count);
-        }
-#endif
     }
 }

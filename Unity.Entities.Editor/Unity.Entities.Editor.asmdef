@@ -20,10 +20,9 @@
         "Unity.Entities.UI.Editor",
         "Unity.Scenes",
         "Unity.Scenes.Editor",
-        "Unity.Serialization",
-        "Unity.Serialization.Editor",
         "Unity.Transforms",
-        "UnityEditor.UI"
+        "UnityEditor.UI",
+        "Unity.Mathematics.Extensions"
     ],
     "includePlatforms": [
         "Editor"
@@ -33,7 +32,9 @@
     "overrideReferences": true,
     "precompiledReferences": [
         "Mono.Cecil.dll",
-        "System.Runtime.CompilerServices.Unsafe.dll"
+        "System.Runtime.CompilerServices.Unsafe.dll",
+        "System.Text.Encodings.Web.dll",
+        "System.Text.Json.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],

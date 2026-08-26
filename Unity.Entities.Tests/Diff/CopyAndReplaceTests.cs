@@ -45,9 +45,9 @@ namespace Unity.Entities.Tests
             SrcEntityManager.SetComponentData(srcEntities[1], new EcsTestDataEnableable { value = 23 });
             SrcEntityManager.SetComponentEnabled<EcsTestDataEnableable>(srcEntities[0], false);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             using var dstEntities = DstEntityManager.UniversalQuery.ToEntityArray(DstWorld.UpdateAllocator.ToAllocator);
             Assert.IsFalse(DstEntityManager.IsComponentEnabled<EcsTestDataEnableable>(dstEntities[0]));
@@ -64,20 +64,14 @@ namespace Unity.Entities.Tests
             if (createToReplaceEntity)
                 DstEntityManager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
 
-#if ENTITY_STORE_V1
-#pragma warning disable CS0618 // Type or member is obsolete
-            DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
-#else
             var remap = SrcEntityManager.CreateEntityRemapArray(Allocator.Temp);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager, remap);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             entity = EntityRemapUtility.RemapEntity(ref remap, entity);
             metaEntity = DstEntityManager.GetChunk(entity).m_Chunk.MetaChunkEntity;
-#endif
 
             Assert.AreEqual(1, SrcEntityManager.UniversalQuery.CalculateEntityCount());
             Assert.AreEqual(1, DstEntityManager.UniversalQuery.CalculateEntityCount());
@@ -90,26 +84,20 @@ namespace Unity.Entities.Tests
         {
             CreateTestData(out var entity, out var metaEntity, 5, 7);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             SrcEntityManager.SetComponentData(entity, new EcsTestData(11));
 
-#if ENTITY_STORE_V1
-#pragma warning disable CS0618 // Type or member is obsolete
-            DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
-#else
             var remap = SrcEntityManager.CreateEntityRemapArray(Allocator.Temp);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager, remap);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             entity = EntityRemapUtility.RemapEntity(ref remap, entity);
             metaEntity = DstEntityManager.GetChunk(entity).m_Chunk.MetaChunkEntity;
-#endif
 
             TestValues(entity, metaEntity, 11, 7);
         }
@@ -121,20 +109,14 @@ namespace Unity.Entities.Tests
 
             SrcEntityManager.SetComponentData(metaEntity, new EcsTestData2(11));
 
-#if ENTITY_STORE_V1
-#pragma warning disable CS0618 // Type or member is obsolete
-            DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
-#else
             var remap = SrcEntityManager.CreateEntityRemapArray(Allocator.Temp);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager, remap);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             entity = EntityRemapUtility.RemapEntity(ref remap, entity);
             metaEntity = DstEntityManager.GetChunk(entity).m_Chunk.MetaChunkEntity;
-#endif
 
             TestValues(entity, metaEntity, 5, 11);
         }
@@ -144,42 +126,36 @@ namespace Unity.Entities.Tests
         {
             CreateTestData(out var entity, out var metaEntity, 5, 7);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
 
-#if ENTITY_STORE_V1
-#pragma warning disable CS0618 // Type or member is obsolete
-            DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
-#else
             var remap = SrcEntityManager.CreateEntityRemapArray(Allocator.Temp);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager, remap);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             entity = EntityRemapUtility.RemapEntity(ref remap, entity);
             metaEntity = DstEntityManager.GetChunk(entity).m_Chunk.MetaChunkEntity;
-#endif
             TestValues(entity, metaEntity, 5, 7);
         }
 
         [Test]
         public void Replace_AfterCreatingAndDestroyingAllEntities()
         {
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             var emptyArchetype = DstEntityManager.CreateArchetype();
             DstEntityManager.CreateEntity(emptyArchetype, 10000);
             DstEntityManager.DestroyEntity(DstEntityManager.UniversalQuery);
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable 0618 // Type or member is obsolete
             DstEntityManager.CopyAndReplaceEntitiesFrom(SrcEntityManager);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore 0618 // Type or member is obsolete
 
             Assert.AreEqual(0, DstEntityManager.UniversalQuery.CalculateChunkCount());
         }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Unity.Collections;
-using Unity.Entities.UniversalDelegates;
 using Unity.Profiling;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -38,7 +37,7 @@ namespace Unity.Entities.Editor
         /// Gets the current active <see cref="FilterQueryDesc"/>.
         /// </summary>
         public EntityQueryDesc FilterQueryDesc => m_QueryResult.EntityQueryDesc;
-        
+
         /// <summary>
         /// Returns the pre-processed tokens.
         /// </summary>
@@ -146,7 +145,7 @@ namespace Unity.Entities.Editor
                         continue;
                     }
                 }
-                else if (token.StartsWith("\"", StringComparison.Ordinal) && token.EndsWith("\"", StringComparison.Ordinal)) 
+                else if (token.StartsWith("\"", StringComparison.Ordinal) && token.EndsWith("\"", StringComparison.Ordinal))
                 {
                     // Discard single quote or empty double quotes
                     if (token.Length > 2)
@@ -168,7 +167,7 @@ namespace Unity.Entities.Editor
         {
             var truncatedToken = token.Length > FixedString64Bytes.UTF8MaxLengthInBytes ? token.Substring(0, FixedString64Bytes.UTF8MaxLengthInBytes) : token;
 
-            // Use the fixed string to-lower variant to be compatible with filtering. 
+            // Use the fixed string to-lower variant to be compatible with filtering.
             return FixedStringUtility.ToLower(truncatedToken);
         }
 

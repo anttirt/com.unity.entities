@@ -226,60 +226,6 @@ namespace Unity.Entities.Tests
             Assert.That(data.Value[0].Entity, Is.EqualTo(b));
         }
         
-        [Test, Ignore("Not supported yet")]
-        public unsafe void ManagedObjectRemap_ClassWithHashSetOfStructsWithEntityReference()
-        {
-            var a = new Entity { Index = 1, Version = 2 };
-            var b = new Entity { Index = 3, Version = 5 };
-            
-            EntityRemapUtility.AddEntityRemapping(ref m_Remapping, a, b);
-
-            var data = new ClassWithHashSetOfStructsWithEntityReference
-            {
-                Value = new HashSet<StructWithEntityReference>
-                {
-                    new StructWithEntityReference
-                    {
-                        Entity = a
-                    }
-                }
-            };
-
-            var managedObjectRemap = new ManagedObjectRemap();
-            var obj = (object) data;
-            managedObjectRemap.RemapEntityReferences(ref obj, (EntityRemapUtility.EntityRemapInfo*) m_Remapping.GetUnsafePtr());
-            
-            Assert.That(data.Value.First().Entity, Is.EqualTo(b));
-        }
-        
-        [Test, Ignore("Not supported yet")]
-        public unsafe void ManagedObjectRemap_ClassWithDictionaryOfStructsWithEntityReference()
-        {
-            var a = new Entity { Index = 1, Version = 2 };
-            var b = new Entity { Index = 3, Version = 5 };
-            
-            EntityRemapUtility.AddEntityRemapping(ref m_Remapping, a, b);
-
-            var data = new ClassWithDictionaryOfStructsWithEntityReference
-            {
-                Value = new Dictionary<string, StructWithEntityReference>
-                {
-                    {
-                        "a",
-                        new StructWithEntityReference
-                        {
-                            Entity = a
-                        }
-                    }
-                }
-            };
-
-            var managedObjectRemap = new ManagedObjectRemap();
-            var obj = (object) data;
-            managedObjectRemap.RemapEntityReferences(ref obj, (EntityRemapUtility.EntityRemapInfo*) m_Remapping.GetUnsafePtr());
-            
-            Assert.That(data.Value.First().Value.Entity, Is.EqualTo(b));
-        }
     }
 }
 #endif

@@ -119,11 +119,9 @@ namespace Unity.Entities
         // So after cloning, just allocate all malloc based buffers and copy the data.
         public static void PatchAfterCloningChunk(Archetype* archetype, byte* chunkBuffer, int entityCount)
         {
-            for (int i = 0, archetypeTypesCount = archetype->TypesCount; i < archetypeTypesCount; ++i)
+            for (int i = archetype->FirstBufferComponent, archetypeBufferTypesEnd = archetype->BufferComponentsEnd; i < archetypeBufferTypesEnd; ++i)
             {
                 var type = archetype->Types[i];
-                if (!type.IsBuffer)
-                    continue;
                 ref readonly var ti = ref TypeManager.GetTypeInfo(type.TypeIndex);
                 var sizeOf = archetype->SizeOfs[i];
                 var offset = archetype->Offsets[i];

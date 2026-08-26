@@ -9,7 +9,9 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Unity.Entities.Determinism")]
 [assembly: InternalsVisibleTo("Unity.Entities.Editor")]
 [assembly: InternalsVisibleTo("Unity.Entities.Editor.PerformanceTests")]
+[assembly: InternalsVisibleTo("Unity.Entities.Editor.Properties")]
 [assembly: InternalsVisibleTo("Unity.Entities.Editor.Tests")]
+[assembly: InternalsVisibleTo("Unity.Entities.UI.Editor")]
 [assembly: InternalsVisibleTo("Unity.Entities.Graphics")]
 [assembly: InternalsVisibleTo("Unity.Entities.Graphics.CodeGen")]
 [assembly: InternalsVisibleTo("Unity.Entities.Graphics.Tests")]
@@ -21,6 +23,8 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Unity.Entities.Hybrid.PerformanceTests")]
 [assembly: InternalsVisibleTo("Unity.Entities.Hybrid.Tests")]
 [assembly: InternalsVisibleTo("Unity.Entities.PerformanceTests")]
+[assembly: InternalsVisibleTo("Unity.Entities.Tests")]
+[assembly: InternalsVisibleTo("Unity.Transforms")]
 [assembly: InternalsVisibleTo("Unity.Runtime.UnityInstance")]
 [assembly: InternalsVisibleTo("Unity.Runtime.ILPP.Tests")]
 [assembly: InternalsVisibleTo("Unity.Samples.Tests")]
@@ -35,6 +39,7 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Unity.Transforms.Tests")]
 [assembly: InternalsVisibleTo("Unity.Transforms.PerformanceTests")]
 [assembly: InternalsVisibleTo("Unity.Entities.Baking.PerformanceTests")]
+[assembly: InternalsVisibleTo("Unity.NetCode.EntitiesInternalAccess")]
 // This adds internal access for UNSUPPORTED package that is currently in the Monorepo
 [assembly: InternalsVisibleTo("Unity.StableID.Hybrid")]
 #if UNITY_ENTITIES_RUNTIME_TOOLING

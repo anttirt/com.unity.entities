@@ -305,25 +305,17 @@ namespace Unity.Scenes
 
 #if UNITY_EDITOR
             {
-#if ENTITY_STORE_V1
-                var startCapacity = srcManager.EntityCapacity;
-#endif
                 using (s_AddSceneSharedComponents.Auto())
                 {
                     var data = new EditorRenderData
                     {
                         SceneCullingMask = UnityEditor.SceneManagement.EditorSceneManager.DefaultSceneCullingMask | (1UL << 59)
                     };
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     srcManager.AddSharedComponentManaged(srcManager.UniversalQuery, data);
+                    #pragma warning restore 0618
                 }
 
-#if ENTITY_STORE_V1
-                var endCapacity = srcManager.EntityCapacity;
-
-                // ExtractEntityRemapRefs gathers entityRemapping based on Entities Capacity.
-                // MoveEntitiesFrom below assumes that AddSharedComponentData on srcManager.UniversalQuery does not affect capacity.
-                Assert.AreEqual(startCapacity, endCapacity);
-#endif
             }
 #endif
 
@@ -358,11 +350,7 @@ namespace Unity.Scenes
         // [BurstCompile]
         static bool ExtractEntityRemapRefs(ref EntityRemapArgs args)
         {
-#if !ENTITY_STORE_V1
             int remapTableSize = args.SrcManager.HighestEntityIndex() + 1;
-#else
-            int remapTableSize = args.SrcManager.EntityCapacity;
-#endif
 
             if (args.SceneSectionData.SubSectionIndex == 0)
             {
@@ -372,7 +360,6 @@ namespace Unity.Scenes
                 return true;
             }
 
-#if !ENTITY_STORE_V1
             NativeArray<Entity> externalReferences;
 
             unsafe
@@ -403,25 +390,6 @@ namespace Unity.Scenes
                     remapTableSize = idx + 1;
                 }
             }
-#else
-            // Loading a section which isn't section 0. We need to figure out the exact count of entities in the section,
-            // because immediately after that comes the external references that need remapping.
-            // Above we could use EntityCapacity as an approximation, it's faster than going over the archetypes to get the exact count.
-            int entitiesCount = 0;
-            // External entity references are "virtual" entities. If we don't have any, only real entities need remapping
-
-            unsafe
-            {
-                var access = args.SrcManager.GetCheckedEntityDataAccess();
-                var archetypes = access->EntityComponentStore->m_Archetypes;
-                for (int ai = 0, ac = archetypes.Length; ai < ac; ai++)
-                {
-                    entitiesCount += archetypes[ai]->EntityCount;
-                }
-            }
-
-            remapTableSize = entitiesCount;
-#endif
 
             // Within a scene, external scenes are identified by some ID
             // In the destination world, scenes are identified by an entity
@@ -446,25 +414,17 @@ namespace Unity.Scenes
 
             var pubRefs = args.EntityManager.GetBuffer<PublicEntityRef>(pubRefEntities[0]);
 
-#if ENTITY_STORE_V1
-            // Space is required to handle every possible external reference that needs remapping.
-            remapTableSize += pubRefs.Length;
-#endif
 
             args.OutEntityRemapping = new NativeArray<EntityRemapUtility.EntityRemapInfo>(remapTableSize, Allocator.TempJob);
 
             // Proper mapping from external reference in section to entity in main world
             for (int k = 0; k < pubRefs.Length; ++k)
             {
-#if !ENTITY_STORE_V1
                 // Note that we come from version 0, which isn't the actual version of the placeholder entity.
                 // But the chunks have been remapped to 0 in order for the entities to be considered invalid
                 // even though they are properly allocated. This is important to ensure some consistency
                 // of the streaming world in case a post-load system has to run there.
                 var source = new Entity { Index = externalReferences[k].Index, Version = 0 };
-#else
-                var source = new Entity{ Index = entitiesCount + k, Version = 1 };
-#endif
                 var target = pubRefs[k].targetEntity;
 
                 args.OutEntityRemapping[source.Index] = new EntityRemapUtility.EntityRemapInfo
@@ -508,6 +468,8 @@ namespace Unity.Scenes
                         }
                         case UpdateLoadOperationResult.Error:
                         {
+                            m_Streams[i].Operation.Dispose();
+                            m_Streams[i].Operation = null;
                             DestroyStreamWorld(i);
                             if (i < m_ConcurrentSectionStreamCount)
                                 CreateStreamWorld(i);
@@ -589,7 +551,9 @@ namespace Unity.Scenes
                                 var objRefs = operation.StealReferencedUnityObjects();
                                 if (objRefs.IsValid)
                                 {
+                                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                     EntityManager.AddSharedComponentManaged(sectionEntity, new SceneSectionReferencedUnityObjects(objRefs));
+                                    #pragma warning restore 0618
                                     RuntimeContentManager.ReleaseObjectAsync(objRefs);
                                 }
 
@@ -859,6 +823,36 @@ namespace Unity.Scenes
             Assert.AreNotEqual(UpdateLoadOperationResult.Aborted, result);
         }
 
+        internal void CancelOperationsForScene(Unity.Entities.Hash128 sceneGUID)
+        {
+            for (int i = 0; i < m_Streams.Length; i++)
+            {
+                if (m_Streams[i].Operation == null || m_Streams[i].SectionEntity == Entity.Null)
+                    continue;
+
+                if (!EntityManager.HasComponent<SceneEntityReference>(m_Streams[i].SectionEntity))
+                    continue;
+
+                var sceneEntityRef = EntityManager.GetComponentData<SceneEntityReference>(m_Streams[i].SectionEntity);
+                if (!EntityManager.HasComponent<SceneReference>(sceneEntityRef.SceneEntity))
+                    continue;
+
+                var sceneRef = EntityManager.GetComponentData<SceneReference>(sceneEntityRef.SceneEntity);
+                if (sceneRef.SceneGUID != sceneGUID)
+                    continue;
+
+                m_Streams[i].Operation?.Dispose();
+                m_Streams[i].Operation = null;
+
+                if (m_Streams[i].World != null)
+                {
+                    DestroyStreamWorld(i);
+                    if (i < m_ConcurrentSectionStreamCount)
+                        CreateStreamWorld(i);
+                }
+            }
+        }
+
         internal static bool CheckDependantSectionsLoaded(EntityManager entityManager, Entity sceneEntity)
         {
             var sectionEntities = entityManager.GetBuffer<ResolvedSectionEntity>(sceneEntity);
@@ -933,7 +927,52 @@ namespace Unity.Scenes
             blobHeaderOwner.Retain();
             var sectionData = EntityManager.GetComponentData<ResolvedSectionPath>(entity);
 
+            // Collect RequestSceneLoaded.ImportEntity directives from the section meta entity and
+            // the parent scene meta entity. The section always has RequestSceneLoaded (it's how
+            // it ended up in the pending-load query that drove us here); the parent scene almost
+            // always does too, since SceneSystem propagates RequestSceneLoaded from scene to
+            // sections at load time. We still HasComponent-check the parent in case the scene is
+            // mid-unload. Entity.Null import values mean "no import" and are silently skipped;
+            // non-null values that don't exist are a programming error and log an error here.
+            // A second defensive check runs at PostProcessScene time, because async loads can span
+            // many frames and a carrier entity may be destroyed in between.
+            // SceneEntityReference is guaranteed by ResolveSceneSectionUtility.ResolveSceneSections
+            // for every section entity that reaches this code path.
+            var parentSceneEntity = EntityManager.GetComponentData<SceneEntityReference>(entity).SceneEntity;
+            var sectionImport = EntityManager.GetComponentData<RequestSceneLoaded>(entity).ImportEntity;
+            var sceneImport = EntityManager.HasComponent<RequestSceneLoaded>(parentSceneEntity)
+                ? EntityManager.GetComponentData<RequestSceneLoaded>(parentSceneEntity).ImportEntity
+                : Entity.Null;
+            var importSources = default(NativeList<Entity>);
+            if (sectionImport != Entity.Null || sceneImport != Entity.Null)
+            {
+                importSources = new NativeList<Entity>(2, Allocator.Persistent);
+                if (sectionImport != Entity.Null)
+                {
+                    if (EntityManager.Exists(sectionImport))
+                        importSources.Add(sectionImport);
+                    else
+                        UnityEngine.Debug.LogError($"RequestSceneLoaded.ImportEntity source entity {sectionImport} does not exist in the main world (attached to section meta entity {entity}). The directive is being skipped; keep carrier entities alive until the scene load completes.");
+                }
+                if (sceneImport != Entity.Null)
+                {
+                    if (!EntityManager.Exists(sceneImport))
+                    {
+                        UnityEngine.Debug.LogError($"RequestSceneLoaded.ImportEntity source entity {sceneImport} does not exist in the main world (attached to scene meta entity {parentSceneEntity}). The directive is being skipped; keep carrier entities alive until the scene load completes.");
+                    }
+                    // Scene-level RequestSceneLoaded propagates to sections at AutoLoad time, so
+                    // the section and scene attach points usually reference the same entity. Only
+                    // import it once — otherwise CopyEntitiesFrom would produce two clones in the
+                    // streaming world and any ProcessAfterLoad system would see the components twice.
+                    else if (importSources.Length == 0 || importSources[0] != sceneImport)
+                    {
+                        importSources.Add(sceneImport);
+                    }
+                }
+            }
+
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // PostLoadCommandBuffer is deprecated; the engine read path stays for the deprecation cycle.
             PostLoadCommandBuffer postLoadCommandBuffer = null;
             if (EntityManager.HasComponent<PostLoadCommandBuffer>(entity))
             {
@@ -950,6 +989,7 @@ namespace Unity.Scenes
 
             if (postLoadCommandBuffer != null)
                 postLoadCommandBuffer = (PostLoadCommandBuffer)postLoadCommandBuffer.Clone();
+            #pragma warning restore 0618
 #endif
 
             return new AsyncLoadSceneOperation(new AsyncLoadSceneData
@@ -967,6 +1007,8 @@ namespace Unity.Scenes
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
                 PostLoadCommandBuffer = postLoadCommandBuffer,
 #endif
+                ImportSourceEntities = importSources,
+                MainWorldEntityManager = EntityManager,
                 ExternalEntitiesRefRange = sceneData.ExternalEntitiesRefRange,
                 SceneSectionIndex = sceneData.SubSectionIndex,
             });

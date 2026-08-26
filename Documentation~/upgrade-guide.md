@@ -4,6 +4,10 @@ Entities 1.4 has some changes that might introduce warnings to your project. To 
 
 * [Change Entities.ForEach code](#change-entitiesforeach-code)
 * [Change Aspects code](#change-aspects-code)
+* [Change EntityCommandBuffer PlaybackPolicy code](#change-entitycommandbuffer-playbackpolicy-code)
+* [Migrate PostLoadCommandBuffer to RequestSceneLoaded.ImportEntity](#migrate-postloadcommandbuffer-to-requestsceneloadedimportentity)
+
+If your project uses InstanceID-based APIs, refer to the [EntityId API migration guide](xref:um-instanceid-to-entityid-migration).
 
 ## Change Entities.ForEach code
 
@@ -150,3 +154,25 @@ static class VerticalMovementHelper
     }
 }
 ```
+
+## Change EntityCommandBuffer PlaybackPolicy code
+
+The `PlaybackPolicy` enum is deprecated in its entirety and will be removed in a future version. This includes both `PlaybackPolicy.SinglePlayback` and `PlaybackPolicy.MultiPlayback`, as well as any `EntityCommandBuffer` constructor overload that takes a `PlaybackPolicy` parameter.
+
+Going forward, `SinglePlayback` is the only supported behavior and is the default: an `EntityCommandBuffer` can be played back only once. Create an `EntityCommandBuffer` without specifying a `PlaybackPolicy`. If you need to apply the same set of commands more than once, record them again into a new `EntityCommandBuffer` for each playback.
+
+## Migrate PostLoadCommandBuffer to RequestSceneLoaded.ImportEntity
+
+The `PostLoadCommandBuffer` managed `IComponentData` is deprecated and will be removed in a future version. Replace it with [`RequestSceneLoaded.ImportEntity`](xref:Unity.Entities.RequestSceneLoaded), which delivers a regular main-world entity (and all of its components) into the section's streaming world before `ProcessAfterLoadGroup` runs.
+
+To migrate:
+
+1. Build the per-instance data on a regular entity in the main world, directly adding the components you previously recorded into the `EntityCommandBuffer`.
+1. Pass that entity as `ImportEntity` in the `SceneSystem.LoadParameters` you give to `SceneSystem.LoadSceneAsync` (or write `RequestSceneLoaded { ImportEntity = dataEntity }` on the scene or section meta entity).
+1. Your existing `ProcessAfterLoad` system queries the imported components exactly as before; the carrier entity appears in the streaming world. Destroy it inside that system if you don't want it to survive into the main world after the load.
+
+You own the source entity in the main world: keep it alive until the load completes, and destroy it yourself when it's no longer needed.
+
+## Convert managed components to unmanaged components
+
+Managed components (`IComponentData`) and managed shared components (`ISharedComponentData`) are deprecated and will be removed in a future version. A component or shared component is managed if it's a `class`, or a `struct` that contains managed (reference-type) fields such as `string` or other classes. Convert these to unmanaged components: use a `struct` that contains only unmanaged fields, and reference `UnityEngine.Object` instances with `UnityObjectRef<T>`. For more information, refer to [Reference Unity objects in your code](reference-unity-objects.md).

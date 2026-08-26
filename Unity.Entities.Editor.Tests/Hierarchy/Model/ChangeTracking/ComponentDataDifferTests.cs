@@ -177,10 +177,14 @@ namespace Unity.Entities.Editor.Tests
         {
             var entityA = CreateEntity(new EcsTestData { value = 12 });
             var entityB = CreateEntity(new EcsTestData { value = 22 });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityC = CreateEntity(new EcsTestData { value = 32 });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityC, new EcsTestSharedComp { value = 2 });
+            #pragma warning restore 0618
 
             using (m_ChunkDiffer.GatherComponentChangesAsync(m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator, out var jobHandle))
             {
@@ -191,9 +195,13 @@ namespace Unity.Entities.Editor.Tests
             m_World.EntityManager.RemoveComponent<EcsTestData>(entityB);
             Assert.That(m_World.EntityManager.HasComponent<EcsTestData>(entityB), Is.False);
             var entityBbis = CreateEntity(new EcsTestData { value = 52 });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityBbis, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityD = CreateEntity(new EcsTestData { value = 42 });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityD, new EcsTestSharedComp { value = 2 });
+            #pragma warning restore 0618
 
             using (var result = m_ChunkDiffer.GatherComponentChangesAsync(m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator, out var jobHandle))
             {

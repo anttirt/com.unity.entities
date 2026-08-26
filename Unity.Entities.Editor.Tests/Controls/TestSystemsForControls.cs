@@ -1,5 +1,4 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-﻿namespace Unity.Entities.Editor.Tests
+namespace Unity.Entities.Editor.Tests
 {
     partial class TestSystemsForControls
     {
@@ -7,7 +6,7 @@
         {
             protected override void OnUpdate()
             {
-                Entities.WithoutBurst().WithAll<EntityGuid>().ForEach((in EntityGuid g) => { }).Run();
+                foreach (var guid in SystemAPI.Query<RefRO<EntityGuid>>()) { }
             }
         }
 
@@ -16,7 +15,7 @@
         {
             protected override void OnUpdate()
             {
-                Entities.WithoutBurst().WithAll<EntityGuid>().ForEach((in EntityGuid g) => { }).Run();
+                foreach (var guid in SystemAPI.Query<RefRO<EntityGuid>>()) { }
             }
         }
 

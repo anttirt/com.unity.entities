@@ -5,7 +5,7 @@ You can reinterpret a `DynamicBuffer<T>` to get another `DynamicBuffer<U>`, wher
 > [!NOTE]
 > The `Reinterpret` method only enforces that the original type and new type have the same size. For example, you can reinterpret a `uint` to a `float` because both types are 32-bit. It's your responsibility to decide whether the reinterpretation makes sense for your purposes.
 
-The following code sample shows how to interpret a dynamic buffer. It assumes a dynamic buffer called `MyElement` exists and contains a single `int` field called `Value`.
+The following code sample shows how to reinterpret a dynamic buffer. It assumes a dynamic buffer called `MyElement` exists and contains a single `int` field called `Value`.
 
 ```csharp
 public class ExampleSystem : SystemBase

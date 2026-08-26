@@ -9,7 +9,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System.Linq;
 #endif
 
@@ -153,49 +153,7 @@ namespace Unity.Entities
             Assert.IsTrue(m_ManagedComponentIndex - 1 == 0 || managedComponentIndices.TestAll(1, m_ManagedComponentIndex - 1), "Managed component index has leaked.");
             managedComponentIndices.Dispose();
 
-#if ENTITY_STORE_V1
-            // Iterate by free list
-            Assert.IsTrue(m_EntityInChunkByEntity[m_NextFreeEntityIndex].Chunk == ChunkIndex.Null, "free chunk list does not end in a null chunk");
-
-            var entityCountByFreeList = EntitiesCapacity;
-            int freeIndex = m_NextFreeEntityIndex;
-            while (freeIndex != -1)
-            {
-                Assert.IsTrue(m_EntityInChunkByEntity[freeIndex].Chunk == ChunkIndex.Null, "found non=null chunk in free list");
-                Assert.IsTrue(freeIndex < EntitiesCapacity, "free entity index exceeds capacity");
-
-                freeIndex = m_EntityInChunkByEntity[freeIndex].IndexInChunk;
-
-                entityCountByFreeList--;
-            }
-
-            // iterate by entities
-            var entityCountByEntities = 0;
-            var entityType = TypeManager.GetTypeIndex<Entity>();
-            for (var i = 0; i != EntitiesCapacity; i++)
-            {
-                var chunk = m_EntityInChunkByEntity[i].Chunk;
-                if (chunk == ChunkIndex.Null)
-                    continue;
-
-                var archetype = selfPtr->GetArchetype(chunk);
-
-                entityCountByEntities++;
-                Assert.AreEqual(entityType, selfPtr->GetArchetype(chunk)->Types[0].TypeIndex, "found archetype with types[0] != Entity");
-                Assert.IsTrue(m_EntityInChunkByEntity[i].IndexInChunk < m_EntityInChunkByEntity[i].Chunk.Count, "found entity with invalid indexInChunk");
-                var entity = *(Entity*)ChunkDataUtility.GetComponentDataRO(m_EntityInChunkByEntity[i].Chunk, archetype,
-                    m_EntityInChunkByEntity[i].IndexInChunk, 0);
-                Assert.AreEqual(i, entity.Index, "found entity with invalid index");
-                Assert.AreEqual(m_VersionByEntity[i], entity.Version, "found entity with invalid version");
-
-                Assert.IsTrue(Exists(entity), "found entity that should not exist");
-            }
-
-
-            Assert.AreEqual(entityCountByEntities, entityCountByArchetype, $"cached entity count {entityCountByEntities} does not match sum of all archetypes {entityCountByArchetype}");
-#else
             s_entityStore.Data.IntegrityCheck();
-#endif
 
             // Enabling this fails SerializeEntitiesWorksWithBlobAssetReferences.
             // There is some special entity 0 usage in the serialization code.
@@ -208,41 +166,23 @@ namespace Unity.Entities
         public static void AssertAllEntitiesCopied(EntityComponentStore* lhs, EntityComponentStore* rhs)
         {
             // TODO - not clear if this check still makes sense with global entities
-#if ENTITY_STORE_V1
-            Assert.IsTrue(rhs->EntitiesCapacity >= lhs->EntitiesCapacity);
-            var rhsEntities = rhs->m_EntityInChunkByEntity;
-            var lhsEntities = lhs->m_EntityInChunkByEntity;
-
-            int capacity = lhs->EntitiesCapacity;
-            for (int i = 0; i != capacity; i++)
-            {
-                if (lhsEntities[i].Chunk == ChunkIndex.Null && rhsEntities[i].Chunk == ChunkIndex.Null)
-                    continue;
-
-                if (lhsEntities[i].IndexInChunk != rhsEntities[i].IndexInChunk)
-                    Assert.AreEqual(lhsEntities[i].IndexInChunk, rhsEntities[i].IndexInChunk);
-            }
-            Assert.AreEqual(lhs->m_NextFreeEntityIndex, rhs->m_NextFreeEntityIndex);
-#endif
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
         public void ValidateEntity(Entity entity)
         {
-            if (entity.Index < 0)
-                throw new ArgumentException(
-                    $"All entities created using EntityCommandBuffer.CreateEntity must be realized via playback(). One of the entities is still deferred (Index: {entity.Index}).");
-
-#if !ENTITY_STORE_V1
             var maximum = EntityStore.MaximumTheoreticalAmountOfEntities;
             if ((uint)entity.Index >= (uint)maximum)
                 throw new ArgumentException(
                     "An Entity index is higher than the valid range. This means the entity.Index got corrupted or incorrectly assigned and it may not be used.");
-#else
-            if ((uint)entity.Index >= (uint)EntitiesCapacity)
-                throw new ArgumentException(
-                    "An Entity index is larger than the capacity of the EntityManager. This means the entity was created by a different world or the entity.Index got corrupted or incorrectly assigned and it may not be used on this EntityManager.");
-#endif
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        public void ValidateChunk(ChunkIndex chunk)
+        {
+            if (chunk == ChunkIndex.Null)
+                throw new InvalidOperationException(
+                    "Entity was created via EntityCommandBuffer.CreateEntity/Instantiate but the EntityCommandBuffer has not yet been played back. Call EntityCommandBuffer.Playback() before reading or writing components on this entity.");
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
@@ -304,13 +244,7 @@ namespace Unity.Entities
 
                 ValidateEntity(*entity);
 
-#if !ENTITY_STORE_V1
                 var exists = s_entityStore.Data.Exists(*entity);
-#else
-                int index = entity->Index;
-                var exists = m_VersionByEntity[index] == entity->Version &&
-                    m_EntityInChunkByEntity[index].Chunk != ChunkIndex.Null;
-#endif
                 if (!exists)
                     throw new ArgumentException(
                         "An EntityManager command is operating on an invalid entity. This usually means that the Entity has already been destroyed or was never created." +
@@ -392,7 +326,9 @@ namespace Unity.Entities
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
         public void AssertComponentIsUnmanaged(TypeIndex componentTypeIndex)
         {
+#pragma warning disable 0618 // managed-type helper obsolete; assertion still needs it.
             if (TypeManager.IsManagedType(componentTypeIndex))
+#pragma warning restore 0618
                 throw new ArgumentException($"Component type is managed. Can not get pointer to data");
         }
 
@@ -768,7 +704,7 @@ namespace Unity.Entities
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
-        public void AssertCanInstantiateEntities(Entity srcEntity, Entity* outputEntities, int instanceCount)
+        public void AssertCanInstantiateEntities(Entity srcEntity)
         {
             if (HasComponent(srcEntity, m_LinkedGroupType, out var entityExists))
             {
@@ -929,7 +865,8 @@ namespace Unity.Entities
 
         internal static string AppendDestroyedEntityRecordError(Entity e)
         {
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (!EntitiesJournaling.Enabled)
                 return " " + k_JournalingDisabledMsg;
 
@@ -952,13 +889,15 @@ namespace Unity.Entities
 
                 return $" {e} was previously destroyed{executingSystemMessage} in world {record.World.Name}." + originSystemMessage;
             }
+#pragma warning restore 0618
 #endif
             return default;
         }
 
         internal static string AppendRemovedComponentRecordError(Entity e, ComponentType type)
         {
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (!EntitiesJournaling.Enabled)
                 return " " + k_JournalingDisabledMsg;
 
@@ -982,6 +921,7 @@ namespace Unity.Entities
 
                 return $" Component {type} was removed from {e} previously{executingSystemMessage} in world {record.World.Name}." + originSystemMessage;
             }
+#pragma warning restore 0618
 #endif
             return default;
         }

@@ -5,9 +5,18 @@ using Unity.Collections;
 using Unity.Entities.Conversion;
 using Unity.Entities.Hybrid.Baking;
 using Unity.Entities.Hybrid.EndToEnd.Tests;
+using Unity.Entities.Hybrid.Tests;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEditor;
+
+#if !UNITY_DISABLE_MANAGED_COMPONENTS
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.Conversion.CompanionComponentBakingTests.ConversionTestCompanionComponentWithEntity>))]
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.Conversion.CompanionComponentBakingTests.ConversionTestCompanionComponentA>))]
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.Conversion.CompanionComponentBakingTests.ConversionTestCompanionComponentB>))]
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.Conversion.CompanionComponentBakingTests.ConversionTestCompanionComponentC>))]
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.Conversion.CompanionComponentBakingTests.ConversionTestCompanionComponentPrefabReference>))]
+#endif
 
 namespace Unity.Entities.Tests
 {
@@ -46,7 +55,9 @@ namespace Unity.Entities.Tests.Conversion
             {
                 // This test might require transform components
                 var entity = GetEntity(TransformUsageFlags.Dynamic);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, authoring);
+                #pragma warning restore 0618
             }
         }
 
@@ -56,7 +67,9 @@ namespace Unity.Entities.Tests.Conversion
             {
                 // This test might require transform components
                 var entity = GetEntity(TransformUsageFlags.Dynamic);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, authoring);
+                #pragma warning restore 0618
             }
         }
 
@@ -66,7 +79,9 @@ namespace Unity.Entities.Tests.Conversion
             {
                 // This test might require transform components
                 var entity = GetEntity(TransformUsageFlags.Dynamic);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, authoring);
+                #pragma warning restore 0618
             }
         }
 
@@ -76,7 +91,9 @@ namespace Unity.Entities.Tests.Conversion
             {
                 // This test might require transform components
                 var entity = GetEntity(TransformUsageFlags.Dynamic);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, authoring);
+                #pragma warning restore 0618
             }
         }
 
@@ -98,18 +115,23 @@ namespace Unity.Entities.Tests.Conversion
             entities.Dispose();
 
             gameObject.GetComponent<ConversionTestCompanionComponent>().SomeValue = 234;
-            Assert.AreEqual(123, m_Manager.GetComponentObject<ConversionTestCompanionComponent>(entity).SomeValue);
+            Assert.AreEqual(123, CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, entity).SomeValue);
 
             var instance = m_Manager.Instantiate(entity);
 
-            m_Manager.GetComponentObject<ConversionTestCompanionComponent>(entity).SomeValue = 345;
-            Assert.AreEqual(123, m_Manager.GetComponentObject<ConversionTestCompanionComponent>(instance).SomeValue);
+            CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, entity).SomeValue = 345;
+            Assert.AreEqual(123, CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, instance).SomeValue);
 
             var instances = new NativeArray<Entity>(2, Allocator.Temp);
             m_Manager.Instantiate(entity, instances);
 
-            Assert.AreEqual(345, m_Manager.GetComponentObject<ConversionTestCompanionComponent>(instances[0]).SomeValue);
-            Assert.AreEqual(345, m_Manager.GetComponentObject<ConversionTestCompanionComponent>(instances[1]).SomeValue);
+            Assert.AreEqual(345, CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, instances[0]).SomeValue);
+            Assert.AreEqual(345, CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, instances[1]).SomeValue);
         }
 
         [Test]
@@ -134,7 +156,8 @@ namespace Unity.Entities.Tests.Conversion
 
             TestUtilities.RegisterSystems(World, TestUtilities.SystemCategories.CompanionComponents);
 
-            var companion = m_Manager.GetComponentData<CompanionLink>(entity).Companion.Value;
+            var companion = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, entity).gameObject;
 
             Assert.AreNotEqual(gameObject, companion);
             AssertEqual(reference, companion.transform.localToWorldMatrix);
@@ -190,7 +213,7 @@ namespace Unity.Entities.Tests.Conversion
             entities.Dispose();
             m_Manager.DestroyEntity(dummy);
 
-            EntitiesAssert.ContainsOnly(m_Manager, EntityMatch.Exact<CompanionLink, CompanionLinkTransform, CompanionReference, ConversionTestCompanionComponent, Prefab, LinkedEntityGroup, AdditionalEntitiesBakingData, LinkedEntityGroupBakingData, TransformAuthoring>(k_CommonComponents));
+            EntitiesAssert.ContainsOnly(m_Manager, EntityMatch.Exact<CompanionLink, CompanionLinkTransform, CompanionReference, ConversionTestCompanionComponent, CompanionComponent<ConversionTestCompanionComponent>, Prefab, LinkedEntityGroup, AdditionalEntitiesBakingData, LinkedEntityGroupBakingData, TransformAuthoring>(k_CommonComponents));
 
             // Accessing the prefab entity and its companion GameObject can't be directly done with GetSingleton because it requires EntityQueryOptions.IncludePrefab
             var companionQuery = EmptySystem.GetEntityQuery(new EntityQueryDesc
@@ -199,11 +222,13 @@ namespace Unity.Entities.Tests.Conversion
                 Options = EntityQueryOptions.IncludePrefab
             });
             var prefabEntity = companionQuery.GetSingletonEntity();
-            var prefabCompanion = m_Manager.GetComponentData<CompanionLink>(prefabEntity).Companion.Value;
+            var prefabCompanion = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, prefabEntity).gameObject;
 
             // Create an instance, the expectation is that the prefab remains inactive, but the instance activates
             var instanceEntity = m_Manager.Instantiate(prefabEntity);
-            var instanceCompanion = m_Manager.GetComponentData<CompanionLink>(instanceEntity).Companion.Value;
+            var instanceCompanion = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, instanceEntity).gameObject;
 
             // Activation happens through a system, so before the first update everything is inactive
             Assert.IsFalse(prefabCompanion.activeSelf);
@@ -239,7 +264,7 @@ namespace Unity.Entities.Tests.Conversion
         public class ConversionTestCompanionComponentWithEntity : UnityEngine.MonoBehaviour, UnityEngine.ISerializationCallbackReceiver
         {
             public static Entity DefaultEntity;
-            public Entity SomeEntity;
+            public Entity SomeEntity { get; private set; }
 
             public void OnBeforeSerialize()
             {
@@ -269,7 +294,9 @@ namespace Unity.Entities.Tests.Conversion
 
             // Add a managed and an unmanaged component, each with an entity field pointing to their own entity
             m_Manager.AddComponentData(entityPrefab, new EcsTestDataEntity {value1 = entityPrefab});
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entityPrefab, new EcsTestManagedDataEntity {value1 = entityPrefab});
+            #pragma warning restore 0618
 
             // This is necessary because there is a bug in Instantiate that only remaps if a LinkedEntityGroup is present
             var buffer = m_Manager.AddBuffer<LinkedEntityGroup>(entityPrefab);
@@ -285,9 +312,12 @@ namespace Unity.Entities.Tests.Conversion
 
             foreach (var instance in instances)
             {
-                var companionComponent = m_Manager.GetComponentObject<ConversionTestCompanionComponentWithEntity>(instance);
+                var companionComponent = CompanionComponentTestFixture
+                    .AssertCompanionReadersAgree<ConversionTestCompanionComponentWithEntity>(m_Manager, instance);
                 var unmanaged = m_Manager.GetComponentData<EcsTestDataEntity>(instance);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var managed = m_Manager.GetComponentData<EcsTestManagedDataEntity>(instance);
+                #pragma warning restore 0618
 
                 // The hybrid component SHOULD NOT be remapped, so it still contains the prefab entity
                 Assert.AreEqual(companionComponent.SomeEntity, entityPrefab);
@@ -298,7 +328,7 @@ namespace Unity.Entities.Tests.Conversion
             }
         }
 
-        class ConversionTestCompanionComponentPrefabReference : UnityEngine.MonoBehaviour
+        internal class ConversionTestCompanionComponentPrefabReference : UnityEngine.MonoBehaviour
         {
             public UnityEngine.GameObject Prefab;
         }
@@ -352,24 +382,25 @@ namespace Unity.Entities.Tests.Conversion
             {
                 All = new[]
                 {
-                    ComponentType.ReadOnly<ConversionTestCompanionComponentA>(),
-                    ComponentType.ReadOnly<ConversionTestCompanionComponentB>(),
-                    ComponentType.ReadOnly<ConversionTestCompanionComponentC>(),
+                    ComponentType.ReadOnly<CompanionComponent<ConversionTestCompanionComponentA>>(),
+                    ComponentType.ReadOnly<CompanionComponent<ConversionTestCompanionComponentB>>(),
+                    ComponentType.ReadOnly<CompanionComponent<ConversionTestCompanionComponentC>>(),
                 }
             });
 
-            var a = query.ToComponentArray<ConversionTestCompanionComponentA>();
-            var b = query.ToComponentArray<ConversionTestCompanionComponentB>();
-            var c = query.ToComponentArray<ConversionTestCompanionComponentC>();
+            var a = query.ToComponentDataArray<CompanionComponent<ConversionTestCompanionComponentA>>(Allocator.Temp);
+            var b = query.ToComponentDataArray<CompanionComponent<ConversionTestCompanionComponentB>>(Allocator.Temp);
+            var c = query.ToComponentDataArray<CompanionComponent<ConversionTestCompanionComponentC>>(Allocator.Temp);
 
             // The source doesn't have the Prefab tag, so it also gets picked up by the query
             Assert.AreEqual(instances.Length + 1, a.Length);
             Assert.AreEqual(instances.Length + 1, b.Length);
             Assert.AreEqual(instances.Length + 1, c.Length);
 
-            CollectionAssert.AllItemsAreUnique(a);
-            CollectionAssert.AllItemsAreUnique(b);
-            CollectionAssert.AllItemsAreUnique(c);
+            // Each instance's companion is a distinct clone, so the mirrored references are unique.
+            CollectionAssert.AllItemsAreUnique(a.ToArray());
+            CollectionAssert.AllItemsAreUnique(b.ToArray());
+            CollectionAssert.AllItemsAreUnique(c.ToArray());
         }
 
         [Test]
@@ -419,7 +450,8 @@ namespace Unity.Entities.Tests.Conversion
                 entities.Dispose();
             });
 
-            var component = m_Manager.GetComponentObject<ConversionTestCompanionComponent>(entity);
+            var component = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_Manager, entity);
             var companion = component.gameObject;
 
             Assert.IsTrue(companion.GetComponent<ConversionTestCompanionComponentWithRequireComponentAttribute>() == null);

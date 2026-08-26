@@ -94,9 +94,13 @@ namespace Unity.Entities.Tests
             Type = componentType.GetManagedType();
             Data = null;
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (componentType.IsManagedComponent)
+            #pragma warning restore 0618
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Data = entityManager.GetComponentObject<object>(entity, componentType);
+                #pragma warning restore 0618
             }
             else if (componentType.IsComponent)
             {

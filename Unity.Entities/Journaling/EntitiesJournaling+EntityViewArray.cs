@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ namespace Unity.Entities
         /// <summary>
         /// Array of <see cref="EntityView"/>.
         /// </summary>
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [DebuggerDisplay("Length = {Length}")]
         [DebuggerTypeProxy(typeof(EntityViewArrayDebugView))]
         [StructLayout(LayoutKind.Sequential)]
@@ -102,7 +102,7 @@ namespace Unity.Entities
             /// <summary>
             /// Enumerator that can iterate through the <see cref="EntityViewArray"/>.
             /// </summary>
-            [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+            [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
             public struct Enumerator : IEnumerator<EntityView>
             {
                 readonly EntityViewArray m_RecordViewArray;

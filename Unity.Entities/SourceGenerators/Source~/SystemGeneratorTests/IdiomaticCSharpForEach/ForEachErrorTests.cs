@@ -14,33 +14,6 @@ namespace Unity.Entities.SourceGenerators;
 public class ForEachErrorTests
 {
     [TestMethod]
-    public async Task SGFE002_ForEachIterationThroughAspectQuery_InPropertyAccessor()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            partial struct TranslationSystem : ISystem
-            {
-                public int Translation
-                {
-                    get
-                    {
-                        foreach (var translation in {|#0:SystemAPI.Query<RefRW<Translation>>()|}){}
-                        return 3;
-                    }
-                }
-
-                public void OnCreate(ref SystemState state) { }
-
-                public void OnDestroy(ref SystemState state) { }
-
-                public void OnUpdate(ref SystemState state) { }
-            }";
-        var expected = VerifyCS.CompilerError(nameof(IfeCompilerMessages.SGFE002)).WithLocation(0);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expected);
-    }
-
-    [TestMethod]
     public async Task SGQC001_QueryingUnsupportedType()
     {
         const string source = @"
@@ -54,7 +27,7 @@ public class ForEachErrorTests
 
                 public void OnDestroy(ref SystemState state)
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<NotAComponent>()|})
+                    foreach (var trans in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<NotAComponent>()|})
                     {
                     }
                 }
@@ -77,7 +50,7 @@ public class ForEachErrorTests
 
                 public void OnDestroy(ref SystemState state)
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<Translation>().WithAll<Translation>()|})
+                    foreach (var trans in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<Translation>().WithAll<Translation>()|})
                     {
                     }
                 }
@@ -100,7 +73,7 @@ public class ForEachErrorTests
 
                 public void OnDestroy(ref SystemState state)
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<Translation>().WithAny<Translation>()|})
+                    foreach (var trans in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<Translation>().WithAny<Translation>()|})
                     {
                     }
                 }
@@ -123,53 +96,7 @@ public class ForEachErrorTests
 
                 public void OnDestroy(ref SystemState state)
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithAll<Translation>().WithAny<Translation>()|})
-                    {
-                    }
-                }
-
-                public void OnUpdate(ref SystemState state) { }
-            }";
-        var expected = VerifyCS.CompilerError(nameof(QueryConstructionErrors.SGQC004)).WithLocation(0);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expected);
-    }
-
-    [TestMethod]
-    public async Task SGQC004_QueriedAspectTypeSpecifiedInWithNone()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            partial struct TranslationSystem : ISystem
-            {
-                public void OnCreate(ref SystemState state) { }
-
-                public void OnDestroy(ref SystemState state)
-                {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<Translation>()|})
-                    {
-                    }
-                }
-
-                public void OnUpdate(ref SystemState state) { }
-            }";
-        var expected = VerifyCS.CompilerError(nameof(QueryConstructionErrors.SGQC004)).WithLocation(0);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expected);
-    }
-
-    [TestMethod]
-    public async Task SGQC004_QueriedAspectTypeSpecifiedInWithAny()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            partial struct TranslationSystem : ISystem
-            {
-                public void OnCreate(ref SystemState state) { }
-
-                public void OnDestroy(ref SystemState state)
-                {
-                    foreach (var translation in {|#0:SystemAPI.Query<RefRW<Translation>>().WithAny<Translation>()|})
+                    foreach (var trans in {|#0:SystemAPI.Query<RefRW<Translation>>().WithAll<Translation>().WithAny<Translation>()|})
                     {
                     }
                 }
@@ -215,7 +142,7 @@ public class ForEachErrorTests
                 public void OnCreate(ref SystemState state) { }
                 public void OnUpdate(ref SystemState state)
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRO<EcsTestData>>()
+                    foreach (var testData in {|#0:SystemAPI.Query<RefRO<EcsTestData>>()
                     .WithChangeFilter<EcsTestData2, EcsTestData3>()
                     .WithChangeFilter<EcsTestData4>()|}) {}
                 }
@@ -342,7 +269,7 @@ public class ForEachErrorTests
             {
                 protected override void OnUpdate()
                 {
-                    foreach (var aspect in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<T>()|})
+                    foreach (var trans in {|#0:SystemAPI.Query<RefRW<Translation>>().WithNone<T>()|})
                     {
                     }
                 }
@@ -429,5 +356,48 @@ public class ForEachErrorTests
             }";
         var expected = VerifyCS.CompilerError(nameof(IfeCompilerMessages.SGFE013)).WithLocation(0);
         await VerifyCS.VerifySourceGeneratorAsync(source, expected);
+    }
+
+    [TestMethod]
+    public async Task SGFE014_WrongTupleOrdering_ForEachVariableStatementSyntax_WithEntityAccess()
+    {
+        const string source = @"
+            using Unity.Entities;
+            using Unity.Entities.Tests;
+            partial struct TestSystem : ISystem
+            {
+                public void OnCreate(ref SystemState state) { }
+                public void OnUpdate(ref SystemState state)
+                {
+                    foreach ((Entity e, EcsTestData c) in {|#0:SystemAPI.Query<RefRO<EcsTestData>>()
+                    .WithEntityAccess()|}) {}
+                }
+                public void OnDestroy(ref SystemState state) { }
+            }";
+        var expectedA = VerifyCS.CompilerError("CS0029").WithSpan(9, 31, 9, 39);
+        var expectedB = VerifyCS.CompilerError("CS0029").WithSpan(9, 41, 9, 54);
+        var expectedC = VerifyCS.CompilerError(nameof(IfeCompilerMessages.SGFE014)).WithLocation(0);
+        await VerifyCS.VerifySourceGeneratorAsync(source, expectedA, expectedB, expectedC);
+    }
+
+    [TestMethod]
+    public async Task SGFE014_WrongTupleOrdering_ForEachStatementSyntax_WithEntityAccess()
+    {
+        const string source = @"
+            using Unity.Entities;
+            using Unity.Entities.Tests;
+            partial struct TestSystem : ISystem
+            {
+                public void OnCreate(ref SystemState state) { }
+                public void OnUpdate(ref SystemState state)
+                {
+                    foreach ((Entity, EcsTestData) result in {|#0:SystemAPI.Query<RefRO<EcsTestData>>()
+                    .WithEntityAccess()|}) {}
+                }
+                public void OnDestroy(ref SystemState state) { }
+            }";
+        var expectedA = VerifyCS.CompilerError("CS0030").WithSpan(9, 21, 9, 28);
+        var expectedB = VerifyCS.CompilerError(nameof(IfeCompilerMessages.SGFE014)).WithLocation(0);
+        await VerifyCS.VerifySourceGeneratorAsync(source, expectedA, expectedB);
     }
 }

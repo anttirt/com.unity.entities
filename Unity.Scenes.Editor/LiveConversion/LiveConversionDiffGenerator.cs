@@ -300,7 +300,8 @@ namespace Unity.Scenes.Editor
                             // We need to go through the type index to correctly handle null Companion Links
                             int packedTypeIdx = setComponents[i].Component.PackedTypeIndex;
                             var idx = TypeManager.GetTypeIndexFromStableTypeHash(types[packedTypeIdx].StableTypeHash);
-                            if (idx == companionLinkIndex || idx == companionLinkTransformIndex)
+                            if (idx == companionLinkIndex || idx == companionLinkTransformIndex
+                                || CompanionComponentTypeIndices.Contains(idx))
                             {
                                 setComponents[i] = setComponents[lastComponentSet - numCompanionComponentsSet];
                                 numCompanionComponentsSet += 1;
@@ -314,7 +315,8 @@ namespace Unity.Scenes.Editor
                             // We need to go through the type index to correctly handle null Companion Links
                             int packedTypeIdx = componentsRemoved[i].PackedTypeIndex;
                             var idx = TypeManager.GetTypeIndexFromStableTypeHash(types[packedTypeIdx].StableTypeHash);
-                            if (idx == companionLinkIndex || idx == companionLinkTransformIndex || idx == companionReferenceIndex)
+                            if (idx == companionLinkIndex || idx == companionLinkTransformIndex || idx == companionReferenceIndex
+                                || CompanionComponentTypeIndices.Contains(idx))
                             {
                                 componentsRemoved[i] = componentsRemoved[lastComponentRemoved - numCompanionLinkComponentsRemoved];
                                 numCompanionLinkComponentsRemoved += 1;
@@ -375,14 +377,18 @@ namespace Unity.Scenes.Editor
             var em = world.EntityManager;
             // We don't know the scene tag of the destination world, so we create a null Scene Tag.
             // In the patching code this will be translated into the final scene entity.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             em.AddSharedComponentManaged(missingSceneQuery, new SceneTag { SceneEntity = Entity.Null });
+            #pragma warning restore 0618
 
             if((flags & BakingUtility.BakingFlags.SceneViewLiveConversion) == 0)
             {
                 // if entities should not be rendered in Scene View, set the culling mask to Game View only
                 // if the EditorRenderData is missing, the default culling is assumed (display in both Game View and Scene View)
                 const ulong cullingMask = UnityEditor.SceneManagement.SceneCullingMasks.GameViewObjects;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 em.AddSharedComponentManaged(missingRenderDataQuery, new EditorRenderData { SceneCullingMask = cullingMask });
+                #pragma warning restore 0618
             }
         }
 

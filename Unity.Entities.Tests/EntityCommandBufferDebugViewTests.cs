@@ -35,8 +35,7 @@ namespace Unity.Entities.Tests
 
             var createCmdView = cmdView as EntityCommandBuffer.CreateCommandView;
             Assert.IsFalse(createCmdView.EntityArchetype.Valid);
-            Assert.AreEqual(ent.Index, createCmdView.EntityIdentityIndex);
-            Assert.AreEqual(1, createCmdView.BatchCount);
+            Assert.AreEqual(1, createCmdView.EntityCount);
             Assert.AreEqual("Create Entity",createCmdView.ToString());
         }
 
@@ -57,8 +56,7 @@ namespace Unity.Entities.Tests
 
             var createCmdView = cmdView as EntityCommandBuffer.CreateCommandView;
             Assert.AreEqual(archetype, createCmdView.EntityArchetype);
-            Assert.AreEqual(ent.Index, createCmdView.EntityIdentityIndex);
-            Assert.AreEqual(1, createCmdView.BatchCount);
+            Assert.AreEqual(1, createCmdView.EntityCount);
             Assert.AreEqual("Create Entity",createCmdView.ToString());
         }
 
@@ -79,17 +77,17 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(prefab, entityCmdView.Entity);
-            Assert.AreEqual(ent.Index, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(1, entityCmdView.EntityCount);
             Assert.AreEqual("Instantiate Entity (count=1)",entityCmdView.ToString());
         }
 
         [Test]
         public void EntityCommandBufferDebugView_InstantiateToArray_ContainsExpectedData()
         {
+            var count = 5;
             var prefab = m_Manager.CreateEntity(typeof(EcsTestData), typeof(Prefab));
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            using var entities = CollectionHelper.CreateNativeArray<Entity>(5, World.UpdateAllocator.Handle);
+            using var entities = CollectionHelper.CreateNativeArray<Entity>(count, World.UpdateAllocator.Handle);
             ecb.Instantiate(prefab, entities);
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
@@ -102,8 +100,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(prefab, entityCmdView.Entity);
-            Assert.AreEqual(entities[0].Index, entityCmdView.IdentityIndex);
-            Assert.AreEqual(entities.Length, entityCmdView.BatchCount);
+            Assert.AreEqual(count, entityCmdView.EntityCount);
             Assert.AreEqual("Instantiate Entity (count=5)",entityCmdView.ToString());
         }
 
@@ -124,8 +121,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(1, entityCmdView.EntityCount);
             Assert.AreEqual("Destroy Entity",entityCmdView.ToString());
         }
 
@@ -148,7 +144,6 @@ namespace Unity.Entities.Tests
 
             var bufferCmdView = cmdView as EntityCommandBuffer.EntityBufferCommandView;
             var typeInfo = TypeManager.GetTypeInfo<EcsIntElement>();
-            Assert.IsFalse(bufferCmdView.ValueRequiresEntityFixup);
             Assert.AreEqual(typeInfo.TypeIndex, bufferCmdView.ComponentTypeIndex);
             Assert.AreEqual(typeInfo.SizeInChunk, bufferCmdView.ComponentSize);
             Assert.AreEqual(2, bufferCmdView.BufferNode->TempBuffer.Length);
@@ -159,42 +154,6 @@ namespace Unity.Entities.Tests
             var contents = (int*)BufferHeader.GetElementPointer(&bufferCmdView.BufferNode->TempBuffer);
             Assert.AreEqual(17, contents[0]);
             Assert.AreEqual(23, contents[1]);
-        }
-
-        [Test]
-        public void EntityCommandBufferDebugView_AddBufferWithEntityFixup_ContainsExpectedData()
-        {
-            var ent = m_Manager.CreateEntity(typeof(EcsTestData));
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            var ent2 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var ent3 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var buf = ecb.AddBuffer<EcsComplexEntityRefElement>(ent);
-            buf.Add(new EcsComplexEntityRefElement { Dummy = 17, Entity = ent2 });
-            buf.Add(new EcsComplexEntityRefElement { Dummy = 23, Entity = ent3 });
-            var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
-
-            var commands = ecbView.Commands;
-            Assert.AreEqual(2, commands.Length); // the two create commands are batched
-
-            var cmdView = commands[1];
-            Assert.AreEqual(ECBCommand.AddBuffer, cmdView.CommandType);
-            Assert.AreEqual(ecb.MainThreadSortKey, cmdView.SortKey);
-
-            var bufferCmdView = cmdView as EntityCommandBuffer.EntityBufferCommandView;
-            var typeInfo = TypeManager.GetTypeInfo<EcsComplexEntityRefElement>();
-            Assert.IsTrue(bufferCmdView.ValueRequiresEntityFixup);
-            Assert.AreEqual(typeInfo.TypeIndex, bufferCmdView.ComponentTypeIndex);
-            Assert.AreEqual(typeInfo.SizeInChunk, bufferCmdView.ComponentSize);
-            Assert.AreEqual(2, bufferCmdView.BufferNode->TempBuffer.Length);
-            Assert.AreEqual(typeInfo.BufferCapacity, bufferCmdView.BufferNode->TempBuffer.Capacity);
-            Assert.AreEqual("Add Entity Buffer EcsComplexEntityRefElement",bufferCmdView.ToString());
-
-            var contents =
-                (EcsComplexEntityRefElement*)BufferHeader.GetElementPointer(&bufferCmdView.BufferNode->TempBuffer);
-            Assert.AreEqual(17, contents[0].Dummy);
-            Assert.AreEqual(ent2, contents[0].Entity);
-            Assert.AreEqual(23, contents[1].Dummy);
-            Assert.AreEqual(ent3, contents[1].Entity);
         }
 
         [Test]
@@ -216,7 +175,6 @@ namespace Unity.Entities.Tests
 
             var bufferCmdView = cmdView as EntityCommandBuffer.EntityBufferCommandView;
             var typeInfo = TypeManager.GetTypeInfo<EcsIntElement>();
-            Assert.IsFalse(bufferCmdView.ValueRequiresEntityFixup);
             Assert.AreEqual(typeInfo.TypeIndex, bufferCmdView.ComponentTypeIndex);
             Assert.AreEqual(typeInfo.SizeInChunk, bufferCmdView.ComponentSize);
             Assert.AreEqual(2, bufferCmdView.BufferNode->TempBuffer.Length);
@@ -228,41 +186,6 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(23, contents[1]);
         }
 
-        [Test]
-        public void EntityCommandBufferDebugView_SetBufferWithEntityFixup_ContainsExpectedData()
-        {
-            var ent = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            var ent2 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var ent3 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var buf = ecb.SetBuffer<EcsComplexEntityRefElement>(ent);
-            buf.Add(new EcsComplexEntityRefElement { Dummy = 17, Entity = ent2 });
-            buf.Add(new EcsComplexEntityRefElement { Dummy = 23, Entity = ent3 });
-            var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
-
-            var commands = ecbView.Commands;
-            Assert.AreEqual(2, commands.Length); // the two create commands are batched
-
-            var cmdView = commands[1];
-            Assert.AreEqual(ECBCommand.SetBuffer, cmdView.CommandType);
-            Assert.AreEqual(ecb.MainThreadSortKey, cmdView.SortKey);
-
-            var bufferCmdView = cmdView as EntityCommandBuffer.EntityBufferCommandView;
-            var typeInfo = TypeManager.GetTypeInfo<EcsComplexEntityRefElement>();
-            Assert.IsTrue(bufferCmdView.ValueRequiresEntityFixup);
-            Assert.AreEqual(typeInfo.TypeIndex, bufferCmdView.ComponentTypeIndex);
-            Assert.AreEqual(typeInfo.SizeInChunk, bufferCmdView.ComponentSize);
-            Assert.AreEqual(2, bufferCmdView.BufferNode->TempBuffer.Length);
-            Assert.AreEqual(typeInfo.BufferCapacity, bufferCmdView.BufferNode->TempBuffer.Capacity);
-            Assert.AreEqual("Set Entity Buffer EcsComplexEntityRefElement",bufferCmdView.ToString());
-
-            var contents =
-                (EcsComplexEntityRefElement*)BufferHeader.GetElementPointer(&bufferCmdView.BufferNode->TempBuffer);
-            Assert.AreEqual(17, contents[0].Dummy);
-            Assert.AreEqual(ent2, contents[0].Entity);
-            Assert.AreEqual(23, contents[1].Dummy);
-            Assert.AreEqual(ent3, contents[1].Entity);
-        }
 
         [Test]
         public void EntityCommandBufferDebugView_AppendToBuffer_ContainsExpectedData()
@@ -281,49 +204,15 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
             var typeInfo = TypeManager.GetTypeInfo<EcsIntElement>();
-            Assert.IsFalse(componentCmdView.ValueRequiresEntityFixup);
             Assert.AreEqual(typeInfo.TypeIndex, componentCmdView.ComponentTypeIndex);
             Assert.AreEqual(sizeof(EcsIntElement), componentCmdView.ComponentSize);
             var actualValue = (EcsIntElement)componentCmdView.ComponentValue;
             Assert.AreEqual(17, actualValue.Value);
             Assert.AreEqual("Append EcsIntElement BufferElementData",componentCmdView.ToString());
-        }
-
-        [Test]
-        public void EntityCommandBufferDebugView_AppendToBufferWithEntityFixup_ContainsExpectedData()
-        {
-            var ent = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            var ent2 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            ecb.AppendToBuffer(ent, new EcsComplexEntityRefElement { Dummy = 17, Entity = ent2 });
-            var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
-
-            var commands = ecbView.Commands;
-            Assert.AreEqual(2, commands.Length);
-
-            var cmdView = commands[1];
-            Assert.AreEqual(ECBCommand.AppendToBuffer, cmdView.CommandType);
-            Assert.AreEqual(ecb.MainThreadSortKey, cmdView.SortKey);
-
-            var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
-            Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
-
-            var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
-            var typeInfo = TypeManager.GetTypeInfo<EcsComplexEntityRefElement>();
-            Assert.IsTrue(componentCmdView.ValueRequiresEntityFixup);
-            Assert.AreEqual(typeInfo.TypeIndex, componentCmdView.ComponentTypeIndex);
-            Assert.AreEqual(sizeof(EcsComplexEntityRefElement), componentCmdView.ComponentSize);
-            var actualValue = (EcsComplexEntityRefElement)componentCmdView.ComponentValue;
-            Assert.AreEqual(17, actualValue.Dummy);
-            Assert.AreEqual(ent2, actualValue.Entity);
-            Assert.AreEqual("Append EcsComplexEntityRefElement BufferElementData",componentCmdView.ToString());
         }
 
         [Test]
@@ -344,47 +233,13 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
-            Assert.IsFalse(componentCmdView.ValueRequiresEntityFixup);
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
             Assert.AreEqual(sizeof(EcsTestData), componentCmdView.ComponentSize);
             Assert.AreEqual(value, (EcsTestData)componentCmdView.ComponentValue);
             Assert.AreEqual("Add EcsTestData Component",componentCmdView.ToString());
-        }
-
-        [Test]
-        public void EntityCommandBufferDebugView_AddComponentWithEntityFixup_ContainsExpectedData()
-        {
-            var ent = m_Manager.CreateEntity();
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            var ent2 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var value = new EcsTestDataEntity { value0 = 17, value1 = ent2 };
-            ecb.AddComponent(ent, value);
-            var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
-
-            var commands = ecbView.Commands;
-            Assert.AreEqual(2, commands.Length);
-
-            var cmdView = commands[1];
-            Assert.AreEqual(ECBCommand.AddComponent, cmdView.CommandType);
-            Assert.AreEqual(ecb.MainThreadSortKey, cmdView.SortKey);
-
-            var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
-            Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
-
-            var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
-            Assert.IsTrue(componentCmdView.ValueRequiresEntityFixup);
-            Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestDataEntity>(), componentCmdView.ComponentTypeIndex);
-            Assert.AreEqual(sizeof(EcsTestDataEntity), componentCmdView.ComponentSize);
-            var actualValue = (EcsTestDataEntity)componentCmdView.ComponentValue;
-            Assert.AreEqual(value.value0, actualValue.value0);
-            Assert.AreEqual(value.value1, actualValue.value1);
-            Assert.AreEqual("Add EcsTestDataEntity Component",componentCmdView.ToString());
         }
 
         [Test]
@@ -404,8 +259,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
@@ -431,8 +285,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
@@ -460,8 +313,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var multiComponentCmdView = cmdView as EntityCommandBuffer.EntityMultipleComponentsCommandView;
             Assert.AreEqual(componentTypes.Length, multiComponentCmdView.TypeSet.Length);
@@ -500,8 +352,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(rootEntity, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
 
@@ -546,8 +397,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(rootEntity, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
 
@@ -589,8 +439,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(rootEntity, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
 
@@ -618,47 +467,13 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
-            Assert.IsFalse(componentCmdView.ValueRequiresEntityFixup);
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
             Assert.AreEqual(sizeof(EcsTestData), componentCmdView.ComponentSize);
             Assert.AreEqual(value, (EcsTestData)componentCmdView.ComponentValue);
             Assert.AreEqual("Set EcsTestData Component",componentCmdView.ToString());
-        }
-
-        [Test]
-        public void EntityCommandBufferDebugView_SetComponentWithEntityFixup_ContainsExpectedData()
-        {
-            var ent = m_Manager.CreateEntity(typeof(EcsTestDataEntity));
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
-            var ent2 = ecb.CreateEntity(); // need deferred entity to force fix-up
-            var value = new EcsTestDataEntity { value0 = 17, value1 = ent2 };
-            ecb.SetComponent(ent, value);
-            var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
-
-            var commands = ecbView.Commands;
-            Assert.AreEqual(2, commands.Length);
-
-            var cmdView = commands[1];
-            Assert.AreEqual(ECBCommand.SetComponent, cmdView.CommandType);
-            Assert.AreEqual(ecb.MainThreadSortKey, cmdView.SortKey);
-
-            var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
-            Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
-
-            var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
-            Assert.IsTrue(componentCmdView.ValueRequiresEntityFixup);
-            Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestDataEntity>(), componentCmdView.ComponentTypeIndex);
-            Assert.AreEqual(sizeof(EcsTestDataEntity), componentCmdView.ComponentSize);
-            var actualValue = (EcsTestDataEntity)componentCmdView.ComponentValue;
-            Assert.AreEqual(value.value0, actualValue.value0);
-            Assert.AreEqual(value.value1, actualValue.value1);
-            Assert.AreEqual("Set EcsTestDataEntity Component",componentCmdView.ToString());
         }
 
         [Test]
@@ -679,8 +494,7 @@ namespace Unity.Entities.Tests
 
             var enabledEntityCmdView = enabledCommand as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, enabledEntityCmdView.Entity);
-            Assert.AreEqual(0, enabledEntityCmdView.IdentityIndex);
-            Assert.AreEqual(1, enabledEntityCmdView.BatchCount);
+            Assert.AreEqual(0, enabledEntityCmdView.EntityCount);
 
             var enabledCmdView = enabledCommand as EntityCommandBuffer.EntityEnabledCommandView;
             Assert.AreEqual(1, enabledCmdView.IsEnabled);
@@ -692,8 +506,7 @@ namespace Unity.Entities.Tests
 
             var disabledEntityCmdView = disabledCommand as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, disabledEntityCmdView.Entity);
-            Assert.AreEqual(0, disabledEntityCmdView.IdentityIndex);
-            Assert.AreEqual(1, disabledEntityCmdView.BatchCount);
+            Assert.AreEqual(0, disabledEntityCmdView.EntityCount);
 
             var disabledCmdView = disabledCommand as EntityCommandBuffer.EntityEnabledCommandView;
             Assert.AreEqual(0, disabledCmdView.IsEnabled);
@@ -719,8 +532,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var nameCmdView = cmdView as EntityCommandBuffer.EntityNameCommandView;
             Assert.AreEqual(name, nameCmdView.Name);
@@ -745,8 +557,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
@@ -772,8 +583,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var componentCmdView = cmdView as EntityCommandBuffer.EntityComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestData>(), componentCmdView.ComponentTypeIndex);
@@ -802,8 +612,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var multiComponentCmdView = cmdView as EntityCommandBuffer.EntityMultipleComponentsCommandView;
             Assert.AreEqual(componentTypes.Length, multiComponentCmdView.TypeSet.Length);
@@ -825,7 +634,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.AddComponent<EcsTestData2>(query, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -838,7 +647,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator.Handle, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -866,7 +674,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.AddComponent(query, ComponentType.ReadWrite<EcsTestData2>(), EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -879,7 +687,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -918,7 +725,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesComponentCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -950,7 +756,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.AddComponent(query, componentTypes, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -963,7 +769,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -995,7 +800,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.AddSharedComponent(query, new EcsTestSharedComp { value = 17 }, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1008,7 +813,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesComponentCommandView_WithUnmanagedSharedValue;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1040,7 +844,9 @@ namespace Unity.Entities.Tests
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData));
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
             const string stringValue = "TestValue";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             ecb.AddComponentObject(query, new EcsTestManagedComponent { value = stringValue });
+            #pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1053,7 +859,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1083,7 +888,9 @@ namespace Unity.Entities.Tests
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData));
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
             const string stringValue = "TestValue";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             ecb.SetComponentObject(query, new EcsTestManagedComponent { value = stringValue });
+            #pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1096,7 +903,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1128,7 +934,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.SetSharedComponent(query, new EcsTestSharedComp { value = 17 }, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1141,7 +947,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1172,7 +977,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.RemoveComponent(query, ComponentType.ReadWrite<EcsTestData>(), EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1185,7 +990,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1213,7 +1017,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.RemoveComponent<EcsTestData>(query, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1226,7 +1030,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1257,7 +1060,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.RemoveComponent(query, componentTypes, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1270,7 +1073,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1302,7 +1104,7 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.Handle);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
             ecb.DestroyEntity(query, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             var ecbView = new EntityCommandBuffer.EntityCommandBufferDebugView(ecb);
 
             var commands = ecbView.Commands;
@@ -1315,7 +1117,6 @@ namespace Unity.Entities.Tests
             var multiEntityCmdView = cmdView as EntityCommandBuffer.MultipleEntitiesCommandView;
             Assert.AreEqual(ecb.m_Data->m_Allocator, multiEntityCmdView.Allocator);
             Assert.AreEqual(entityCount, multiEntityCmdView.EntitiesCount);
-            Assert.IsTrue(multiEntityCmdView.SkipDeferredEntityLookup);
             var actualEntities =
                 NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(multiEntityCmdView.Entities.Ptr,
                     entityCount, Allocator.None);
@@ -1345,8 +1146,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var sharedComponentCmdView = cmdView as EntityCommandBuffer.EntityUnmanagedSharedComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestSharedComp>(), sharedComponentCmdView.ComponentTypeIndex);
@@ -1374,8 +1174,7 @@ namespace Unity.Entities.Tests
 
             var entityCmdView = cmdView as EntityCommandBuffer.EntityCommandView;
             Assert.AreEqual(ent, entityCmdView.Entity);
-            Assert.AreEqual(0, entityCmdView.IdentityIndex);
-            Assert.AreEqual(1, entityCmdView.BatchCount);
+            Assert.AreEqual(0, entityCmdView.EntityCount);
 
             var sharedComponentCmdView = cmdView as EntityCommandBuffer.EntityUnmanagedSharedComponentCommandView;//EntitySharedComponentCommandView;
             Assert.AreEqual(TypeManager.GetTypeIndex<EcsTestSharedComp>(), sharedComponentCmdView.ComponentTypeIndex);

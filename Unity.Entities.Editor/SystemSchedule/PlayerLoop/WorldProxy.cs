@@ -130,6 +130,18 @@ namespace Unity.Entities.Editor
             return data.UpdateAfterIndices.Select(v => m_AllSystems[v]).ToList();
         }
 
+        internal IReadOnlyList<SystemProxy> GetUpdateBeforeReverseSet(SystemProxy sys)
+        {
+            var data = m_SystemData[sys.SystemIndex];
+            return data.UpdateBeforeReverseIndices.Select(v => m_AllSystems[v]).ToList();
+        }
+
+        internal IReadOnlyList<SystemProxy> GetUpdateAfterReverseSet(SystemProxy sys)
+        {
+            var data = m_SystemData[sys.SystemIndex];
+            return data.UpdateAfterReverseIndices.Select(v => m_AllSystems[v]).ToList();
+        }
+
         unsafe SystemState* GetStatePointer(in ScheduledSystemData sys, World world)
         {
             if ((sys.Category & SystemCategory.Unmanaged) == 0)

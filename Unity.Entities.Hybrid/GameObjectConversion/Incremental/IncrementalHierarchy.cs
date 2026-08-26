@@ -24,7 +24,7 @@ namespace Unity.Entities.Conversion
         /// Contains the instance ID for every element in the hierarchy. This array is parallel to the parent index
         /// array and the transform array.
         /// </summary>
-        public NativeList<int> InstanceId;
+        public NativeList<EntityId> EntityId;
 
         /// <summary>
         /// Contains the index of the parent in the hierarchy for every element in the hierarchy. An invalid parent is
@@ -46,9 +46,9 @@ namespace Unity.Entities.Conversion
         public NativeParallelHashMap<int, UnsafeList<int>> ChildIndicesByIndex;
 
         /// <summary>
-        /// Maps instance IDs to indices in the hierarchy.
+        /// Maps entity IDs to indices in the hierarchy.
         /// </summary>
-        public NativeParallelHashMap<int, int> IndexByInstanceId;
+        public NativeParallelHashMap<EntityId, int> IndexByEntityId;
 
         /// <summary>
         /// Contains the active state for every element in the hierarchy. This array is parallel to the parent index
@@ -68,8 +68,8 @@ namespace Unity.Entities.Conversion
                 TransformArray.Dispose();
             if (TransformAuthorings.IsCreated)
                 TransformAuthorings.Dispose();
-            if (InstanceId.IsCreated)
-                InstanceId.Dispose();
+            if (EntityId.IsCreated)
+                EntityId.Dispose();
             if (ParentIndex.IsCreated)
                 ParentIndex.Dispose();
             if (ChildIndicesByIndex.IsCreated)
@@ -83,8 +83,8 @@ namespace Unity.Entities.Conversion
                 ChildIndicesByIndex.Dispose();
             }
 
-            if (IndexByInstanceId.IsCreated)
-                IndexByInstanceId.Dispose();
+            if (IndexByEntityId.IsCreated)
+                IndexByEntityId.Dispose();
             if (Active.IsCreated)
                 Active.Dispose();
             if (Static.IsCreated)
@@ -108,11 +108,11 @@ namespace Unity.Entities.Conversion
 
         internal static bool TryAddSingle(IncrementalHierarchy hierarchy, GameObject go, Transform t, GameObject parent)
         {
-            int id = go.GetInstanceID();
-            int index = hierarchy.InstanceId.Length;
-            if (!hierarchy.IndexByInstanceId.TryAdd(id, index))
+            EntityId id = go.GetEntityId();
+            int index = hierarchy.EntityId.Length;
+            if (!hierarchy.IndexByEntityId.TryAdd(id, index))
                 return false;
-            hierarchy.InstanceId.Add(id);
+            hierarchy.EntityId.Add(id);
             hierarchy.TransformArray.Add(t);
             hierarchy.TransformAuthorings.Add(default);
             hierarchy.Active.Add(go.activeSelf);
@@ -120,9 +120,9 @@ namespace Unity.Entities.Conversion
 
             if (parent != null)
             {
-                var pid = parent.GetInstanceID();
+                var pid = parent.GetEntityId();
                 // this line assumes that parent of this GameObject has already been added.
-                hierarchy.IndexByInstanceId.TryGetValue(pid, out var parentIndex);
+                hierarchy.IndexByEntityId.TryGetValue(pid, out var parentIndex);
                 hierarchy.ParentIndex.Add(parentIndex);
                 AddChild(hierarchy, parentIndex, index);
             }
@@ -171,9 +171,9 @@ namespace Unity.Entities.Conversion
             hierarchy.ChildIndicesByIndex[parentIndex] = childList;
         }
 
-        internal static void ChangeChildrenOrderInParent(IncrementalHierarchy hierarchy, int parentId)
+        internal static void ChangeChildrenOrderInParent(IncrementalHierarchy hierarchy, EntityId parentId)
         {
-            if (hierarchy.IndexByInstanceId.TryGetValue(parentId, out int newParentIdx))
+            if (hierarchy.IndexByEntityId.TryGetValue(parentId, out int newParentIdx))
             {
                 UpdateChildrenIndices(hierarchy, newParentIdx);
             }
@@ -455,30 +455,30 @@ namespace Unity.Entities.Conversion
             return count;
         }
 
-        internal static void ChangeParents(IncrementalHierarchy hierarchy, NativeKeyValueArrays<int, int> parentChange, NativeList<int> outChangeFailed, NativeList<IncrementalBakingChanges.ParentChange> outChangeSuccessful)
+        internal static void ChangeParents(IncrementalHierarchy hierarchy, NativeKeyValueArrays<EntityId, EntityId> parentChange, NativeList<EntityId> outChangeFailed, NativeList<IncrementalBakingChanges.ParentChange> outChangeSuccessful)
         {
-            var instanceIds = parentChange.Keys;
-            var parentInstanceIds = parentChange.Values;
-            for (int i = 0; i < instanceIds.Length; i++)
+            var entityIds = parentChange.Keys;
+            var parentEntityIds = parentChange.Values;
+            for (int i = 0; i < entityIds.Length; i++)
             {
-                var instanceId = instanceIds[i];
-                if (!hierarchy.IndexByInstanceId.TryGetValue(instanceId, out int idx))
+                var entityId = entityIds[i];
+                if (!hierarchy.IndexByEntityId.TryGetValue(entityId, out int idx))
                 {
-                    outChangeFailed.Add(instanceId);
+                    outChangeFailed.Add(entityId);
                     // this case might happen when an instance was already removed
                     continue;
                 }
 
                 int oldParentIdx = hierarchy.ParentIndex[idx];
-                int oldParentId = 0;
+                EntityId oldParentId = EntityId.None;
                 if (oldParentIdx != -1)
                 {
-                    oldParentId = hierarchy.InstanceId[oldParentIdx];
+                    oldParentId = hierarchy.EntityId[oldParentIdx];
                     RemoveChild(hierarchy, oldParentIdx, idx);
                 }
 
-                int newParentId = parentInstanceIds[i];
-                if (hierarchy.IndexByInstanceId.TryGetValue(newParentId, out int newParentIdx))
+                EntityId newParentId = parentEntityIds[i];
+                if (hierarchy.IndexByEntityId.TryGetValue(newParentId, out int newParentIdx))
                 {
                     AddChild(hierarchy, newParentIdx, idx);
                     UpdateChildrenIndices(hierarchy, newParentIdx);
@@ -486,23 +486,23 @@ namespace Unity.Entities.Conversion
 
                     outChangeSuccessful.Add(new IncrementalBakingChanges.ParentChange
                     {
-                        InstanceId = instanceId,
-                        NewParentInstanceId = newParentId,
-                        PreviousParentInstanceId = oldParentId,
+                        EntityId = entityId,
+                        NewParentEntityId = newParentId,
+                        PreviousParentEntityId = oldParentId,
                     });
                 }
                 else
                 {
-                    if (newParentId != 0)
-                        outChangeFailed.Add(instanceId);
+                    if (newParentId != EntityId.None)
+                        outChangeFailed.Add(entityId);
                     else
                     {
                         // We are a root object
                         outChangeSuccessful.Add(new IncrementalBakingChanges.ParentChange
                         {
-                            InstanceId = instanceId,
-                            NewParentInstanceId = newParentId,
-                            PreviousParentInstanceId = oldParentId,
+                            EntityId = entityId,
+                            NewParentEntityId = newParentId,
+                            PreviousParentEntityId = oldParentId,
                         });
                     }
 
@@ -511,9 +511,9 @@ namespace Unity.Entities.Conversion
             }
         }
 
-        internal static void UpdateActiveAndStaticState(IncrementalHierarchy hierarchy, int instanceId, bool active, bool isStatic)
+        internal static void UpdateActiveAndStaticState(IncrementalHierarchy hierarchy, EntityId entityId, bool active, bool isStatic)
         {
-            var index = hierarchy.IndexByInstanceId[instanceId];
+            var index = hierarchy.IndexByEntityId[entityId];
             ref var activeStatus = ref hierarchy.Active.ElementAt(index);
             activeStatus = active;
 
@@ -521,29 +521,29 @@ namespace Unity.Entities.Conversion
             staticStatus = isStatic;
         }
 
-        internal static void Remove(IncrementalHierarchy hierarchy, NativeArray<int> instances)
+        internal static void Remove(IncrementalHierarchy hierarchy, NativeArray<EntityId> instances)
         {
-            var openInstanceIds = new NativeList<int>(instances.Length, Allocator.Temp);
-            openInstanceIds.AddRange(instances);
+            var openEntityIds = new NativeList<EntityId>(instances.Length, Allocator.Temp);
+            openEntityIds.AddRange(instances);
 
             // This code currently doesn't make use of the fact that we are always deleting entire subhierarchies
-            while (openInstanceIds.Length > 0)
+            while (openEntityIds.Length > 0)
             {
-                int id = openInstanceIds[openInstanceIds.Length - 1];
-                openInstanceIds.Length -= 1;
-                if (!hierarchy.IndexByInstanceId.TryGetValue(id, out int idx))
+                EntityId id = openEntityIds[openEntityIds.Length - 1];
+                openEntityIds.Length -= 1;
+                if (!hierarchy.IndexByEntityId.TryGetValue(id, out int idx))
                     continue;
 
                 {
                     // push children and remove children array entry
                     var iter = GetChildren(hierarchy, idx);
                     while (iter.MoveNext())
-                        openInstanceIds.Add(hierarchy.InstanceId[iter.Current]);
+                        openEntityIds.Add(hierarchy.EntityId[iter.Current]);
                     RemoveAllImmediateChildren(hierarchy, idx);
                 }
 
                 // Remove-and-swap on the arrays
-                hierarchy.InstanceId.RemoveAtSwapBack(idx);
+                hierarchy.EntityId.RemoveAtSwapBack(idx);
                 int oldParentIdx = hierarchy.ParentIndex[idx];
                 hierarchy.ParentIndex.RemoveAtSwapBack(idx);
                 hierarchy.TransformArray.RemoveAtSwapBack(idx);
@@ -552,15 +552,15 @@ namespace Unity.Entities.Conversion
                 hierarchy.TransformAuthorings.RemoveAtSwapBack(idx);
 
                 // then patch up the lookup tables
-                hierarchy.IndexByInstanceId.Remove(id);
+                hierarchy.IndexByEntityId.Remove(id);
                 if (oldParentIdx != -1)
                     RemoveChild(hierarchy, oldParentIdx, idx);
-                int swappedIdx = hierarchy.InstanceId.Length;
+                int swappedIdx = hierarchy.EntityId.Length;
                 if (swappedIdx > 0 && swappedIdx != idx)
                 {
                     // update index to instance id lookup
-                    int swappedId = hierarchy.InstanceId[idx];
-                    hierarchy.IndexByInstanceId[swappedId] = idx;
+                    EntityId swappedId = hierarchy.EntityId[idx];
+                    hierarchy.IndexByEntityId[swappedId] = idx;
 
                     // update index to children lookup of parent
                     int swappedParentIdx = hierarchy.ParentIndex[idx];
@@ -588,37 +588,37 @@ namespace Unity.Entities.Conversion
             foreach (var go in scene.GetRootGameObjects())
                 open.Push(go);
             var childIndexCache = new List<int>();
-            var childIdCache = new List<int>();
+            var childIdCache = new List<EntityId>();
             while (open.Count > 0)
             {
                 var go = open.Pop();
-                var id = go.GetInstanceID();
-                if (hierarchy.IndexByInstanceId.TryGetValue(id, out var idx))
+                var id = go.GetEntityId();
+                if (hierarchy.IndexByEntityId.TryGetValue(id, out var idx))
                 {
                     if (go.transform != hierarchy.TransformArray[idx])
                     {
                         var otherTransform = hierarchy.TransformArray[idx];
-                        var otherId = otherTransform?.gameObject?.GetInstanceID() ?? 0;
-                        Debug.LogError($"Object {go} ({go.GetInstanceID()}) is stored at index {idx}, but the transform stored there is {otherTransform} ({otherId})");
+                        var otherId = otherTransform?.gameObject?.GetEntityId() ?? EntityId.None;
+                        Debug.LogError($"Object {go} ({go.GetEntityId()}) is stored at index {idx}, but the transform stored there is {otherTransform} ({otherId})");
                     }
 
                     var parentIdx = hierarchy.ParentIndex[idx];
                     if (go.transform.parent == null && parentIdx != -1)
                     {
-                        int parentId = hierarchy.InstanceId[parentIdx];
-                        var parentObj = UnityEditor.EditorUtility.InstanceIDToObject(parentId);
+                        EntityId parentId = hierarchy.EntityId[parentIdx];
+                        var parentObj = UnityEditor.EditorUtility.EntityIdToObject(parentId);
                         Debug.LogError(
-                            $"Object {go} ({go.GetInstanceID()}) has no parent, but in the hierarchy parent {parentObj} ({parentId}) is stored");
+                            $"Object {go} ({go.GetEntityId()}) has no parent, but in the hierarchy parent {parentObj} ({parentId}) is stored");
                     }
                     else if (go.transform.parent != null)
                     {
-                        int parentId = hierarchy.InstanceId[parentIdx];
+                        EntityId parentId = hierarchy.EntityId[parentIdx];
                         var parentObjFromTransform = go.transform.parent.gameObject;
-                        if (parentObjFromTransform.GetInstanceID() != parentId)
+                        if (parentObjFromTransform.GetEntityId() != parentId)
                         {
-                            var parentObj = UnityEditor.EditorUtility.InstanceIDToObject(parentId);
+                            var parentObj = UnityEditor.EditorUtility.EntityIdToObject(parentId);
                             Debug.LogError(
-                                $"Object {go} ({go.GetInstanceID()}) has parent {parentObjFromTransform} ({parentObjFromTransform.GetInstanceID()}), but in the hierarchy parent {parentObj} ({parentId} is stored)");
+                                $"Object {go} ({go.GetEntityId()}) has parent {parentObjFromTransform} ({parentObjFromTransform.GetEntityId()}), but in the hierarchy parent {parentObj} ({parentId} is stored)");
                         }
                     }
 
@@ -629,24 +629,24 @@ namespace Unity.Entities.Conversion
                     while (childIter.MoveNext())
                     {
                         childIndexCache.Add(childIter.Current);
-                        childIdCache.Add(hierarchy.InstanceId[childIter.Current]);
+                        childIdCache.Add(hierarchy.EntityId[childIter.Current]);
                     }
 
                     if (childIndexCache.Count != go.transform.childCount)
                         Debug.LogError(
-                            $"Object {go} ({go.GetInstanceID()}) has {go.transform.childCount} children, but in the hierarchy {childIndexCache.Count} children are stored");
+                            $"Object {go} ({go.GetEntityId()}) has {go.transform.childCount} children, but in the hierarchy {childIndexCache.Count} children are stored");
 
                     for (int i = 0; i < go.transform.childCount; i++)
                     {
                         var child = go.transform.GetChild(i).gameObject;
-                        var childId = child.GetInstanceID();
+                        var childId = child.GetEntityId();
                         if (!childIdCache.Contains(childId))
                             Debug.LogError(
-                                $"Object {go} ({go.GetInstanceID()}) has child {child} ({childId}), but in the hierarchy it is missing");
+                                $"Object {go} ({go.GetEntityId()}) has child {child} ({childId}), but in the hierarchy it is missing");
                     }
                 }
                 else
-                    Debug.LogError($"Object {go} ({go.GetInstanceID()}) is not present in the hierarchy");
+                    Debug.LogError($"Object {go} ({go.GetEntityId()}) is not present in the hierarchy");
 
                 for (int i = 0; i < go.transform.childCount; i++)
                     open.Push(go.transform.GetChild(i).gameObject);
@@ -655,26 +655,26 @@ namespace Unity.Entities.Conversion
 
         static void ValidateThatSceneContainsHierarchy(Scene scene, IncrementalHierarchy hierarchy)
         {
-            if (hierarchy.InstanceId.Length == 0)
+            if (hierarchy.EntityId.Length == 0)
                 return;
             var objects = new List<UnityEngine.Object>();
-            Resources.InstanceIDToObjectList(hierarchy.InstanceId.AsArray(), objects);
+            Resources.EntityIdsToObjectList(hierarchy.EntityId.AsArray(), objects);
             for (int i = 0; i < objects.Count; i++)
             {
                 var go = objects[i] as GameObject;
                 if (go == null)
                 {
                     Debug.LogError(
-                        $"Object {objects[i]} ({hierarchy.InstanceId[i]}) is in the hierarchy, but doesn't exist anymore or isn't a GameObject");
+                        $"Object {objects[i]} ({hierarchy.EntityId[i]}) is in the hierarchy, but doesn't exist anymore or isn't a GameObject");
                     continue;
                 }
                 if (go.scene.IsValid() && go.scene != scene)
-                    Debug.LogError($"Object {objects[i]} ({hierarchy.InstanceId[i]}) from scene {go.scene.name} ({go.scene.handle}) is in the hierarchy, but is not part of the conversion scene {scene.name} ({scene.handle})");
+                    Debug.LogError($"Object {objects[i]} ({hierarchy.EntityId[i]}) from scene {go.scene.name} ({go.scene.handle}) is in the hierarchy, but is not part of the conversion scene {scene.name} ({scene.handle})");
                 if (hierarchy.TransformArray[i] != go.transform)
                 {
                     var otherTransform = hierarchy.TransformArray[i];
-                    var otherId = otherTransform?.gameObject.GetInstanceID() ?? 0;
-                    Debug.LogError($"Object {go} ({go.GetInstanceID()}) is stored at index {i}, but the transform stored there is {otherTransform} ({otherId})");
+                    var otherId = otherTransform?.gameObject.GetEntityId() ?? EntityId.None;
+                    Debug.LogError($"Object {go} ({go.GetEntityId()}) is stored at index {i}, but the transform stored there is {otherTransform} ({otherId})");
                 }
             }
         }
@@ -693,8 +693,8 @@ namespace Unity.Entities.Conversion
                 TransformArray = new TransformAccessArray(roots.Length),
                 TransformAuthorings = new NativeList<TransformAuthoring>(roots.Length, alloc),
                 ChildIndicesByIndex = new NativeParallelHashMap<int, UnsafeList<int>>(roots.Length, alloc),
-                IndexByInstanceId = new NativeParallelHashMap<int, int>(roots.Length, alloc),
-                InstanceId = new NativeList<int>(roots.Length, alloc),
+                IndexByEntityId = new NativeParallelHashMap<EntityId, int>(roots.Length, alloc),
+                EntityId = new NativeList<EntityId>(roots.Length, alloc),
                 ParentIndex = new NativeList<int>(roots.Length, alloc),
                 Active = new NativeList<bool>(roots.Length, alloc),
                 Static = new NativeList<bool>(roots.Length, alloc)

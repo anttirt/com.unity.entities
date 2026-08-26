@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Unity.Entities;
 using Unity.Entities.Conversion;
 using Unity.Mathematics;
@@ -66,6 +65,16 @@ namespace Unity.Scenes.Editor
                 var prevSceneAsset = m_PreviousSceneAssets[i];
                 if (prevSceneAsset != subScene.SceneAsset)
                 {
+
+                    if (subScene.gameObject.scene.path == subScene.EditingScene.path)
+                    {
+                        UnityEngine.Debug.LogError(
+                            $"Circular reference detected: Attempted to convert Scene '{subScene.EditingScene.path}' into a Sub Scene. A scene cannot reference itself as a SubScene.",
+                            this );
+                        Undo.PerformUndo();
+                        break;
+                    }
+
                     if (!needsHierarchyReload)
                     {
                         // First time we see there's a change in Scene Asset,
@@ -364,8 +373,7 @@ namespace Unity.Scenes.Editor
                 EditorGUILayout.Space();
                 return;
             }
-
-            var prevColor = subScene.HierarchyColor;
+            
             var prevAutoLoad = subScene.AutoLoadScene;
             CachePreviousSceneAssetReferences();
 
@@ -373,50 +381,52 @@ namespace Unity.Scenes.Editor
 
             HandleChangedSceneAssetReferences();
 
-            if (subScene.HierarchyColor != prevColor)
-                SceneHierarchyHooks.ReloadAllSceneHierarchies();
-
             if (prevAutoLoad != subScene.AutoLoadScene)
                 subScene.RebuildSceneEntities();
 
-            bool isImportingClosedSubscenes = false;
-            DrawOpenSubScenes(_selectedSubscenes);
-            var loadableScenes = SubSceneInspectorUtility.GetLoadableScenes(_selectedSubscenes);
-            var closedSubScenes = _selectedSubscenes.Where(s => !s.IsLoaded).ToArray();
-            if (DrawClosedSubScenes(loadableScenes, closedSubScenes))
+            SubScene duplicateSubScene = null;
+            foreach (var selected in _selectedSubscenes)
             {
-                isImportingClosedSubscenes = true;
-            }
-
-#if false
-            // @TODO: TEMP for debugging
-            if (GUILayout.Button("ClearWorld"))
-            {
-                World.DisposeAllWorlds();
-                DefaultWorldInitialization.Initialize("Default World", !Application.isPlaying);
-
-                var scenes = FindObjectsOfType<SubScene>();
-                foreach (var scene in scenes)
+                if (selected.IsDuplicateSubScene())
                 {
-                    var oldEnabled = scene.enabled;
-                    scene.enabled = false;
-                    scene.enabled = oldEnabled;
+                    duplicateSubScene = selected;
+                    break;
                 }
-
-                EditorUpdateUtility.EditModeQueuePlayerLoopUpdate();
             }
-    #endif
-
-            bool hasDuplicates = subScene.SceneAsset != null && (SubScene.AllSubScenes.Count(s => (s.SceneAsset == subScene.SceneAsset)) > 1);
-            if (hasDuplicates)
+            if (duplicateSubScene != null)
             {
-                EditorGUILayout.HelpBox($"The Scene Asset '{subScene.EditableScenePath}' is used mutiple times and this is not supported. Clear the reference.", MessageType.Warning, true);
+                EditorGUILayout.HelpBox($"The Scene Asset '{duplicateSubScene.EditableScenePath}' is used multiple times and this is not supported. Clear the duplicate reference to fix this issue.", MessageType.Warning, true);
                 if (GUILayout.Button("Clear"))
                 {
-                    subScene.SceneAsset = null;
+                    duplicateSubScene.SceneAsset = null;
                     SceneHierarchyHooks.ReloadAllSceneHierarchies();
                 }
                 EditorGUILayout.Space();
+            }
+            else
+            {
+                bool isImportingClosedSubscenes = false;
+                DrawOpenSubScenes(_selectedSubscenes);
+                var loadableScenes = SubSceneInspectorUtility.GetLoadableScenes(_selectedSubscenes);
+                var tmpList = new List<SubScene>();
+                for (var i = 0; i < _selectedSubscenes.Length; i++)
+                {
+                    if (_selectedSubscenes[i].SceneGUID != default && !_selectedSubscenes[i].IsLoaded)
+                        tmpList.Add(_selectedSubscenes[i]);
+                }
+                var closedSubScenes = tmpList.ToArray();
+                if (DrawClosedSubScenes(loadableScenes, closedSubScenes))
+                {
+                    isImportingClosedSubscenes = true;
+                }
+
+                GUILayout.Space(EditorGUIUtility.singleLineHeight);
+                // Initial behaviour with conversion was to trigger an async import for the first target only if it didn't happen successfully before. Let's keep it for now
+                if (isImportingClosedSubscenes || !IsSubsceneImported(subScene, ImportMode.Asynchronous))
+                {
+                    GUILayout.Label(Content.ImportingLabel);
+                    Repaint();
+                }
             }
 
             var uncleanHierarchyObject = SubSceneInspectorUtility.GetUncleanHierarchyObject(_selectedSubscenes);
@@ -437,14 +447,6 @@ namespace Unity.Scenes.Editor
             if (SubSceneInspectorUtility.HasChildren(_selectedSubscenes))
             {
                 EditorGUILayout.HelpBox($"SubScenes can not have child game objects. Close the scene and delete the child game objects.", MessageType.Warning, true);
-            }
-
-            GUILayout.Space(EditorGUIUtility.singleLineHeight);
-            // Initial behaviour with conversion was to trigger an async import for the first target only if it didn't happen successfully before. Let's keep it for now
-            if (isImportingClosedSubscenes || !IsSubsceneImported(subScene, ImportMode.Asynchronous))
-            {
-                GUILayout.Label(Content.ImportingLabel);
-                Repaint();
             }
         }
 

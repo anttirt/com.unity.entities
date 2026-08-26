@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using JetBrains.Annotations;
 using Unity.Properties;
 using Unity.Entities.UI;
@@ -19,16 +18,16 @@ namespace Unity.Entities.Editor
     class SystemWindowDebugData
     {
         [CreateProperty, UsedImplicitly]
-        public int SystemTreeViewItemActiveInstanceCount => SystemTreeViewItem.Pool.ActiveInstanceCount;
+        public int SystemTreeViewItemActiveInstanceCount => SystemTreeViewItemData.Pool.CountActive;
 
-        [CreateProperty, UsedImplicitly] public int SystemTreeViewItemPoolSize => SystemTreeViewItem.Pool.PoolSize;
+        [CreateProperty, UsedImplicitly] public int SystemTreeViewItemPoolSize => SystemTreeViewItemData.Pool.CountAll;
 
         [CreateProperty, UsedImplicitly]
         public int SystemInformationVisualElementActiveInstanceCount =>
-            SystemInformationVisualElement.Pool.ActiveInstanceCount;
+            SystemInformationVisualElement.Pool.CountActive;
 
         [CreateProperty, UsedImplicitly]
-        public int SystemInformationVisualElementPoolSize => SystemInformationVisualElement.Pool.PoolSize;
+        public int SystemInformationVisualElementPoolSize => SystemInformationVisualElement.Pool.CountAll;
 
         [UsedImplicitly]
         class Inspector : PropertyInspector<SystemWindowDebugData>
@@ -144,9 +143,14 @@ namespace Unity.Entities.Editor
     [DisableAutoCreation]
     partial class SystemsWindowTestSystem : SystemBase
     {
+        public partial struct SystemsWindowTestJob : IJobEntity
+        {
+            public void Execute(in SceneTag g) { }
+        }
+
         protected override void OnUpdate()
         {
-            Entities.WithoutBurst().WithAll<SceneTag>().ForEach((in SceneTag g) => { }).Run();
+            new SystemsWindowTestJob().Run();
         }
 
         protected override void OnCreate()

@@ -11,7 +11,7 @@ However, Unity's entity component system (ECS) is designed so that it represents
 * **Authoring data** is any data that you create during the editing of your application, such a scripts, assets, or any other game-related data. This data type is flexible and readable: designed for humans to interact with.
 * **Runtime data** is the data that ECS processes at runtime, such as the data it processes when you enter Play mode. This data type is optimized for performance and storage efficiency: designed for computers to process.
 
-In the Editor, you can always check what kind of data type Unity is processing, through the data mode circles at the top of the Inspector and Hierarchy. For more information, refer to the documentation on [Working with authoring and runtime data](editor-authoring-runtime.md).
+The [Inspector](editor-entity-inspector.md) automatically shows the appropriate data based on your selection: selecting an entity displays runtime data, and selecting a GameObject displays authoring data.
 
 ## Baking process
 
@@ -66,6 +66,9 @@ This means that there might be discrepancies between baking a full scene, and in
 
 > [!NOTE]
 > There is variance in the output between incremental baking and full baking. The ordering of entities is different, as is the size of the entities. Because of this variance, the chunk layout isn't the same. You must make sure that this doesn't impact the user experience of your application.
+
+> [!NOTE]
+> Warnings do not prevent the baking process from succeeding. When entering play mode after a successful bake, if no changes requiring a re-bake have been made, any warnings generated during the subscene bake will not be emitted again.
 
 ## Additional resources
 

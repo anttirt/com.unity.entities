@@ -37,7 +37,9 @@ namespace Unity.Entities.Hybrid.EndToEnd.Tests
                 systems.AddRange(new[]
                 {
                     typeof(CompanionGameObjectUpdateSystem),
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     typeof(CompanionGameObjectUpdateTransformSystem),
+                    #pragma warning restore 0618
                     typeof(TransformSystemGroup) // empty but required to satisfy constraint
                 });
             }

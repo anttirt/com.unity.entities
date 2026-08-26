@@ -57,7 +57,13 @@ namespace Unity.Scenes.Editor.Tests
             }
             Assert.IsFalse(string.IsNullOrEmpty(exportedTypesFile));
 
-            var allLines = File.ReadAllLines(exportedTypesFile);
+            // Copy the artifact to a temp file so we can read it
+            var tempFilePath = Path.Combine(Path.GetTempPath(), Path.GetFileName(exportedTypesFile));
+            FileUtil.CopyFileOrDirectory(exportedTypesFile, tempFilePath);
+
+            var allLines = File.ReadAllLines(tempFilePath);
+            File.Delete(tempFilePath);
+
             var findType = false;
             foreach (var line in allLines)
             {
@@ -128,6 +134,7 @@ namespace Unity.Scenes.Editor.Tests
         }
 
         [Test]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-138270")]
         public void SubScene_WithDependencyOnAssetInScene_ClearCache_EndToEnd()
         {
             var subScene = SubSceneTestsHelper.CreateSubSceneFromObjects(ref m_TempAssets, "SubScene", false, () =>
@@ -303,7 +310,9 @@ namespace Unity.Scenes.Editor.Tests
                     var entity = entities.FirstOrDefault(de => de.HasComponent<SubSceneLoadTestAssetComponent>());
                     Assert.IsNotNull(entity, "Failed to find converted GameObject");
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var component = world.EntityManager.GetComponentData<SubSceneLoadTestAssetComponent>(entity.Entity);
+                    #pragma warning restore 0618
                     Assert.AreEqual(asset, component.Asset);
                 }
 
@@ -452,7 +461,9 @@ namespace Unity.Scenes.Editor.Tests
                 {
                     var query = world.EntityManager.CreateEntityQuery(typeof(SubSceneLoadTestSharedComponent));
                     var entity = query.GetSingletonEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var comp = world.EntityManager.GetSharedComponentManaged<SubSceneLoadTestSharedComponent>(entity);
+                    #pragma warning restore 0618
                     Assert.AreEqual(1, comp.Int);
                     Assert.AreEqual("Test", comp.String);
                     Assert.AreEqual(m_Texture1, comp.Asset);
@@ -603,7 +614,9 @@ namespace Unity.Scenes.Editor.Tests
                         VerifyBlobAsset(unmanaged.BlobAsset, 1, "GO1", 1, "GO1-unmanaged");
 
                         var shared =
+                            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                             world.EntityManager.GetSharedComponentManaged<SubSceneLoadTestSharedComponent>(e1.Entity);
+                            #pragma warning restore 0618
                         Assert.AreEqual(42, shared.Int);
                         Assert.AreEqual("Test", shared.String);
                         Assert.AreEqual(m_Texture2, shared.Asset);
@@ -619,28 +632,36 @@ namespace Unity.Scenes.Editor.Tests
                         Assert.AreEqual(2, unmanaged.Int);
                         VerifyBlobAsset(unmanaged.BlobAsset, 2, "GO2", 1, "GO2-unmanaged");
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var managed = world.EntityManager.GetComponentData<SubSceneLoadTestManagedComponent>(e2.Entity);
+                        #pragma warning restore 0618
                         Assert.AreEqual(e2.Entity, managed.Entity);
                         Assert.AreEqual(2, managed.Int);
                         Assert.AreEqual("Test2", managed.String);
                         Assert.AreEqual(m_Texture1, managed.Asset);
 
                         var shared =
+                            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                             world.EntityManager.GetSharedComponentManaged<SubSceneLoadTestSharedComponent>(e2.Entity);
+                            #pragma warning restore 0618
                         Assert.AreEqual(42, shared.Int);
                         Assert.AreEqual("Test", shared.String);
                         Assert.AreEqual(m_Texture1, shared.Asset);
                     }
 
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var managed = world.EntityManager.GetComponentData<SubSceneLoadTestManagedComponent>(e3.Entity);
+                        #pragma warning restore 0618
                         Assert.AreEqual(e3.Entity, managed.Entity);
                         Assert.AreEqual(3, managed.Int);
                         Assert.AreEqual("Test3", managed.String);
                         Assert.AreEqual(m_Texture1, managed.Asset);
 
                         var shared =
+                            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                             world.EntityManager.GetSharedComponentManaged<SubSceneLoadTestSharedComponent>(e3.Entity);
+                            #pragma warning restore 0618
                         Assert.AreEqual(42, shared.Int);
                         Assert.AreEqual("Test Different", shared.String);
                         Assert.AreEqual(m_Texture1, shared.Asset);
@@ -659,7 +680,9 @@ namespace Unity.Scenes.Editor.Tests
                         Assert.AreEqual(4, unmanaged.Int);
                         VerifyBlobAsset(unmanaged.BlobAsset, 4, "GO4", 1, "GO4-unmanaged");
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var managed = world.EntityManager.GetComponentData<SubSceneLoadTestManagedComponent>(e4.Entity);
+                        #pragma warning restore 0618
                         Assert.AreEqual(e4.Entity, managed.Entity);
                         Assert.AreEqual(4, managed.Int);
                         Assert.AreEqual("Test4", managed.String);

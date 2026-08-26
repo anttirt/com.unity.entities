@@ -1,12 +1,14 @@
 # Journaling
 
+[!include[](includes/journaling-deprecation.md)]
+
 You can use Journaling to record every action that you perform in your project to help you debug your project. You can use the Journaling window, or your IDE to inspect the data it collects. For example, it records creating or destroying worlds or entities, or adding or removing systems or components.
 
 ## Enable Journaling
 
 To enable Journaling, you can either:
 
-* Open the Journaling window **Window &gt; Entities &gt; Journaling**
+* Open the Journaling window **Window &gt; Entities &gt; Journaling (Deprecated)**
 * Enable the option through the [Preferences](https://docs.unity3d.com/Manual/Preferences.html) window (**Preferences &gt; Entities &gt; Journaling**).
 
 You can also use the preprocessor define `DISABLE_ENTITIES_JOURNALING` to remove all Journaling code from your projects, which can be useful for debugging your project.
@@ -17,9 +19,9 @@ To assign total memory to Journaling, adjust the value of the [Total Memory MB](
 
 The memory is assigned in MB. It's managed as a first in, first out system, which means that Unity overwrites the oldest Journaling records with the newest records when the memory is full. If you need to keep records for longer, increase the memory size to reduce overwrites.
 
-## Journaling window
+## Journaling window (deprecated)
 
-To open the Journaling window, go to **Window &gt; Entities &gt; Journaling**. When you open the window, it starts recording data. It records data in both Edit and Play mode. When you pause recording, the window displays the record types. You can select a record to inspect any systems, entities, or components associated with it. You can also use the search bar to quickly search for any records of interest.
+To open the Journaling window, go to **Window &gt; Entities &gt; Journaling (Deprecated)**. When you open the window, it starts recording data. It records data in both Edit and Play mode. When you pause recording, the window displays the record types. You can select a record to inspect any systems, entities, or components associated with it. You can also use the search bar to quickly search for any records of interest.
 
 ![The Journaling window](images/editor-journaling-window.png)<br/>_The Journaling window_
 

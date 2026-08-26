@@ -352,11 +352,7 @@ namespace Unity.Entities.Tests
         public void RunHashWriterParallelFor()
         {
             const int MAPSIZE = 100;
-#if UNITY_2022_2_14F1_OR_NEWER
             int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-            int maxThreadCount = JobsUtility.MaxJobThreadCount;
-#endif
             // Make sure that each iteration was called and the parallel write worked.
             NativeParallelHashMap<int, int> map = new NativeParallelHashMap<int, int>(MAPSIZE, World.UpdateAllocator.ToAllocator);
             // Tracks the threadIndex used for each job.
@@ -396,11 +392,7 @@ namespace Unity.Entities.Tests
         public void RunMultiHashWriterParallelFor()
         {
             const int MAPSIZE = 100;
-#if UNITY_2022_2_14F1_OR_NEWER
             int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-            int maxThreadCount = JobsUtility.MaxJobThreadCount;
-#endif
             // Make sure that each iteration was called and the parallel write worked.
             NativeParallelHashMap<int, int> map = new NativeParallelHashMap<int, int>(MAPSIZE, World.UpdateAllocator.ToAllocator);
             // Tracks the threadIndex used for each job.

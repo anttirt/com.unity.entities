@@ -2,11 +2,14 @@ using System;
 using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Entities.Serialization;
 using Unity.Scenes;
 using Unity.Scenes.Editor;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEditor.SceneManagement;
+using UnityEngine;
+using Hash128 = Unity.Entities.Hash128;
 
 namespace Unity.Scenes.Editor
 {
@@ -14,7 +17,6 @@ namespace Unity.Scenes.Editor
     [InitializeOnLoad]
     class GameObjectSceneMetaDataImporter : ScriptedImporter
     {
-        [Serializable]
         internal struct GameObjectSceneMetaData
         {
             public BlobString SceneName;
@@ -24,6 +26,7 @@ namespace Unity.Scenes.Editor
         static readonly int CurrentFileFormatVersion = 3;
         static Type GameObjectSceneMetaDataImporterType = null;
         const string k_Extension = "scenemeta";
+
 
         static GameObjectSceneMetaDataImporter()
         {
@@ -99,7 +102,6 @@ namespace Unity.Scenes.Editor
             var scene = EditorSceneManager.OpenScene(ctx.assetPath, OpenSceneMode.Additive);
             try
             {
-                var metaPath = ctx.GetOutputArtifactFilePath(k_Extension);
                 var subScenes = SubScene.AllSubScenes;
                 var sceneGuids = subScenes.Where(x => x.SceneGUID.IsValid).Select(x =>
                     {
@@ -116,8 +118,11 @@ namespace Unity.Scenes.Editor
 
                 builder.AllocateString(ref metaData.SceneName, scene.name);
                 builder.Construct(ref metaData.SubSceneGUIDs, sceneGuids);
-                BlobAssetReference<GameObjectSceneMetaData>.Write(builder, metaPath, CurrentFileFormatVersion);
+                using var memoryWriter = new MemoryBinaryWriter();
+                BlobAssetReference<GameObjectSceneMetaData>.Write(memoryWriter, builder, CurrentFileFormatVersion);
                 builder.Dispose();
+
+                ctx.SetOutputArtifactData(k_Extension, memoryWriter.GetContentAsNativeArray());
             }
             finally
             {

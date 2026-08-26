@@ -19,12 +19,12 @@ The following example code shows an ECB used in a parallel job:
 
 [!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_multi_threaded)]
 
-
 ## Multi playback
 
-If you call the `Playback` method more than once, it throws an exception. To avoid this, create an `EntityCommandBuffer` instance with the `PlaybackPolicy.MultiPlayback` option:
+> [!NOTE]
+> The `PlaybackPolicy` enum is obsolete and will be removed in a future release. To apply the same set of commands more than once, record them into a new `EntityCommandBuffer` for each playback.
 
-[!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_multi_playback)]
+If you call the `Playback` method more than once, it throws an exception. To avoid this, create an `EntityCommandBuffer` instance with the `PlaybackPolicy.MultiPlayback` option.
 
 You can use multi-playback if you want to repeatedly spawn a set of entities. To do this, create and configure a set of new entities with an `EntityCommandBuffer`, and then repeat playback to respawn another matching set of entities.
 

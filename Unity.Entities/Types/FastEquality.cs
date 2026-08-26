@@ -338,10 +338,10 @@ namespace Unity.Entities
 
             hash = Hash32(buffer.Ptr, buffer.Length);
 
-            if (unityObjectRefsSerializer.InstanceIDs.Length > 0)
+            if (unityObjectRefsSerializer.EntityIds.Length > 0)
             {
-                var objects = new List<UnityEngine.Object>(unityObjectRefsSerializer.InstanceIDs.Length);
-                Resources.InstanceIDToObjectList(unityObjectRefsSerializer.InstanceIDs.AsArray(), objects);
+                var objects = new List<UnityEngine.Object>(unityObjectRefsSerializer.EntityIds.Length);
+                Resources.EntityIdsToObjectList(unityObjectRefsSerializer.EntityIds.AsArray(), objects);
 
                 foreach (var obj in objects)
                 {

@@ -16,7 +16,7 @@ namespace Unity.Entities.Baking
     struct BakerJournalingEntry
     {
         [FieldOffset(0)] public int recordTypeInt;
-        [FieldOffset(4)] public int intValue;
+        [FieldOffset(4)] public EntityId intValue;
 #if UNITY_EDITOR
         [FieldOffset(4)] public GUID guidValue;
 #endif
@@ -31,9 +31,9 @@ namespace Unity.Entities.Baking
 
     struct ComponentBakeTrigger : IEquatable<ComponentBakeTrigger>
     {
-        public int AuthoringComponentId;
+        public EntityId AuthoringComponentId;
         public ComponentBakeReason BakeReason;
-        public int ReasonId;
+        public EntityId ReasonId;
         public Hash128 ReasonGuid;
         public TypeIndex BakingUnityTypeIndex;
 
@@ -106,8 +106,10 @@ namespace Unity.Entities.Baking
             Enabled = false;
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             lastJournalingRecordIndex = EntitiesJournaling.RecordIndex;
+#pragma warning restore 0618            
 #endif
             if (!Enabled)
                 return;
@@ -119,53 +121,53 @@ namespace Unity.Entities.Baking
                 return;
         }
 
-        public static void RecordGameObjectChanged(int instanceId)
+        public static void RecordGameObjectChanged(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.ChangedGameObjects, instanceId);
+            AddToJournaling(BakeRecordType.ChangedGameObjects, entityId);
         }
 
-        public static void RecordGameObjectNew(int instanceId)
+        public static void RecordGameObjectNew(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.NewGameObjects, instanceId);
+            AddToJournaling(BakeRecordType.NewGameObjects, entityId);
         }
 
-        public static void RecordGameObjectDestroyed(int instanceId)
+        public static void RecordGameObjectDestroyed(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.DestroyedGameObjects, instanceId);
+            AddToJournaling(BakeRecordType.DestroyedGameObjects, entityId);
         }
 
-        public static void RecordComponentNew(int instanceId)
+        public static void RecordComponentNew(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.NewComponents, instanceId);
+            AddToJournaling(BakeRecordType.NewComponents, entityId);
         }
 
-        public static void RecordComponentChanged(int instanceId)
+        public static void RecordComponentChanged(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.ChangedComponents, instanceId);
+            AddToJournaling(BakeRecordType.ChangedComponents, entityId);
         }
 
-        public static void RecordComponentDestroyed(int instanceId)
+        public static void RecordComponentDestroyed(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.DestroyedComponents, instanceId);
+            AddToJournaling(BakeRecordType.DestroyedComponents, entityId);
         }
 
-        public static void RecordAssetChanged(int instanceId)
+        public static void RecordAssetChanged(EntityId entityId)
         {
             if (!Enabled)
                 return;
-            AddToJournaling(BakeRecordType.ChangedAssets, instanceId);
+            AddToJournaling(BakeRecordType.ChangedAssets, entityId);
         }
 
 #if UNITY_EDITOR
@@ -177,7 +179,7 @@ namespace Unity.Entities.Baking
         }
 #endif
 
-        public static void RecordComponentBake(int componentId, ComponentBakeReason reason, int reasonId, TypeIndex unityTypeIndex)
+        public static void RecordComponentBake(EntityId componentId, ComponentBakeReason reason, EntityId reasonId, TypeIndex unityTypeIndex)
         {
             if (!Enabled)
                 return;
@@ -197,7 +199,7 @@ namespace Unity.Entities.Baking
         }
 
 #if UNITY_EDITOR
-        public static void RecordComponentBake(int componentId, ComponentBakeReason reason, GUID reasonGuid, TypeIndex unityTypeIndex)
+        public static void RecordComponentBake(EntityId componentId, ComponentBakeReason reason, GUID reasonGuid, TypeIndex unityTypeIndex)
         {
             if (!Enabled)
                 return;
@@ -208,7 +210,7 @@ namespace Unity.Entities.Baking
             {
                 AuthoringComponentId = componentId,
                 BakeReason = reason,
-                ReasonId = 0,
+                ReasonId = EntityId.None,
                 ReasonGuid = reasonGuid,
                 BakingUnityTypeIndex = unityTypeIndex
             };
@@ -216,7 +218,7 @@ namespace Unity.Entities.Baking
         }
 #endif
 
-        private static void AddToJournaling(BakeRecordType recordType, int value)
+        private static void AddToJournaling(BakeRecordType recordType, EntityId value)
         {
             var entry = new BakerJournalingEntry();
             entry.RecordType = recordType;
@@ -238,7 +240,8 @@ namespace Unity.Entities.Baking
 
         private static void AddToJournaling(BakerJournalingEntry entry)
         {
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             unsafe
             {
                 int entrySize = UnsafeUtility.SizeOf<BakerJournalingEntry>();
@@ -251,48 +254,49 @@ namespace Unity.Entities.Baking
                     data: UnsafeUtility.AddressOf(ref entry),
                     dataLength: entrySize);
             }
+#pragma warning restore 0618            
 #endif
         }
 
         public struct JournalBakingInfo : IDisposable
         {
-            public UnsafeParallelHashSet<int> ChangedGameObjects;
-            public UnsafeParallelHashSet<int> NewGameObjects;
-            public UnsafeParallelHashSet<int> DestroyedGameObjects;
+            public UnsafeParallelHashSet<EntityId> ChangedGameObjects;
+            public UnsafeParallelHashSet<EntityId> NewGameObjects;
+            public UnsafeParallelHashSet<EntityId> DestroyedGameObjects;
 
-            public UnsafeParallelHashSet<int> NewComponents;
-            public UnsafeParallelHashSet<int> ChangedComponents;
-            public UnsafeParallelHashSet<int> DestroyedComponents;
+            public UnsafeParallelHashSet<EntityId> NewComponents;
+            public UnsafeParallelHashSet<EntityId> ChangedComponents;
+            public UnsafeParallelHashSet<EntityId> DestroyedComponents;
 
-            public UnsafeParallelHashSet<int> ChangedAssets;
+            public UnsafeParallelHashSet<EntityId> ChangedAssets;
 
 #if UNITY_EDITOR
             public UnsafeParallelHashSet<GUID> ChangedAssetsOnDisk;
 #endif
 
             public UnsafeParallelHashMap<ComponentBakeTrigger, int> ComponentBakeTriggersCount;
-            public UnsafeParallelMultiHashMap<int, ComponentBakeTrigger> ComponentBakeTriggers;
+            public UnsafeParallelMultiHashMap<EntityId, ComponentBakeTrigger> ComponentBakeTriggers;
 
             bool isCreated;
 
             public JournalBakingInfo(Allocator allocator)
             {
-                ChangedGameObjects = new UnsafeParallelHashSet<int>(10, allocator);
-                NewGameObjects = new UnsafeParallelHashSet<int>(10, allocator);
-                DestroyedGameObjects = new UnsafeParallelHashSet<int>(10, allocator);
+                ChangedGameObjects = new UnsafeParallelHashSet<EntityId>(10, allocator);
+                NewGameObjects = new UnsafeParallelHashSet<EntityId>(10, allocator);
+                DestroyedGameObjects = new UnsafeParallelHashSet<EntityId>(10, allocator);
 
-                NewComponents = new UnsafeParallelHashSet<int>(10, allocator);
-                ChangedComponents = new UnsafeParallelHashSet<int>(10, allocator);
-                DestroyedComponents = new UnsafeParallelHashSet<int>(10, allocator);
+                NewComponents = new UnsafeParallelHashSet<EntityId>(10, allocator);
+                ChangedComponents = new UnsafeParallelHashSet<EntityId>(10, allocator);
+                DestroyedComponents = new UnsafeParallelHashSet<EntityId>(10, allocator);
 
-                ChangedAssets = new UnsafeParallelHashSet<int>(10, allocator);
+                ChangedAssets = new UnsafeParallelHashSet<EntityId>(10, allocator);
 
 #if UNITY_EDITOR
                 ChangedAssetsOnDisk = new UnsafeParallelHashSet<GUID>(10, allocator);
 #endif
 
                 ComponentBakeTriggersCount = new UnsafeParallelHashMap<ComponentBakeTrigger, int>(1024, allocator);
-                ComponentBakeTriggers = new UnsafeParallelMultiHashMap<int, ComponentBakeTrigger>(1024, allocator);
+                ComponentBakeTriggers = new UnsafeParallelMultiHashMap<EntityId, ComponentBakeTrigger>(1024, allocator);
 
                 isCreated = true;
             }
@@ -345,7 +349,8 @@ namespace Unity.Entities.Baking
         {
             JournalBakingInfo info = new JournalBakingInfo(Allocator.Persistent);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             unsafe
             {
                 // We want only baking records with an index that's greater than lastJournalingRecordIndex
@@ -403,6 +408,7 @@ namespace Unity.Entities.Baking
                     }
                 }
             }
+#pragma warning restore 0618            
 #endif
             return info;
         }
@@ -479,19 +485,19 @@ namespace Unity.Entities.Baking
                 sb.AppendLine($"------------------------------");
                 foreach (var authoringId in authoringIds)
                 {
-                    var obj = Resources.InstanceIDToObject(authoringId);
+                    var obj = Resources.EntityIdToObject(authoringId);
                     if (obj != null)
                     {
                         if (obj is GameObject go)
                         {
-                            sb.AppendLine($"GameObject: {go.name} ({go.GetInstanceID()})");
+                            sb.AppendLine($"GameObject: {go.name} ({go.GetEntityId()})");
                         }
 
                         if (obj is Component component)
                         {
                             sb.AppendLine($"Type: {component.GetType().Name}");
                             sb.AppendLine(
-                                $"GameObject: {component.gameObject.name} ({component.gameObject.GetInstanceID()})");
+                                $"GameObject: {component.gameObject.name} ({component.gameObject.GetEntityId()})");
                         }
                     }
                     else
@@ -499,7 +505,7 @@ namespace Unity.Entities.Baking
                         sb.AppendLine($"GameObject/Component: Not Available, possibly deleted ({authoringId})");
                     }
 
-                    sb.AppendLine($"InstanceID: {authoringId}");
+                    sb.AppendLine($"EntityId: {authoringId}");
                     sb.AppendLine("Why did I bake?:");
                     foreach (var trigger in bakerRecords.ComponentBakeTriggers.GetValuesForKey(authoringId))
                     {
@@ -577,7 +583,7 @@ namespace Unity.Entities.Baking
 #endif
                             case ComponentBakeReason.ActiveChanged:
                             {
-                                var gameObject = (GameObject) Resources.InstanceIDToObject(trigger.ReasonId);
+                                var gameObject = (GameObject) Resources.EntityIdToObject(trigger.ReasonId);
                                 if (gameObject != null)
                                 {
                                     sb.Append($"\tIsActive() Changed ({gameObject.name}, {trigger.ReasonId})");
@@ -591,7 +597,7 @@ namespace Unity.Entities.Baking
                             }
                             case ComponentBakeReason.UpdatePrefabInstance:
                             {
-                                var gameObject = (GameObject) Resources.InstanceIDToObject(trigger.ReasonId);
+                                var gameObject = (GameObject) Resources.EntityIdToObject(trigger.ReasonId);
                                 if (gameObject != null)
                                 {
                                     sb.Append(
@@ -618,26 +624,26 @@ namespace Unity.Entities.Baking
             Debug.Log(sb.ToString());
         }
 
-        static void WriteComponent(StringBuilder sb, int componentId)
+        static void WriteComponent(StringBuilder sb, EntityId componentId)
         {
-            var component = (Component) Resources.InstanceIDToObject(componentId);
+            var component = (Component) Resources.EntityIdToObject(componentId);
             sb.AppendLine($"Type: {component.GetType().Name}");
-            sb.AppendLine($"InstanceID: {componentId}");
-            sb.AppendLine($"GameObject: {component.gameObject.name} ({component.gameObject.GetInstanceID()})");
+            sb.AppendLine($"EntityId: {componentId}");
+            sb.AppendLine($"GameObject: {component.gameObject.name} ({component.gameObject.GetEntityId()})");
         }
 
-        static void WriteGameObject(ref GameObjectComponents gameObjectComponents, StringBuilder sb, int gameObjectId)
+        static void WriteGameObject(ref GameObjectComponents gameObjectComponents, StringBuilder sb, EntityId gameObjectId)
         {
-            var gameObject = (GameObject)Resources.InstanceIDToObject(gameObjectId);
+            var gameObject = (GameObject)Resources.EntityIdToObject(gameObjectId);
             sb.AppendLine($"Name: {gameObject.name}");
-            sb.AppendLine($"InstanceID: {gameObjectId}");
+            sb.AppendLine($"EntityId: {gameObjectId}");
             sb.AppendLine($"Scene: {gameObject.scene.name}");
 
             sb.AppendLine($"Components: ");
             foreach (var componentData in gameObjectComponents.GetComponents(gameObjectId))
             {
                 var typeInfo = TypeManager.GetTypeInfo(componentData.TypeIndex);
-                sb.AppendLine($"\t{typeInfo.Type.Name} ({componentData.InstanceID})");
+                sb.AppendLine($"\t{typeInfo.Type.Name} ({componentData.EntityId})");
             }
         }
 

@@ -12,6 +12,7 @@ namespace Unity.Entities.Editor.Tests
     sealed class IntegrateGameObjectChangesEnumeratorTests
     {
         HierarchyNodeStore m_HierarchyNodeStore;
+        HierarchyNameStore m_NameStore;
         SubSceneMap m_Mapping;
         HierarchyGameObjectChanges m_Changes;
 
@@ -20,6 +21,7 @@ namespace Unity.Entities.Editor.Tests
         {
             m_Mapping = new SubSceneMap();
             m_HierarchyNodeStore = new HierarchyNodeStore(Allocator.Persistent);
+            m_NameStore = new HierarchyNameStore(Allocator.Persistent);
             m_Changes = new HierarchyGameObjectChanges(Allocator.Persistent);
         }
 
@@ -27,6 +29,7 @@ namespace Unity.Entities.Editor.Tests
         public void TearDown()
         {
             m_HierarchyNodeStore.Dispose();
+            m_NameStore.Dispose();
             m_Mapping.Dispose();
             m_Changes.Dispose();
         }
@@ -38,9 +41,9 @@ namespace Unity.Entities.Editor.Tests
             var testGO = new GameObject();
             m_Changes.LoadedScenes.Add(testScene);
             m_Changes.UnloadedScenes.Add(testScene);
-            m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(testGO.GetInstanceID(), GameObjectChangeTrackerEventType.CreatedOrChanged));
+            m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(testGO.GetEntityId(), GameObjectChangeTrackerEventType.CreatedOrChanged));
 
-            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping, 10);
+            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping, m_NameStore, 10);
 
             Assert.That(iterator.CurrentStep, Is.EqualTo(Step.HandleUnloadedScenes));
             Assert.That(iterator.MoveNext(), Is.True);
@@ -73,13 +76,13 @@ namespace Unity.Entities.Editor.Tests
 
             if (hasGameObjectChanges)
             {
-                m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(testGO.GetInstanceID(), GameObjectChangeTrackerEventType.CreatedOrChanged));
+                m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(testGO.GetEntityId(), GameObjectChangeTrackerEventType.CreatedOrChanged));
                 expectedSteps.Add(Step.IntegrateChanges);
             }
 
             expectedSteps.Add(Step.Complete);
 
-            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping, 10);
+            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping, m_NameStore, 10);
             var steps = new List<Step>();
             while (true)
             {
@@ -97,10 +100,10 @@ namespace Unity.Entities.Editor.Tests
             for (var i = 0; i < 30; i++)
             {
                 var gameObject = new GameObject();
-                m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(gameObject.GetInstanceID(), GameObjectChangeTrackerEventType.CreatedOrChanged));
+                m_Changes.GameObjectChangeTrackerEvents.Add(new GameObjectChangeTrackerEvent(gameObject.GetEntityId(), GameObjectChangeTrackerEventType.CreatedOrChanged));
             }
 
-            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping,10);
+            var iterator = m_HierarchyNodeStore.CreateIntegrateGameObjectChangesEnumerator(m_Changes, m_Mapping, m_NameStore,10);
             Assert.That(iterator.CurrentStep, Is.EqualTo(Step.HandleLoadedScenes));
             Assert.That(iterator.MoveNext(), Is.True);
             Assert.That(iterator.CurrentStep, Is.EqualTo(Step.IntegrateChanges));

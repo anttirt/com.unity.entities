@@ -165,6 +165,9 @@ namespace Unity.Transforms
                 .WithAll<LocalTransform>()
                 .WithAllRW<LocalToWorld>()
                 .WithNone<Parent>()
+#if ENABLE_TRANSFORMREF
+                .WithNone<TransformRef>()
+#endif
                 .WithOptions(EntityQueryOptions.FilterWriteGroup);
             _worldSpaceQuery = state.GetEntityQuery(builder);
             // Ideally we'd use a change-version filter on worldSpaceQuery, but we need to process chunks with PostTransformMatrix,
@@ -173,13 +176,21 @@ namespace Unity.Transforms
             builder = new EntityQueryBuilder(Allocator.Temp)
                 .WithAll<LocalTransform, Child>()
                 .WithAllRW<LocalToWorld>()
-                .WithNone<Parent>();
+                .WithNone<Parent>()
+#if ENABLE_TRANSFORMREF
+                .WithNone<TransformRef>()
+#endif
+                ;
             _hierarchyRootsQuery = state.GetEntityQuery(builder);
 
             builder = new EntityQueryBuilder(Allocator.Temp)
                 .WithAll<LocalTransform, Parent>()
                 .WithAllRW<LocalToWorld>()
-                .WithOptions(EntityQueryOptions.FilterWriteGroup);
+                .WithOptions(EntityQueryOptions.FilterWriteGroup)
+#if ENABLE_TRANSFORMREF
+                .WithNone<TransformRef>()
+#endif
+                ;
             _localToWorldWriteGroupMask = state.GetEntityQuery(builder).GetEntityQueryMask();
 
             _localTransformTypeHandleRO = state.GetComponentTypeHandle<LocalTransform>(true);

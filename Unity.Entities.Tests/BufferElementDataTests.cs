@@ -834,7 +834,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i != 10; i++)
             {
                 var original = m_Manager.CreateEntity(typeof(EcsIntElement));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(original, new SharedData1(i));
+                #pragma warning restore 0618
                 var buffer = m_Manager.GetBuffer<EcsIntElement>(original);
                 buffer.Add(5);
             }
@@ -883,7 +885,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i != 10; i++)
             {
                 var original = m_Manager.CreateEntity(typeof(EcsIntElement));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(original, new SharedData1(i));
+                #pragma warning restore 0618
                 var buffer = m_Manager.GetBuffer<EcsIntElement>(original);
                 buffer.Add(5);
             }

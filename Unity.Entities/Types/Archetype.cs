@@ -8,19 +8,21 @@ namespace Unity.Entities
     [Flags]
     internal enum ArchetypeFlags : ushort
     {
-        CleanupComplete = 1,
-        CleanupNeeded = 2,
-        Disabled = 4,
-        Prefab = 8,
-        HasChunkHeader = 16,
-        HasBlobAssetRefs = 32,
-        HasCompanionComponents = 64,
-        HasBufferComponents = 128,
-        HasManagedComponents = 256,
-        HasManagedEntityRefs = 512,
-        HasWeakAssetRefs = 1024,
-        HasSystemInstanceComponents = 2048,
-        HasUnityObjectRefs = 4096,
+        CleanupComplete     = 1 << 0,
+        CleanupNeeded       = 1 << 1,
+        Disabled            = 1 << 2,
+        Prefab              = 1 << 3,
+        HasChunkHeader      = 1 << 4,
+        HasBlobAssetRefs    = 1 << 5,
+        HasCompanionComponents = 1 << 6,
+        HasBufferComponents = 1 << 7,
+        HasManagedComponents = 1 << 8,
+        HasManagedEntityRefs = 1 << 9,
+        HasWeakAssetRefs    = 1 << 10,
+        HasSystemInstanceComponents = 1 << 11,
+        HasUnityObjectRefs  = 1 << 12,
+        HasOnAddedCallbacks = 1 << 13,
+        HasOnRemovedCallbacks = 1 << 14
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -103,6 +105,8 @@ namespace Unity.Entities
         public bool HasWeakAssetRefs => (Flags & ArchetypeFlags.HasWeakAssetRefs) != 0;
         public bool HasUnityObjectRefs => (Flags & ArchetypeFlags.HasUnityObjectRefs) != 0;
         public bool HasSystemInstanceComponents => (Flags & ArchetypeFlags.HasSystemInstanceComponents) != 0;
+        public bool HasOnAddedCallbacks => (Flags & ArchetypeFlags.HasOnAddedCallbacks) != 0;
+        public bool HasOnRemovedCallbacks => (Flags & ArchetypeFlags.HasOnRemovedCallbacks) != 0;
 
         public int NumNativeComponentData => FirstBufferComponent - 1;
         public int NumBufferComponents => FirstManagedComponent - FirstBufferComponent;

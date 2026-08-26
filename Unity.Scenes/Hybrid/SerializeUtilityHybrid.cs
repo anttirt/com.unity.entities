@@ -116,18 +116,18 @@ namespace Unity.Scenes
             }
 #else
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-            NativeArray<int> newGameObjects = new NativeArray<int>(objRefs.CompanionObjectIndices.Length, Allocator.Temp);
-            NativeHashMap<int, int> sourceInstanceIDToNewIndex = new NativeHashMap<int, int>(objRefs.CompanionObjectIndices.Length, Allocator.Temp);
+            NativeArray<EntityId> newGameObjects = new NativeArray<EntityId>(objRefs.CompanionObjectIndices.Length, Allocator.Temp);
+            NativeHashMap<EntityId, int> sourceInstanceIDToNewIndex = new NativeHashMap<EntityId, int>(objRefs.CompanionObjectIndices.Length, Allocator.Temp);
             UnityEngine.GameObject[] newGameObjectsArray = new GameObject[objRefs.CompanionObjectIndices.Length];
 
             for (int i = 0; i < objRefs.CompanionObjectIndices.Length; i++)
             {
                 var companionIndex = objRefs.CompanionObjectIndices[i];
                 var source = (UnityEngine.GameObject)objectReferences[companionIndex];
-                var sourceInstanceId = source.GetInstanceID();
+                var sourceInstanceId = source.GetEntityId();
 
                 var newGameObject = UnityEngine.Object.Instantiate(source);
-                var newGameObjectInstanceId = newGameObject.GetInstanceID();
+                var newGameObjectInstanceId = newGameObject.GetEntityId();
                 objectReferences[companionIndex] = newGameObject;
                 newGameObjects[i] = newGameObjectInstanceId;
                 newGameObjectsArray[i] = newGameObject;
@@ -139,7 +139,7 @@ namespace Unity.Scenes
             {
                 if (objectReferences[i] is UnityEngine.Component component)
                 {
-                    if (sourceInstanceIDToNewIndex.TryGetValue(component.gameObject.GetInstanceID(),
+                    if (sourceInstanceIDToNewIndex.TryGetValue(component.gameObject.GetEntityId(),
                             out var newGameObjectIndex))
                     {
                         var newGameObject = newGameObjectsArray[newGameObjectIndex];

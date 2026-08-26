@@ -45,6 +45,33 @@ Because the example modifies the `LocalTransform` data, it's wrapped inside `Ref
 
 Note that the `Entity` argument comes last in the returned tuple.
 
+## Filter the query
+
+You can chain additional methods onto `SystemAPI.Query` to filter or refine which entities match. The following methods are available:
+
+| **Method** | **Description** |
+|---|---|
+| `WithAll<T>` | Requires components that must be present and enabled. |
+| `WithAny<T>` | Requires at least one of the specified components to be present and enabled. |
+| `WithNone<T>` | Excludes entities that have the specified component present and enabled. The query still matches entities where the component is absent or disabled. |
+| `WithDisabled<T>` | Requires [enableable components](components-enableable.md) that must be present and disabled. |
+| `WithPresent<T>` | Requires components that must be present, whether or not they're enabled. Use this for [enableable components](components-enableable.md) when you want to match entities regardless of each component's enabled state. |
+| `WithAbsent<T>` | Excludes entities that have the specified component, regardless of whether it's enabled or disabled. |
+| `WithChangeFilter<T>` | Only matches entities in chunks where the specified component has potentially changed since the last time the system ran. |
+| `WithOptions` | Specifies additional [`EntityQueryOptions`](xref:Unity.Entities.EntityQueryOptions) for the query. |
+| `WithSharedComponentFilter<T>` | Filters entities by a specific unmanaged [shared component](components-shared.md) value. |
+| `WithSharedComponentFilterManaged<T>` | Filters entities by a specific managed [shared component](components-shared.md) value. |
+| `WithEntityAccess` | Includes the `Entity` reference in the returned tuple. |
+
+Most filter methods accept up to three type parameters. `WithEntityAccess` and `WithOptions` don't take type parameters. To add more component types, chain multiple calls together. For example:
+
+```csharp
+foreach (var transform in SystemAPI.Query<RefRW<LocalTransform>>()
+    .WithAll<RotationSpeed>()
+    .WithPresent<MyEnableableTag>()
+    .WithNone<Disabled>())
+```
+
 ## Known limitations
 
 `SystemAPI.Query` has the following limitations, which are outlined below.

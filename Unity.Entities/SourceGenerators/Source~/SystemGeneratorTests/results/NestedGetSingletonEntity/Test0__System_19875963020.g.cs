@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -16,6 +17,7 @@ public unsafe partial struct NestedGetSingletonEntity : global::Unity.Entities.I
         #line hidden
     }
 
+    #pragma warning disable 0618
     
     TypeHandle __TypeHandle;
     struct TypeHandle
@@ -40,4 +42,5 @@ public unsafe partial struct NestedGetSingletonEntity : global::Unity.Entities.I
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

@@ -43,7 +43,7 @@ namespace Unity.Entities.Tests.Conversion
             };
 
             Assert.That(guids, Is.Unique);
-            Assert.That(guids.Select(g => g.OriginatingId), Is.All.EqualTo(go.GetInstanceID()));
+            Assert.That(guids.Select(g => g.OriginatingEntityId), Is.All.EqualTo(go.GetEntityId()));
         }
 
         [Test]

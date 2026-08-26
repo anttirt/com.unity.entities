@@ -30,7 +30,9 @@ namespace Unity.Entities.Tests
                     IntValue = authoring.IntValue
                 });
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, new TestComponentAuthoring.ManagedTestComponent
+                #pragma warning restore 0618
                 {
                     Material = authoring.Material
                 });

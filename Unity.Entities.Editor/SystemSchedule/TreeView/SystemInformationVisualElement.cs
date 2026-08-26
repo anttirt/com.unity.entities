@@ -1,19 +1,19 @@
-using System;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
 {
     class SystemInformationVisualElement : BindableElement, IBinding
     {
-        internal static readonly BasicPool<SystemInformationVisualElement> Pool = new BasicPool<SystemInformationVisualElement>(() => new SystemInformationVisualElement());
+        internal static readonly ObjectPool<SystemInformationVisualElement> Pool = new ObjectPool<SystemInformationVisualElement>(() => new SystemInformationVisualElement());
 
-        SystemTreeViewItem m_Target;
+        SystemTreeViewItemData m_Target;
         public SystemTreeView TreeView { get; set; }
-        const float k_SystemNameLabelWidth = 100f;
+        const float k_SystemNameLabelWidth = 200f;
         const float k_SingleIndentWidth = 15f;
         const string k_UnityTreeViewItemIndentsName = "unity-tree-view__item-indents";
 
-        public SystemTreeViewItem Target
+        public SystemTreeViewItemData Target
         {
             get => m_Target;
             set
@@ -25,18 +25,12 @@ namespace Unity.Entities.Editor
             }
         }
 
+        public int IndexInTreeView { get; set; }
+
         readonly VisualElement m_SystemEnableToggleContainer;
         readonly Toggle m_SystemEnableToggle;
         readonly VisualElement m_Icon;
         readonly Label m_SystemNameLabel;
-        readonly Label m_WorldNameLabel;
-        readonly Label m_NamespaceLabel;
-        readonly Label m_EntityCountLabel;
-        readonly Label m_RunningTimeLabel;
-        readonly VisualElement m_WorldNameColumn;
-        readonly VisualElement m_NamespaceColumn;
-        readonly VisualElement m_EntityCountColumn;
-        readonly VisualElement m_TimeColumn;
 
         SystemInformationVisualElement()
         {
@@ -48,27 +42,21 @@ namespace Unity.Entities.Editor
 
             AddToClassList(UssClasses.DotsEditorCommon.CommonResources);
 
-            m_SystemEnableToggleContainer = this.Q(className: UssClasses.SystemScheduleWindow.Items.EnabledContainer);
-            m_SystemEnableToggle = this.Q<Toggle>(className: UssClasses.SystemScheduleWindow.Items.StateToggle);
+            m_SystemEnableToggleContainer = new VisualElement();
+            m_SystemEnableToggleContainer.AddToClassList(UssClasses.SystemScheduleWindow.Items.EnabledContainer);
+            m_SystemEnableToggle = new Toggle();
+            m_SystemEnableToggle.AddToClassList(UssClasses.SystemScheduleWindow.Items.StateToggle);
+            m_SystemEnableToggleContainer.Add(m_SystemEnableToggle);
             m_SystemEnableToggle.RegisterValueChangedCallback(OnSystemTogglePress);
 
             m_Icon = this.Q(className: UssClasses.SystemScheduleWindow.Items.Icon);
 
             m_SystemNameLabel = this.Q<Label>(className: UssClasses.SystemScheduleWindow.Items.SystemName);
-            m_WorldNameLabel = this.Q<Label>(className: UssClasses.SystemScheduleWindow.Items.WorldName);
-            m_NamespaceLabel = this.Q<Label>(className: UssClasses.SystemScheduleWindow.Items.Namespace);
-            m_EntityCountLabel = this.Q<Label>(className: UssClasses.SystemScheduleWindow.Items.Matches);
-            m_RunningTimeLabel = this.Q<Label>(className: UssClasses.SystemScheduleWindow.Items.Time);
-
-            m_WorldNameColumn = this.Q(className: UssClasses.SystemScheduleWindow.Items.WorldNameColumn);
-            m_NamespaceColumn = this.Q(className: UssClasses.SystemScheduleWindow.Items.NamespaceColumn);
-            m_EntityCountColumn = this.Q(className: UssClasses.SystemScheduleWindow.Items.EntityCountColumn);
-            m_TimeColumn = this.Q(className: UssClasses.SystemScheduleWindow.Items.TimeColumn);
         }
 
         public static SystemInformationVisualElement Acquire(SystemTreeView treeView)
         {
-            var item = Pool.Acquire();
+            var item = Pool.Get();
 
             item.TreeView = treeView;
             return item;
@@ -95,48 +83,13 @@ namespace Unity.Entities.Editor
             if (Target.SystemProxy.Valid && Target.SystemProxy.World == null)
                 return;
 
-            InsertSystemToggle();
+            // Insert system toggle above the system information visual element
+            var itemRoot = parent?.parent;
+            itemRoot.Insert(0, m_SystemEnableToggleContainer);
 
             m_Icon.style.display = string.Empty == GetSystemClass(Target.SystemProxy) ? DisplayStyle.None : DisplayStyle.Flex;
             SetText(m_SystemNameLabel, Target.GetSystemName());
             SetSystemNameLabelWidth(m_SystemNameLabel);
-
-            // world name column
-            var worldName = Target.GetWorldName();
-            SetText(m_WorldNameLabel, worldName);
-            m_WorldNameColumn.SetVisibility(TreeView.ShowWorldColumn);
-
-            // namespace column
-            var namespaceString = Target.GetNamespace();
-            SetText(m_NamespaceLabel, namespaceString);
-            m_NamespaceColumn.SetVisibility(TreeView.ShowNamespaceColumn);
-
-            // entity count column
-            var entityCount = Target.GetEntityMatches();
-            SetText(m_EntityCountLabel, entityCount);
-            m_EntityCountColumn.SetVisibility(TreeView.ShowEntityCountColumn);
-            if (!TreeView.Show0sInEntityCountAndTimeColumn && entityCount.Equals("0"))
-            {
-                m_EntityCountLabel.Hide();
-            }
-            else
-            {
-                m_EntityCountLabel.Show();
-            }
-
-            // runtime column
-            var runningTime = Target.GetRunningTime(TreeView.ShowMorePrecisionForRunningTime);
-            SetText(m_RunningTimeLabel, runningTime);
-            m_TimeColumn.SetVisibility(TreeView.ShowTimeColumn);
-            if (!TreeView.Show0sInEntityCountAndTimeColumn &&
-                (runningTime.Equals("0.00") || runningTime.Equals("0.0000")))
-            {
-                m_RunningTimeLabel.Hide();
-            }
-            else
-            {
-                m_RunningTimeLabel.Show();
-            }
 
             SetSystemClass(m_Icon, Target.SystemProxy);
             SetGroupNodeLabelBold(m_SystemNameLabel, Target.SystemProxy);
@@ -163,25 +116,6 @@ namespace Unity.Entities.Editor
                 var groupState = systemState && Target.GetParentState();
                 m_SystemEnableToggle.SetEnabled(true);
                 m_SystemNameLabel.SetEnabled(groupState);
-                m_WorldNameLabel.SetEnabled(groupState);
-                m_NamespaceLabel.SetEnabled(groupState);
-                m_EntityCountLabel.SetEnabled(groupState);
-                m_RunningTimeLabel.SetEnabled(groupState);
-            }
-        }
-
-        void InsertSystemToggle()
-        {
-            var itemRoot = parent?.parent;
-
-            switch (TreeView.SearchFilter.IsEmpty)
-            {
-                case true when itemRoot != null && itemRoot.IndexOf(m_SystemEnableToggleContainer) == -1:
-                    itemRoot.Insert(0, m_SystemEnableToggleContainer);
-                    break;
-                case false when !Contains(m_SystemEnableToggleContainer):
-                    this.Q(classes: UssClasses.SystemScheduleWindow.Items.SystemNameColumn)?.Insert(0, m_SystemEnableToggleContainer);
-                    break;
             }
         }
 
@@ -189,15 +123,15 @@ namespace Unity.Entities.Editor
         {
             switch (Target.GetSystemToggleState())
             {
-                case SystemTreeViewItem.SystemToggleState.Disabled:
+                case SystemTreeViewItemData.SystemToggleState.Disabled:
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleEnabled, false);
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleMixed, false);
                     break;
-                case SystemTreeViewItem.SystemToggleState.Mixed:
+                case SystemTreeViewItemData.SystemToggleState.Mixed:
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleEnabled, false);
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleMixed, true);
                     break;
-                case SystemTreeViewItem.SystemToggleState.AllEnabled:
+                case SystemTreeViewItemData.SystemToggleState.AllEnabled:
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleEnabled, true);
                     m_SystemEnableToggle.EnableInClassList(UssClasses.SystemScheduleWindow.Items.SystemToggleMixed, false);
                     break;
@@ -283,9 +217,9 @@ namespace Unity.Entities.Editor
             // Update to reflect the toggle state right away in the UI.
             Update();
 
-#if !UNITY_2023_2_OR_NEWER
-            evt.PreventDefault();
-#endif
+            // Refresh all items currently being displayed, so we can update children of a group being disabled for example
+            TreeView.MultiColumnTreeViewElement.RefreshItems();
+
             evt.StopPropagation();
         }
 

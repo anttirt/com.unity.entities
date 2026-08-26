@@ -430,7 +430,8 @@ namespace Unity.Entities
             // TODO: Find other systems of same type in creation order, restore type lookup. Needed?
             _unmanagedSlotByTypeHash.Remove(typeHash, sysHandle.m_Handle);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (EntitiesJournaling.Enabled)
             {
                 EntitiesJournaling.AddRecord(
@@ -442,6 +443,7 @@ namespace Unity.Entities
                     data: &sysHandle,
                     dataLength: sizeof(SystemHandle));
             }
+#pragma warning restore 0618
 #endif
 
             // Invalidate the slot so handles no longer resolve, but don't free the storage yet
@@ -482,7 +484,8 @@ namespace Unity.Entities
             _unmanagedSlotByTypeHash.Add(typeHash, handle);
             m_SystemStatePtrMap.Add(statePtr->m_SystemID, (IntPtr)statePtr);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (EntitiesJournaling.Enabled)
             {
                 EntitiesJournaling.AddRecord(
@@ -494,6 +497,7 @@ namespace Unity.Entities
                     data: &systemHandle,
                     dataLength: sizeof(SystemHandle));
             }
+#pragma warning restore 0618
 #endif
 
             if (callOnCreate)
@@ -510,8 +514,15 @@ namespace Unity.Entities
 
         Entity CreateSystemEntity(World self, int typeIndex, SystemState* statePtr)
         {
-            var systemComponent = ComponentType.ReadWrite<SystemInstance>();
-            Entity systemEntity = self.EntityManager.CreateEntity(self.EntityManager.CreateArchetype(&systemComponent, 1));
+#if UNITY_EDITOR            
+            var componentTypes = new NativeArray<ComponentType>(2, Allocator.Temp);
+            componentTypes[0] = ComponentType.ReadWrite<SystemInstance>();
+            componentTypes[1] = ComponentType.ReadWrite<HideInHierarchy>();
+#else
+            var componentTypes = new NativeArray<ComponentType>(1, Allocator.Temp);
+            componentTypes[0] = ComponentType.ReadWrite<SystemInstance>();
+#endif
+            Entity systemEntity = self.EntityManager.CreateEntity(self.EntityManager.CreateArchetype(componentTypes));
             FixedString64Bytes systemName = default;
             systemName.CopyFromTruncated(TypeManager.GetSystemName(typeIndex));
             self.EntityManager.SetName(systemEntity, systemName);
@@ -536,7 +547,8 @@ namespace Unity.Entities
             m_SystemStatePtrMap.Add(statePtr->m_SystemID, (IntPtr) statePtr);
             ++Version;
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (EntitiesJournaling.Enabled)
             {
                 EntitiesJournaling.AddRecord(
@@ -548,6 +560,7 @@ namespace Unity.Entities
                     data: &safeHandle,
                     dataLength: sizeof(SystemHandle));
             }
+#pragma warning restore 0618
 #endif
 
             return statePtr;
@@ -569,8 +582,10 @@ namespace Unity.Entities
 #if ENABLE_PROFILER
             EntitiesProfiler.OnSystemCreated(TypeManager.GetSystemTypeIndex<T>(), in systemHandle);
 #endif
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             EntitiesJournaling.OnSystemCreated(TypeManager.GetSystemTypeIndex<T>(), in systemHandle);
+#pragma warning restore 0618
 #endif
 
             return systemHandle;
@@ -594,8 +609,10 @@ namespace Unity.Entities
 #if ENABLE_PROFILER
             EntitiesProfiler.OnSystemCreated(t, in untypedHandle);
 #endif
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             EntitiesJournaling.OnSystemCreated(t, in untypedHandle);
+#pragma warning restore 0618
 #endif
 
             return untypedHandle;
@@ -650,10 +667,9 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// Retrieves the SystemHandle for the system of the specified SystemTypeIndex, creating the system if it does not already exist.
-        /// The system in question must be unmanaed, i.e. be an unmanaged struct implementing ISystem. 
+        /// Retrieves the SystemHandle for the specified SystemTypeIndex, creating the unmanaged system if it does not already exist.
         /// </summary>
-        /// <param name="t">The SystemTypeIndex of the desired system.</param>
+        /// <param name="t">The SystemTypeIndex.</param>
         /// <returns>A SystemHandle.</returns>
         /// <remarks>In the case that the specified system is created, the system's OnCreate will be called automatically.</remarks>
         [ExcludeFromBurstCompatTesting("Uses managed World")]
@@ -956,7 +972,7 @@ namespace Unity.Entities
     /// collections checks), because it is intended to be cheaply passed around by value.
     /// </remarks>
     [GenerateTestsForBurstCompatibility]
-    public unsafe struct WorldUnmanaged
+    public unsafe struct WorldUnmanaged : IEquatable<WorldUnmanaged>, IComparable<WorldUnmanaged>
     {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
         private AtomicSafetyHandle m_Safety;
@@ -1217,7 +1233,7 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// Gets the SystemTypeIndex for the system corresponding to the provided SystemHandle.
+        /// Gets the SystemTypeIndex for the specified SystemHandle.
         /// </summary>
         /// <param name="SystemHandle">The SystemHandle</param>
         /// <returns>A SystemTypeIndex</returns>
@@ -1341,5 +1357,40 @@ namespace Unity.Entities
             executingSystem = impl.ExecutingSystem;
         }
 #endif
+        public override bool Equals(object compare)
+        {
+            return compare is WorldUnmanaged compareWorld && Equals(compareWorld);
+        }
+        
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hashCode = SequenceNumber.GetHashCode();
+                hashCode = (hashCode * 397) ^ Version;
+                return hashCode;
+            }
+        }        
+        
+        public bool Equals(WorldUnmanaged world)
+        {
+            return world.SequenceNumber == SequenceNumber && world.Version == Version;
+        }
+
+        public int CompareTo(WorldUnmanaged other)
+        {
+            var compareVal = SequenceNumber.CompareTo(other.SequenceNumber);
+            return compareVal != 0 ? compareVal : Version.CompareTo(other.Version);
+        }
+        
+        public static bool operator==(WorldUnmanaged lhs, WorldUnmanaged rhs)
+        {
+            return lhs.SequenceNumber == rhs.SequenceNumber && lhs.Version == rhs.Version;
+        }
+        
+        public static bool operator!=(WorldUnmanaged lhs, WorldUnmanaged rhs)
+        {
+            return !(lhs == rhs);
+        }        
     }
 }

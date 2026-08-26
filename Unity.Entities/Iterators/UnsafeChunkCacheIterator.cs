@@ -81,12 +81,10 @@ namespace Unity.Entities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNextChunk(ref int chunkIndexInCache, out ArchetypeChunk outputChunk, out int outputChunkEntityCount, out byte outputUseEnableBits, ref v128 enableBits)
         {
-#if UNITY_BURST_EXPERIMENTAL_PREFETCH_INTRINSIC
             if (Hint.Likely(chunkIndexInCache + 1 < Length))
             {
                 Common.Prefetch(&EntityComponentStore.PerChunkArray.ChunkData[_Chunks[chunkIndexInCache + 1]], Common.ReadWrite.Read);
             }
-#endif
 
             chunkIndexInCache++;
             while (chunkIndexInCache < Length)

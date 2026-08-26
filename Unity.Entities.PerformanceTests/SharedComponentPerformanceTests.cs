@@ -8,6 +8,7 @@ namespace Unity.Entities.PerformanceTests
     [Category("Performance")]
     public sealed class SharedComponentPerformanceTests : EntityPerformanceTestFixture
     {
+        #pragma warning disable EA0017 // intentionally a managed shared component
         struct TestSharedManaged : ISharedComponentData, IEquatable<TestSharedManaged>
         {
             public int value;
@@ -28,6 +29,7 @@ namespace Unity.Entities.PerformanceTests
                 return HashCode.Combine(value, name);
             }
         }
+        #pragma warning restore EA0017
 
         struct TestShared1 : ISharedComponentData
         {
@@ -64,8 +66,10 @@ namespace Unity.Entities.PerformanceTests
             {
                 for (int i = 0; i < entities.Length; ++i)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities[i], new TestShared1 {value = i & 0x003F});
                     m_Manager.SetSharedComponentManaged(entities[i], new TestShared2 {value = i & 0x0FC0});
+                    #pragma warning restore 0618
                 }
             })
                 .SetUp(() =>
@@ -103,8 +107,10 @@ namespace Unity.Entities.PerformanceTests
                     m_Manager.CreateEntity(archetype, entities);
                     for (int i = 0; i < entities.Length; ++i)
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         m_Manager.SetSharedComponentManaged(entities[i], new TestShared1 {value = i & 0x003F});
                         m_Manager.SetSharedComponentManaged(entities[i], new TestShared2 {value = i & 0x0FC0});
+                        #pragma warning restore 0618
                     }
                 })
                 .CleanUp(() =>
@@ -166,7 +172,9 @@ namespace Unity.Entities.PerformanceTests
                 {
                     for (int i = 0; i < entities.Length; ++i)
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         m_Manager.AddSharedComponentManaged(entities[i], new TestSharedManaged{value=17,name="Bob"});
+                        #pragma warning restore 0618
                     }
                 })
                 .SetUp(() =>
@@ -184,7 +192,9 @@ namespace Unity.Entities.PerformanceTests
 
             Measure.Method(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.AddSharedComponentManaged(entities, new TestSharedManaged { value = 17,name="Bob" });
+                    #pragma warning restore 0618
                 })
                 .SetUp(() =>
                 {
@@ -277,12 +287,16 @@ namespace Unity.Entities.PerformanceTests
                 {
                     for (int i = 0; i < entities.Length; ++i)
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         m_Manager.SetSharedComponentManaged(entities[i], new TestSharedManaged{value=17,name="Bob"});
+                        #pragma warning restore 0618
                     }
                 })
                 .CleanUp(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities, default(TestSharedManaged));
+                    #pragma warning restore 0618
                 })
                 .WarmupCount(1)
                 .MeasurementCount(100)
@@ -291,11 +305,15 @@ namespace Unity.Entities.PerformanceTests
 
             Measure.Method(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities, new TestSharedManaged { value = 17,name="Bob" });
+                    #pragma warning restore 0618
                 })
                 .CleanUp(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities, default(TestSharedManaged));
+                    #pragma warning restore 0618
                 })
                 .WarmupCount(1)
                 .MeasurementCount(100)
@@ -305,7 +323,9 @@ namespace Unity.Entities.PerformanceTests
             Measure.Method(() =>
                 {
                     for(int i=0; i<chunks.Length; ++i)
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         m_Manager.SetSharedComponentManaged(chunks[i], new TestSharedManaged { value = 17, name="Bob" });
+                        #pragma warning restore 0618
                 })
                 .SetUp(() =>
                 {
@@ -314,7 +334,9 @@ namespace Unity.Entities.PerformanceTests
                 .CleanUp(() =>
                 {
                     for(int i=0; i<chunks.Length; ++i)
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         m_Manager.SetSharedComponentManaged(chunks[i], default(TestSharedManaged));
+                        #pragma warning restore 0618
                     chunks.Dispose();
                 })
                 .WarmupCount(1)
@@ -324,11 +346,15 @@ namespace Unity.Entities.PerformanceTests
 
             Measure.Method(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(query, new TestSharedManaged { value = 17, name="Bob" });
+                    #pragma warning restore 0618
                 })
                 .CleanUp(() =>
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(query, default(TestSharedManaged));
+                    #pragma warning restore 0618
                 })
                 .WarmupCount(1)
                 .MeasurementCount(100)

@@ -128,15 +128,15 @@ namespace Unity.Entities
         /// Implements system update semantics similar to [UnityEngine.MonoBehaviour.FixedUpdate](https://docs.unity3d.com/ScriptReference/MonoBehaviour.FixedUpdate.html).
         /// </summary>
         /// <remarks>When this mode is enabled on a group, the group updates exactly once for each elapsed interval
-        /// of the fixed timestep.
-        ///
+        /// of the fixed timestep.<br/>
+        /// <br/>
         /// For example, assume a fixed timestep of 0.02 seconds. If the previous frame updated
         /// at an elapsed time of 1.0 seconds, and the elapsed time for the current frame is now 1.05 seconds, then the
         /// system group updates twice in a row: one with an elapsed simulation time of 1.02 seconds, and a second time
         /// with an elapsed time of 1.04 seconds. In both cases, the delta time is reported as 0.02 seconds. If the
         /// elapsed wall time for the next frame is 1.06 seconds, then the system group doesn't update at all for that
-        /// frame.
-        ///
+        /// frame.<br/>
+        /// <br/>
         /// This mode provides the strongest stability and determinism guarantees, and is best suited for systems implementing
         /// physics or netcode logic. However, the systems in the group will update at an unreliable rate each frame, and
         /// may not update at all if the actual elapsed time is small enough. The running time of systems in this group

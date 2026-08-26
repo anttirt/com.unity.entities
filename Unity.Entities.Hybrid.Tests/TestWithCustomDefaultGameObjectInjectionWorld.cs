@@ -7,7 +7,7 @@ namespace Unity.Entities.Hybrid.Tests
     [Serializable]
     public struct TestWithCustomDefaultGameObjectInjectionWorld
     {
-        public World PreviousGameObjectInjectionWorld;
+        public World PreviousGameObjectInjectionWorld { get; set; }
         private bool _wasInPlayerLoop;
 
         public World World => World.DefaultGameObjectInjectionWorld;

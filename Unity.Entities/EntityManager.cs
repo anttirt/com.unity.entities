@@ -11,6 +11,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Profiling;
+using Unity.Mathematics;
 using UnityEngine.Scripting;
 using UnityEngine.TestTools;
 
@@ -207,9 +208,6 @@ namespace Unity.Entities
         /// first ensures that all Jobs finish. This can prevent the Job scheduler from utilizing available CPU
         /// cores and threads, resulting in a temporary performance drop.
         /// </remarks>
-#if ENTITY_STORE_V1
-        public int EntityCapacity => GetCheckedEntityDataAccess()->EntityComponentStore->EntitiesCapacity;
-#endif
 
         // TODO : this is a temporary workaround for the use of EntityCapacity in remapping
         // NOTE : this only accounts for entities which are actually stored in chunks,
@@ -283,6 +281,7 @@ namespace Unity.Entities
             // Pick any recorded types that have come in after a domain reload.
             EarlyInitHelpers.FlushEarlyInits();
 
+            TypeManager.InitializePendingLifecycleCallbacks();
             SystemBaseRegistry.InitializePendingTypes();
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -311,7 +310,8 @@ namespace Unity.Entities
                 };
             }
 #endif
-            m_EntityDataAccess = (EntityDataAccess*)Memory.Unmanaged.Allocate(sizeof(EntityDataAccess), 16, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "World.EntityManager", Allocator.Persistent);
+            m_EntityDataAccess = (EntityDataAccess*)Memory.Unmanaged.Allocate(sizeof(EntityDataAccess), 16, memoryLabel);
             UnsafeUtility.MemClear(m_EntityDataAccess, sizeof(EntityDataAccess));
             EntityDataAccess.Initialize(m_EntityDataAccess, world);
         }
@@ -333,7 +333,8 @@ namespace Unity.Entities
             PreDisposeCheck();
 
             GetCheckedEntityDataAccess()->Dispose();
-            Memory.Unmanaged.Free(m_EntityDataAccess, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "World.EntityManager", Allocator.Persistent);
+            Memory.Unmanaged.Free(m_EntityDataAccess, memoryLabel);
             m_EntityDataAccess = null;
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -440,7 +441,7 @@ namespace Unity.Entities
         /// <param name="system">The system handle.</param>
         /// <typeparam name="T">The type of component to retrieve.</typeparam>
         /// <returns>A <see cref="RefRW{T}"/> struct of type T containing access to the component value.</returns>
-        /// <exception cref="ArgumentException">Thrown if the component type has no fields.</exception>
+        /// <exception cref="ArgumentException">Thrown if the entity does not exist, does not have the component, or the component type has no fields.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the system isn't from this world.</exception>
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleComponentData) })]
         public RefRW<T> GetComponentDataRW<T>(SystemHandle system) where T : unmanaged, IComponentData
@@ -449,6 +450,26 @@ namespace Unity.Entities
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var data = access->GetComponentDataRW_AsBytePointer(system.m_Entity, typeIndex);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            return new RefRW<T>(data, access->DependencyManager->Safety.GetSafetyHandle(typeIndex, false));
+#else
+            return new RefRW<T>(data);
+#endif
+        }
+
+        /// <summary>
+        /// Gets the value of a component for an entity.
+        /// </summary>
+        /// <param name="entity">The entity.</param>
+        /// <typeparam name="T">The type of component to retrieve.</typeparam>
+        /// <returns>A <see cref="RefRW{T}"/> struct of type T containing access to the component value.</returns>
+        /// <exception cref="ArgumentException">Thrown if the entity does not exist, does not have the component, or the component type has no fields.</exception>
+        [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleComponentData) })]
+        public RefRW<T> GetComponentDataRW<T>(Entity entity) where T : unmanaged, IComponentData
+        {
+            var access = GetCheckedEntityDataAccess();
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            var data = access->GetComponentDataRW_AsBytePointer(entity, typeIndex);
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             return new RefRW<T>(data, access->DependencyManager->Safety.GetSafetyHandle(typeIndex, false));
 #else
@@ -473,7 +494,9 @@ namespace Unity.Entities
         public void SetComponentData<T>(Entity entity, T componentData) where T : unmanaged, IComponentData
         {
             var access = GetCheckedEntityDataAccess();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             access->SetComponentData(entity, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -494,7 +517,9 @@ namespace Unity.Entities
         public void SetComponentData<T>(SystemHandle system, T componentData) where T : unmanaged, IComponentData
         {
             var access = GetCheckedEntityDataAccess(system);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             access->SetComponentData(system.m_Entity, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -568,7 +593,9 @@ namespace Unity.Entities
             }
 #endif
             var metaChunkEntity = chunk.m_Chunk.MetaChunkEntity;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SetComponentData<T>(metaChunkEntity, componentValue);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -584,11 +611,14 @@ namespace Unity.Entities
         ///
         /// The method also works for adding managed objects implementing `IComponentData`, but `GetComponentData` is the preferred method for those objects.
         /// </remarks>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Returns managed object")]
         public T GetComponentObject<T>(Entity entity)
         {
             var access = GetCheckedEntityDataAccess();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return access->GetComponentObject<T>(entity, ComponentType.ReadWrite<T>());
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -605,11 +635,14 @@ namespace Unity.Entities
         ///
         /// The method also works for adding managed objects implementing `IComponentData`, but `GetComponentData` is the preferred method for those objects.
         /// </remarks>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Returns managed object")]
         public T GetComponentObject<T>(Entity entity, ComponentType componentType)
         {
             var access = GetCheckedEntityDataAccess();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return access->GetComponentObject<T>(entity, componentType);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -625,11 +658,14 @@ namespace Unity.Entities
         ///
         /// The method also works for adding managed objects implementing `IComponentData`, but `GetComponentData` is the preferred method for those objects.
         /// </remarks>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Returns managed object")]
         public T GetComponentObject<T>(SystemHandle system)
         {
             var access = GetCheckedEntityDataAccess(system);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return access->GetComponentObject<T>(system.m_Entity, ComponentType.ReadWrite<T>());
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -646,11 +682,31 @@ namespace Unity.Entities
         ///
         /// The method also works for adding managed objects implementing `IComponentData`, but `GetComponentData` is the preferred method for those objects.
         /// </remarks>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Returns managed object")]
         public T GetComponentObject<T>(SystemHandle system, ComponentType componentType)
         {
             var access = GetCheckedEntityDataAccess(system);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return access->GetComponentObject<T>(system.m_Entity, componentType);
+            #pragma warning restore 0618
+        }
+
+        /// <summary>
+        /// Attempts to get the managed [UnityEngine.Component](https://docs.unity3d.com/ScriptReference/Component.html) object
+        /// from an entity.
+        /// </summary>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
+        [ExcludeFromBurstCompatTesting("Returns managed object")]
+        public bool TryGetComponentObject<T>(Entity entity, out T result)
+        {
+            var access = GetCheckedEntityDataAccess();
+            var hasComponent = access->HasComponent(entity, ComponentType.ReadWrite<T>());
+
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            result = hasComponent ? access->GetComponentObject<T>(entity, ComponentType.ReadWrite<T>()) : default(T);
+            #pragma warning restore 0618
+            return hasComponent;
         }
 
         #region Shared Component public APIs
@@ -691,6 +747,7 @@ namespace Unity.Entities
         /// <param name="entity">The entity</param>
         /// <param name="componentData">A shared component object containing the values to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void SetSharedComponentManaged<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
@@ -699,7 +756,9 @@ namespace Unity.Entities
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
                 access->SetSharedComponentData_Managed(entity, componentData);
             }
@@ -727,6 +786,7 @@ namespace Unity.Entities
         /// <param name="entities">The target entities</param>
         /// <param name="componentData">A shared component object containing the values to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void SetSharedComponentManaged<T>(NativeArray<Entity> entities, T componentData) where T : struct, ISharedComponentData
@@ -735,7 +795,9 @@ namespace Unity.Entities
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
                 access->SetSharedComponentData_Managed(entities, componentData);
             }
@@ -797,6 +859,7 @@ namespace Unity.Entities
         /// <param name="query">The query where matching entities will be assigned the shared component to.</param>
         /// <param name="componentData">A shared component object containing the values to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void SetSharedComponentManaged<T>(EntityQuery query, T componentData) where T : struct, ISharedComponentData
@@ -809,7 +872,9 @@ namespace Unity.Entities
             var componentType = ComponentType.ReadWrite<T>();
             var changes = access->BeginStructuralChanges();
             var newSharedComponentDataIndex = access->InsertSharedComponent(componentData);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(componentType.TypeIndex))
+            #pragma warning restore 0618
             {
                 access->SetSharedComponentDataOnQueryDuringStructuralChange(queryImpl, newSharedComponentDataIndex,
                     componentType);
@@ -851,6 +916,7 @@ namespace Unity.Entities
         /// <param name="entity">The target entity</param>
         /// <typeparam name="T">The type of the shared component to look up on the target entity</typeparam>
         /// <returns>The index of the target entity's value for the shared component of type <typeparamref name="T"/>.</returns>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public int GetSharedComponentIndexManaged<T>(Entity entity) where T : struct, ISharedComponentData
         {
@@ -963,7 +1029,9 @@ namespace Unity.Entities
             var access = GetCheckedEntityDataAccess();
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(ti));
+            #pragma warning restore 0618
             var defaultValue = default(T);
             access->SetSharedComponentData_Unmanaged(entity, ti, UnsafeUtility.AddressOf(ref componentData), UnsafeUtility.AddressOf(ref defaultValue));
             access->EndStructuralChanges(ref changes);
@@ -992,7 +1060,9 @@ namespace Unity.Entities
             var access = GetCheckedEntityDataAccess();
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(ti));
+            #pragma warning restore 0618
             var defaultValue = default(T);
             access->SetSharedComponentData_Unmanaged(entities, ti, UnsafeUtility.AddressOf(ref componentData), UnsafeUtility.AddressOf(ref defaultValue));
             access->EndStructuralChanges(ref changes);
@@ -1004,7 +1074,9 @@ namespace Unity.Entities
         {
             var access = GetCheckedEntityDataAccess();
             var changes = access->BeginStructuralChanges();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
             access->SetSharedComponentData_Unmanaged(entity, typeIndex, componentDataAddr, null);
             access->EndStructuralChanges(ref changes);
         }
@@ -1041,7 +1113,9 @@ namespace Unity.Entities
             var access = GetCheckedEntityDataAccess();
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(ti));
+            #pragma warning restore 0618
             var defaultValue = default(T);
             access->SetSharedComponentData_Unmanaged(chunk, ti, UnsafeUtility.AddressOf(ref componentData), UnsafeUtility.AddressOf(ref defaultValue));
             access->EndStructuralChanges(ref changes);
@@ -1062,6 +1136,7 @@ namespace Unity.Entities
         /// <param name="chunk">The target chunk</param>
         /// <param name="componentData">An unmanaged shared component object containing the values to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void SetSharedComponentManaged<T>(ArchetypeChunk chunk, T componentData) where T : struct, ISharedComponentData
@@ -1070,7 +1145,9 @@ namespace Unity.Entities
             var changes = access->BeginStructuralChanges();
             var ti = TypeManager.GetTypeIndex<T>();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
                 access->SetSharedComponentData_Managed(chunk, componentData);
             }
@@ -1088,6 +1165,7 @@ namespace Unity.Entities
         /// <param name="entity">The entity.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
         /// <returns>A copy of the shared component.</returns>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public T GetSharedComponentManaged<T>(Entity entity) where T : struct, ISharedComponentData
         {
@@ -1121,6 +1199,7 @@ namespace Unity.Entities
         /// list.</param>
         /// <typeparam name="T">The data type of the shared component.</typeparam>
         /// <returns>A copy of the shared component.</returns>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public T GetSharedComponentManaged<T>(int sharedComponentIndex) where T : struct, ISharedComponentData
         {
@@ -1172,6 +1251,7 @@ namespace Unity.Entities
         /// <param name="sharedComponentValues">A List&lt;T&gt; object to receive the unique instances of the
         /// shared component of type T.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void GetAllUniqueSharedComponentsManaged<T>(List<T> sharedComponentValues)
             where T : struct, ISharedComponentData
@@ -1187,7 +1267,9 @@ namespace Unity.Entities
         /// shared components' indices.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
         [Obsolete(
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             "Use GetAllUniqueSharedComponentsManaged<T> (UnityUpgradable) -> GetAllUniqueSharedComponentsManaged<T>(*)",
+            #pragma warning restore 0618
             true)]
         public void GetAllUniqueSharedComponentData<T>(List<T> sharedComponentValues, List<int> sharedComponentIndices) where T : struct, ISharedComponentData
         {
@@ -1212,6 +1294,7 @@ namespace Unity.Entities
         /// <param name="sharedComponentIndices">A List&lt;int&gt; object to receive the unique instances of the
         /// shared components' indices.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void GetAllUniqueSharedComponentsManaged<T>(List<T> sharedComponentValues, List<int> sharedComponentIndices)
             where T : struct, ISharedComponentData
@@ -1229,7 +1312,9 @@ namespace Unity.Entities
         /// shared components' versions.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
         [Obsolete(
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             "Use GetAllUniqueSharedComponentsManaged<T> (UnityUpgradable) -> GetAllUniqueSharedComponentsManaged<T>(*)",
+            #pragma warning restore 0618
             true)]
         public void GetAllUniqueSharedComponentData<T>(
             List<T> sharedComponentValues,
@@ -1261,6 +1346,7 @@ namespace Unity.Entities
         /// <param name="sharedComponentVersions">A List&lt;int&gt; object to receive the unique instances of the
         /// shared components' versions.</param>
         /// <typeparam name="T">The type of shared component.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void GetAllUniqueSharedComponentsManaged<T>(List<T> sharedComponentValues, List<int> sharedComponentIndices, List<int> sharedComponentVersions)
             where T : struct, ISharedComponentData
@@ -1290,6 +1376,36 @@ namespace Unity.Entities
             sharedComponentValues = new NativeList<T>(0, allocator);
             sharedComponentValues.m_ListData->Dispose();
             access->GetAllUniqueSharedComponents_Unmanaged<T>(out *sharedComponentValues.m_ListData, allocator);
+        }
+
+
+        /// <summary>
+        /// Gets a list of all the unique instances of an unmanaged shared component type and a corresponding list of indices into the
+        /// internal shared component list.
+        /// </summary>
+        /// <remarks>
+        /// All entities with the same archetype and the same values for a shared component are stored in the same set
+        /// of chunks. This function finds the unique shared components existing across chunks and archetypes and
+        /// fills a list with copies of those components, plus a parallel list of their indices in the internal shared
+        /// component list. You can use the indices to ask for the same shared components directly by calling
+        /// <see cref="GetSharedComponent{T}(int)"/>, passing in the index. An index remains valid until the shared
+        /// component order version changes.
+        /// Note that the first element of the output list will always be the default value for <typeparamref name="T"/>,
+        /// even if no entities or chunks currently use that value.
+        /// </remarks>
+        /// <param name="sharedComponentValues">A NativeList&lt;T&gt; to receive the unique instances of the shared component of type T.</param>
+        /// <param name="sharedComponentIndices">A NativeList&lt;int&gt; to receive the indices of those shared components in the internal shared component list.</param>
+        /// <param name="allocator">The allocator for the native lists.</param>
+        /// <typeparam name="T">The type of shared component.</typeparam>
+        [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleSharedComponentData) })]
+        public void GetAllUniqueSharedComponents<T>(out NativeList<T> sharedComponentValues, out NativeList<int> sharedComponentIndices, AllocatorManager.AllocatorHandle allocator) where T : unmanaged, ISharedComponentData
+        {
+            var access = GetCheckedEntityDataAccess();
+            sharedComponentValues = new NativeList<T>(0, allocator);
+            sharedComponentValues.m_ListData->Dispose();
+            sharedComponentIndices = new NativeList<int>(0, allocator);
+            sharedComponentIndices.m_ListData->Dispose();
+            access->GetAllUniqueSharedComponents_Unmanaged<T>(out *sharedComponentValues.m_ListData, out *sharedComponentIndices.m_ListData, allocator);
         }
 
         /// <summary> Obsolete. Use <see cref="AddSharedComponent{T}(Unity.Entities.Entity,T)"/> instead.</summary>
@@ -1331,7 +1447,9 @@ namespace Unity.Entities
             var ti = TypeManager.GetTypeIndex<T>();
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedType(ti))
+            #pragma warning restore 0618
             {
                 throw new ArgumentException($"Can't use this API with a Managed Shared Component, {TypeManager.GetType(ti)} must be a blittable, unmanaged type");
             }
@@ -1373,7 +1491,9 @@ namespace Unity.Entities
             var ti = TypeManager.GetTypeIndex<T>();
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedType(ti))
+            #pragma warning restore 0618
             {
                 throw new ArgumentException($"Can't use this API with a Managed Shared Component, {TypeManager.GetType(ti)} must be a blittable, unmanaged type");
             }
@@ -1406,6 +1526,7 @@ namespace Unity.Entities
         /// <param name="sharedComponent">The shared component instance.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
         /// <returns>The current version number.</returns>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public int GetSharedComponentOrderVersionManaged<T>(T sharedComponent) where T : struct, ISharedComponentData
         {
@@ -1488,6 +1609,15 @@ namespace Unity.Entities
             var access = GetCheckedEntityDataAccess(system);
             return GetBufferInternal<T>(access, system.m_Entity, isReadOnly);
         }
+
+#if ENABLE_TRANSFORMREF
+        [GenerateTestsForBurstCompatibility]
+        public TransformRef GetTransformRef(Entity entity, bool isReadOnly = false)
+        {
+            var access = GetCheckedEntityDataAccess();
+            return access->GetTransformRef(entity, isReadOnly);
+        }
+#endif
 
         /// <summary>
         /// Gets a struct containing information about the archetype in which an entity is stored.
@@ -1712,7 +1842,9 @@ namespace Unity.Entities
         public Entity CreateSingleton<T>(T componentData, FixedString64Bytes name = default) where T : unmanaged, IComponentData
         {
             var entity = CreateSingletonEntityInternal<T>(name);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SetComponentData(entity, componentData);
+            #pragma warning restore 0618
             return entity;
         }
 
@@ -1933,7 +2065,7 @@ namespace Unity.Entities
             var ecs = access->EntityComponentStore;
             ecs->AssertEntitiesExist((Entity*)entities.GetUnsafeReadOnlyPtr(), entities.Length);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             // Have to record here because method is not using EntityDataAccess
             if (Hint.Unlikely(ecs->m_RecordToJournal != 0))
                 access->JournalAddRecord_AddComponent(default, in entities, &componentType.TypeIndex, 1);
@@ -1954,7 +2086,7 @@ namespace Unity.Entities
             if (useBatches)
             {
                 ecs->AssertCanAddComponent(entityBatchList, componentType);
-                StructuralChange.AddComponentEntitiesBatch(ecs, (UnsafeList<EntityBatchInChunk>*)NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(ref entityBatchList), componentType.TypeIndex);
+                StructuralChange.AddComponentEntitiesBatch(ecs, entityBatchList.GetUnsafeList(), componentType.TypeIndex);
             }
             else
             {
@@ -2462,7 +2594,9 @@ namespace Unity.Entities
             var type = ComponentType.ReadWrite<T>();
             var added = AddComponent(entity, type);
             if (!type.IsZeroSized)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SetComponentData(entity, componentData);
+                #pragma warning restore 0618
 
             return added;
         }
@@ -2495,7 +2629,9 @@ namespace Unity.Entities
             var type = ComponentType.ReadWrite<T>();
             var added = AddComponent(system.m_Entity, type);
             if (!type.IsZeroSized)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SetComponentData(system.m_Entity, componentData);
+                #pragma warning restore 0618
 
             return added;
         }
@@ -2590,7 +2726,7 @@ namespace Unity.Entities
                 var componentTypeIndex = componentType.TypeIndex;
                 var componentTypeIndexForAdd = TypeManager.MakeChunkComponentTypeIndex(componentTypeIndex);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
                 // Have to record here because method is not using EntityDataAccess
                 if (Hint.Unlikely(ecs->m_RecordToJournal != 0))
                     access->JournalAddRecord_AddComponent(default, chunkPtr, chunks.Length, &componentTypeIndexForAdd, 1);
@@ -2656,6 +2792,36 @@ namespace Unity.Entities
             return GetBuffer<T>(entity);
         }
 
+#if ENABLE_TRANSFORMREF
+        [StructuralChangeMethod]
+        public TransformRef AddTransform(Entity entity, float3 localPosition, quaternion localRotation,
+            float3 localScale)
+        {
+            AddComponent<TransformRef>(entity);
+            TransformRef transformRef = GetTransformRef(entity);
+            transformRef.SetLocalTransform(localPosition, localRotation, localScale);
+            return transformRef;
+        }
+
+        [StructuralChangeMethod]
+        public TransformRef AddTransform(Entity entity, float3 localPosition, quaternion localRotation)
+        {
+            return AddTransform(entity, localPosition, localRotation, new float3(1f, 1f, 1f));
+        }
+
+        [StructuralChangeMethod]
+        public TransformRef AddTransform(Entity entity, float3 localPosition)
+        {
+            return AddTransform(entity, localPosition, quaternion.identity, new float3(1f, 1f, 1f));
+        }
+
+        [StructuralChangeMethod]
+        public TransformRef AddTransform(Entity entity)
+        {
+            return AddTransform(entity, float3.zero, quaternion.identity, new float3(1f, 1f, 1f));
+        }
+#endif
+
         /// <summary>
         /// Adds a managed [UnityEngine.Component](https://docs.unity3d.com/ScriptReference/Component.html)
         /// object to an entity.
@@ -2678,6 +2844,7 @@ namespace Unity.Entities
         /// <param name="componentData">An object inheriting UnityEngine.Component.</param>
         /// <exception cref="ArgumentNullException">If the componentData object is not an instance of
         /// UnityEngine.Component.</exception>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Takes managed object")]
         public void AddComponentObject(Entity entity, object componentData)
@@ -2690,7 +2857,9 @@ namespace Unity.Entities
             ComponentType type = componentData.GetType();
 
             AddComponent(entity, type);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SetComponentObject(entity, type, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -2715,6 +2884,7 @@ namespace Unity.Entities
         /// <param name="componentData">An object inheriting UnityEngine.Component.</param>
         /// <exception cref="ArgumentNullException">If the componentData object is not an instance of
         /// UnityEngine.Component.</exception>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Takes managed object")]
         public void AddComponentObject(SystemHandle system, object componentData)
@@ -2727,7 +2897,9 @@ namespace Unity.Entities
             ComponentType type = componentData.GetType();
 
             AddComponent(system.m_Entity, type);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SetComponentObject(system.m_Entity, type, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary> Obsolete. Use <see cref="AddSharedComponentManaged{T}(Unity.Entities.Entity,T)"/> instead.</summary>
@@ -2762,6 +2934,7 @@ namespace Unity.Entities
         /// <param name="entity">The entity.</param>
         /// <param name="componentData">The shared component value to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public bool AddSharedComponentManaged<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
@@ -2770,7 +2943,9 @@ namespace Unity.Entities
             var changes = access->BeginStructuralChanges();
             var componentType = ComponentType.ReadWrite<T>();
             bool result;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (componentType.TypeIndex.IsManagedSharedComponent)
+            #pragma warning restore 0618
             {
                 result = access->AddSharedComponentDataDuringStructuralChange_Managed(entity, componentData);
             }
@@ -2802,6 +2977,7 @@ namespace Unity.Entities
         /// <param name="entities">The target entities</param>
         /// <param name="componentData">The shared component value to set.</param>
         /// <typeparam name="T">The shared component type.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void AddSharedComponentManaged<T>(NativeArray<Entity> entities, T componentData) where T : struct, ISharedComponentData
@@ -2809,7 +2985,9 @@ namespace Unity.Entities
             var access = GetCheckedEntityDataAccess();
             var changes = access->BeginStructuralChanges();
             var componentType = ComponentType.ReadWrite<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(componentType.TypeIndex))
+            #pragma warning restore 0618
             {
                 access->AddSharedComponentDataDuringStructuralChange_Managed(entities, componentData);
             }
@@ -2891,6 +3069,7 @@ namespace Unity.Entities
         /// <param name="entityQuery">The EntityQuery defining a set of entities to modify.</param>
         /// <param name="componentData">The data to set.</param>
         /// <typeparam name="T">The data type of the shared component.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [StructuralChangeMethod]
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public void AddSharedComponentManaged<T>(EntityQuery entityQuery, T componentData)
@@ -2904,7 +3083,9 @@ namespace Unity.Entities
             var componentType = ComponentType.ReadWrite<T>();
             var changes = access->BeginStructuralChanges();
             var newSharedComponentDataIndex = access->InsertSharedComponent(componentData);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(componentType.TypeIndex))
+            #pragma warning restore 0618
             {
                 access->AddSharedComponentDataToQueryDuringStructuralChange(queryImpl, newSharedComponentDataIndex,
                     componentType);
@@ -2961,6 +3142,66 @@ namespace Unity.Entities
             var changes = access->BeginStructuralChanges();
 
             StructuralChange.MoveEntityArchetype(ecs, &entity, archetype.Archetype);
+
+            access->EndStructuralChanges(ref changes);
+        }
+
+        /// <summary>
+        /// Adds and removes components of a NativeArray of Entities to match the specified EntityArchetype.
+        /// </summary>
+        /// <remarks>
+        /// Components of the archetype which the entities already have will preserve their values.
+        ///
+        /// Components of the archetype which the entities do *not* have will get the default value for their types.
+        ///
+        /// Adding a component to an entity changes its archetype and results in the entity being moved to a
+        /// different chunk. The entity moves to a chunk with other entities that have the same shared component values.
+        /// A new chunk is created if no chunk with the same archetype and shared component values currently exists.
+        ///
+        /// **Important:** This method creates a sync point, which means that the EntityManager waits for all
+        /// currently running jobs to complete before adding the components. No additional jobs can start before
+        /// the method is finished. A sync point can cause a drop in performance because the ECS framework might not
+        /// be able to use the processing power of all available cores.
+        /// </remarks>
+        /// <exception cref="ArgumentException">An <see cref="Entity"/> in the array does not exist.</exception>
+        /// <param name="entities">The entities whose archetype to change.</param>
+        /// <param name="archetype">The new archetype for the entities.</param>
+        [StructuralChangeMethod]
+        public void SetArchetype(NativeArray<Entity> entities, EntityArchetype archetype)
+        {
+            if (entities.Length == 0)
+                return;
+
+            archetype.CheckValidEntityArchetype();
+
+            var access = GetCheckedEntityDataAccess();
+            var ecs = access->EntityComponentStore;
+
+            EntityComponentStore.AssertValidArchetype(ecs, archetype);
+            ecs->AssertEntitiesExist((Entity*)entities.GetUnsafeReadOnlyPtr(), entities.Length);
+
+            var newArchetype = archetype.Archetype;
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            for (int i = 0; i < entities.Length; i++)
+                EntityComponentStore.AssertArchetypeDoesNotRemoveCleanupComponents(ecs->GetArchetype(entities[i]), newArchetype);
+#endif
+
+            var changes = access->BeginStructuralChanges();
+
+            if (entities.Length > EntityDataAccess.FASTER_TO_BATCH_THRESHOLD &&
+                ecs->CreateEntityBatchList(entities, 0, Allocator.Temp, out var entityBatchList))
+            {
+                StructuralChange.MoveEntityArchetypeBatch(ecs, entityBatchList.GetUnsafeList(), newArchetype);
+            }
+            else
+            {
+                for (int i = 0; i < entities.Length; i++)
+                {
+                    var entity = entities[i];
+                    StructuralChange.MoveEntityArchetype(ecs, &entity, newArchetype);
+                }
+            }
 
             access->EndStructuralChanges(ref changes);
         }
@@ -3365,7 +3606,7 @@ namespace Unity.Entities
         {
             var access = GetCheckedEntityDataAccess();
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             // When entities journaling recording is enabled, we make a temp array to record the entities created
             if (Hint.Unlikely(access->EntityComponentStore->m_RecordToJournal != 0))
             {
@@ -3406,31 +3647,6 @@ namespace Unity.Entities
             access->EndStructuralChanges(ref changes);
         }
 
-#if ENTITY_STORE_V1
-        /// <summary>
-        /// Destroys all entities in the EntityManager and resets the internal entity ID version table.
-        /// </summary>
-        /// <remarks>
-        /// This method can be used to reset an EntityManager for the purpose of creating data that can be written to disk with a deterministic, exact matching file on disk.
-        /// It resets all chunk and entity version state so that it can be serialized to disk back to a state that is the same as a clean world.
-        /// Archetypes and EntityQuery are not reset since they are often cached / owned by systems, but these are also not stored on disk.
-        /// </remarks>
-        [ExcludeFromBurstCompatTesting("Takes managed array")]
-        public void DestroyAndResetAllEntities()
-        {
-            DestroyEntity(UniversalQueryWithSystems);
-            if (Debug.EntityCount != 0)
-                throw new System.ArgumentException("Destroying all entities failed. Some entities couldn't be deleted.");
-
-            // FreeAllEntities also resets entity index
-            var access = GetCheckedEntityDataAccess();
-            var ecs = access->EntityComponentStore;
-            ecs->FreeAllEntities(true);
-
-            access->ManagedComponentStore.ResetManagedComponentStoreForDeserialization(0, ref *ecs);
-            access->ManagedComponentStore.PrepareForDeserialize();
-        }
-#else
         /// <summary>
         /// DestroyAndResetAllEntities is deprecated and will be removed in a future release. Instead, manually destroy entities, or the whole world.
         /// </summary>
@@ -3441,7 +3657,6 @@ namespace Unity.Entities
             if (Debug.EntityCount != 0)
                 throw new System.ArgumentException("Destroying all entities failed. Some entities couldn't be deleted.");
         }
-#endif
 
         /// <summary>
         /// Destroys all entities in an array.
@@ -3818,47 +4033,6 @@ namespace Unity.Entities
             }
         }
 
-#if ENTITY_STORE_V1
-        /// <summary>
-        /// Copies all entities from srcEntityManager and replaces all entities in this EntityManager
-        /// </summary>
-        /// <remarks>
-        /// Guarantees that the chunk layout and order of the entities will match exactly, thus this method can be used for deterministic rollback.
-        /// This feature is not complete and only supports a subset of the EntityManager features at the moment:
-        /// * Currently it copies all CleanupComponents (They should not be copied)
-        /// * Currently does not support class based components
-        /// </remarks>
-        /// <param name="srcEntityManager">The EntityManager to copy from</param>
-        [Obsolete("This function only works in a narrow set of circumstances and has semantics that differ from a regular copy.", false)]
-        [ExcludeFromBurstCompatTesting("Accesses managed component store")]
-        public void CopyAndReplaceEntitiesFrom(EntityManager srcEntityManager)
-        {
-            srcEntityManager.CompleteAllTrackedJobs();
-            CompleteAllTrackedJobs();
-
-            var srcAccess = srcEntityManager.GetCheckedEntityDataAccess();
-            var selfAccess = GetCheckedEntityDataAccess();
-
-            int maxSrcChunksCount = srcAccess->m_UniversalQueryWithChunksAndSystems.CalculateChunkCountWithoutFiltering();
-            using (var srcChunks = srcAccess->m_UniversalQueryWithChunksAndSystems.ToArchetypeChunkListAsync(Allocator.TempJob, out var srcChunksJob))
-            using (var dstChunks = selfAccess->m_UniversalQueryWithChunksAndSystems.ToArchetypeChunkListAsync(Allocator.TempJob, out var dstChunksJob))
-            {
-                using (var archetypeChunkChanges = EntityDiffer.GetArchetypeChunkChanges(
-                    srcChunks,
-                    dstChunks,
-                    maxSrcChunksCount,
-                    Allocator.TempJob,
-                    jobHandle: out var archetypeChunkChangesJob,
-                    dependsOn: JobHandle.CombineDependencies(srcChunksJob, dstChunksJob)))
-                {
-                    archetypeChunkChangesJob.Complete();
-
-                    EntityDiffer.CopyAndReplaceChunks(srcEntityManager, this, selfAccess->m_UniversalQueryWithChunksAndSystems, archetypeChunkChanges);
-                    EntityComponentStore.AssertAllEntitiesCopied(srcAccess->EntityComponentStore, selfAccess->EntityComponentStore);
-                }
-            }
-        }
-#else
         /// <summary>
         /// Copies all entities from srcEntityManager and replaces all entities in this EntityManager
         /// </summary>
@@ -3920,7 +4094,6 @@ namespace Unity.Entities
                 EntityDiffer.CopyAndReplaceChunks(srcEntityManager, this, selfAccess->m_UniversalQueryWithChunksAndSystems, archetypeChunkChanges, remap);
             }
         }
-#endif
 
         /// <summary>
         /// Moves all entities managed by the specified EntityManager to the world of this EntityManager.
@@ -4157,11 +4330,7 @@ namespace Unity.Entities
         /// <returns>An array containing a no-op identity transformation for each entity.</returns>
         public NativeArray<EntityRemapUtility.EntityRemapInfo> CreateEntityRemapArray(AllocatorManager.AllocatorHandle allocator)
         {
-#if !ENTITY_STORE_V1
             var remapSize = HighestEntityIndex() + 1;
-#else
-            var remapSize = EntityCapacity;
-#endif
             var array = CollectionHelper.CreateNativeArray<EntityRemapUtility.EntityRemapInfo>(remapSize, allocator);
             return array;
         }
@@ -4335,6 +4504,14 @@ namespace Unity.Entities
             return GetCheckedEntityDataAccess()->GetBufferTypeHandle<T>(isReadOnly);
         }
 
+#if ENABLE_TRANSFORMREF
+        [GenerateTestsForBurstCompatibility]
+        public TransformTypeHandle GetTransformTypeHandle(bool isReadOnly)
+        {
+            return GetCheckedEntityDataAccess()->GetTransformTypeHandle(isReadOnly);
+        }
+#endif
+
         /// <summary>
         /// Gets the dynamic type object required to access a shared component of type T.
         /// </summary>
@@ -4346,6 +4523,8 @@ namespace Unity.Entities
         /// </remarks>
         /// <typeparam name="T">The compile-time type of the shared component.</typeparam>
         /// <returns>The run-time type information of the shared component.</returns>
+        // NOTE: dual-use method — see ComponentSystemBase.GetSharedComponentTypeHandle for the
+        // reason this is not marked [Obsolete] in step 1.
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleSharedComponentData) })]
         public SharedComponentTypeHandle<T> GetSharedComponentTypeHandle<T>()
             where T : struct, ISharedComponentData
@@ -4771,34 +4950,6 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// Look up an aspect for an entity.
-        /// </summary>
-        /// <param name="entity">The entity.</param>
-        /// <typeparam name="T">The type of aspect to retrieve.</typeparam>
-        /// <returns>An aspect struct of type T representing the aspect on the entity.</returns>
-        /// <remarks>
-        /// T must implement the <see cref="IAspect"/> interface.
-        /// The given entity is assumed to have all the components required by the aspect type.
-        /// </remarks>
-        /// <remarks>
-        /// This method will create an instance of the aspect struct using
-        /// an internal SystemState.
-        /// </remarks>
-        /// <remarks>
-        /// When calling from an ISystem, use SystemAPI.GetAspect instead.
-        /// When calling from a SystemBase, use SystemBase.GetAspect instead.
-        /// Use this method when calling from outside the dots runtime, e.g. from the editor code.
-        /// </remarks>
-#pragma warning disable CS0618 // Disable Aspects obsolete warnings
-        [ExcludeFromBurstCompatTesting("This unfortunately needs access to the managed world for the ExternalAPIState.")]
-        public T GetAspect<T>(Entity entity) where T : struct, IAspect, IAspectCreate<T>
-        {
-            T aspect = default;
-            return aspect.CreateAspect(entity, ref *World.ExternalAPIState);
-        }
-#pragma warning restore CS0618
-
-        /// <summary>
         /// Completes the dependency chain required for this component to have read and write access.
         /// So it completes all write dependencies of the component to allow for reading,
         /// and it completes all read dependencies, so we can write to it.
@@ -4848,7 +4999,9 @@ namespace Unity.Entities
         internal void SetComponentObject(Entity entity, ComponentType componentType, object componentObject)
         {
             var access = GetCheckedEntityDataAccess();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             access->SetComponentObject(entity, componentType, componentObject);
+            #pragma warning restore 0618
         }
 
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleComponentData) })]
@@ -4913,6 +5066,28 @@ namespace Unity.Entities
             return new EntityStorageInfoLookup(access);
 #endif
         }
+
+#if ENABLE_TRANSFORMREF
+        internal TransformLookup GetTransformLookup(bool isReadOnly = false)
+        {
+            var access = GetCheckedEntityDataAccess();
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            var safetyHandles = &access->DependencyManager->Safety;
+#endif
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            var transformTypeIndex = TypeManager.GetTypeIndex<TransformRef>();
+            return new TransformLookup(access, isReadOnly,
+                safetyHandles->GetSafetyHandleForComponentLookup(transformTypeIndex, isReadOnly),
+                // TODO DOTS-10269: this should be a per-hierarchy handle, but for how we'll just
+                // use the secondary per-type handle as used by DynamicBuffer types.
+                safetyHandles->GetBufferHandleForBufferLookup(transformTypeIndex));
+#else
+            return new TransformLookup(access, isReadOnly);
+#endif
+        }
+#endif
 
         internal void SetComponentDataRaw(Entity entity, TypeIndex typeIndex, void* data, int size)
         {
@@ -5368,10 +5543,8 @@ namespace Unity.Entities
                 remapChunks = remapChunks,
                 entityRemapping = entityRemapping
             }.Schedule(remapChunks.Length, 1
-#if !ENTITY_STORE_V1
                 // Freeing entities with entity store V2 requires reading from the actual chunks.
                 , freeChunksJob
-#endif
             );
 
             var remapArchetypesJob = new RemapAllArchetypesJob
@@ -5437,7 +5610,6 @@ namespace Unity.Entities
             }
         }
 
-#if !ENTITY_STORE_V1
         // Both DuplicateEntitiesForDiffer and RemapEntitiesForDiffer are there to help with entity
         // duplication between the main world and the shadow world used by the differ. Since those
         // cannot use the same entities anymore with entity store V2, an explicit remapping is required.
@@ -5455,7 +5627,7 @@ namespace Unity.Entities
                 var dstEntities = (Entity*)dstChunk.Buffer;
                 var ec = dstChunk.Count;
 
-                EntityComponentStore.s_entityStore.Data.AllocateEntities(dstEntities, ec, ChunkIndex.Null, 0);
+                EntityComponentStore.s_entityStore.Data.AllocateEntitiesDirect(dstEntities, ec, ChunkIndex.Null, 0);
 
                 for (int ei = 0; ei < ec; ei++)
                 {
@@ -5488,7 +5660,6 @@ namespace Unity.Entities
                 EntityRemapping = entityRemapping
             }.Run(dstChunks.Length);
         }
-#endif
 
         #region Nested type definitions
 
@@ -5647,7 +5818,7 @@ namespace Unity.Entities
                 Archetype* dstArchetype = remapChunks[index].dstArchetype;
 
                 var entityCount = chunk.Count;
-                dstEntityComponentStore->RemapChunk(chunk, 0, entityCount, ref entityRemapping);
+                dstEntityComponentStore->RemapChunk(chunk, entityCount, ref entityRemapping);
                 EntityRemapUtility.PatchEntities(dstArchetype->ScalarEntityPatches + 1,
                     dstArchetype->ScalarEntityPatchCount - 1, dstArchetype->BufferEntityPatches,
                     dstArchetype->BufferEntityPatchCount, chunk.Buffer, entityCount, ref entityRemapping);
@@ -5723,7 +5894,7 @@ namespace Unity.Entities
                 Archetype* dstArchetype = remapChunks[index].dstArchetype;
 
                 var entityCount = chunk.Count;
-                dstEntityComponentStore->RemapChunk(chunk, 0, entityCount, ref entityRemapping);
+                dstEntityComponentStore->RemapChunk(chunk, entityCount, ref entityRemapping);
                 EntityRemapUtility.PatchEntities(dstArchetype->ScalarEntityPatches + 1,
                     dstArchetype->ScalarEntityPatchCount - 1, dstArchetype->BufferEntityPatches,
                     dstArchetype->BufferEntityPatchCount, chunk.Buffer, entityCount, ref entityRemapping);
@@ -5887,9 +6058,6 @@ namespace Unity.Entities
             public void Execute()
             {
                 EntityComponentStore->FreeAllEntities(
-#if ENTITY_STORE_V1
-                    false
-#endif
                     );
             }
         }
@@ -5981,6 +6149,7 @@ namespace Unity.Entities
         /// <typeparam name="T">The type of component to create.</typeparam>
         /// <returns>The Entity object that you can use to access the singleton component entity.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the component type has no fields, is enableable, or an entity containing it already exists.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static Entity CreateSingleton<T>(this EntityManager manager, FixedString64Bytes name = default) where T : class, IComponentData, new()
         {
             return manager.CreateSingletonEntityInternal<T>(name);
@@ -5999,10 +6168,13 @@ namespace Unity.Entities
         /// <typeparam name="T">The type of component to create.</typeparam>
         /// <returns>The Entity object that you can use to access the singleton component entity.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the component type has no fields, is enableable, or an entity containing it already exists.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static Entity CreateSingleton<T>(this EntityManager manager, T componentData, FixedString64Bytes name = default) where T : class, IComponentData, new()
         {
             var entity = manager.CreateSingletonEntityInternal<T>(name);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetComponentData(entity, componentData);
+            #pragma warning restore 0618
             return entity;
         }
 
@@ -6041,6 +6213,7 @@ namespace Unity.Entities
         /// <typeparam name="T">The type of component to retrieve.</typeparam>
         /// <returns>A struct of type T containing the component value.</returns>
         /// <exception cref="ArgumentException">Thrown if the component type has no fields.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetComponentData<T>(this EntityManager manager, Entity entity) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6056,6 +6229,7 @@ namespace Unity.Entities
         /// <returns>A struct of type T containing the component value.</returns>
         /// <exception cref="ArgumentException">Thrown if the component type has no fields.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the system isn't from this world.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetComponentData<T>(this EntityManager manager, SystemHandle system) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6074,10 +6248,13 @@ namespace Unity.Entities
         /// <param name="componentData">The data to set.</param>
         /// <typeparam name="T">The component type.</typeparam>
         /// <exception cref="ArgumentException">Thrown if the component type has no fields.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void SetComponentData<T>(this EntityManager manager, Entity entity, T componentData) where T : class, IComponentData, new()
         {
             var type = ComponentType.ReadWrite<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetComponentObject(entity, type, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -6089,6 +6266,7 @@ namespace Unity.Entities
         /// <typeparam name="T">The component type.</typeparam>
         /// <exception cref="ArgumentException">Thrown if the component type has no fields.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the system isn't from this world.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void SetComponentData<T>(this EntityManager manager, SystemHandle system, T componentData) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6097,7 +6275,9 @@ namespace Unity.Entities
                 throw new InvalidOperationException("System is from a different world.");
 #endif
             var type = ComponentType.ReadWrite<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             access->SetComponentObject(system.m_Entity, type, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -6112,6 +6292,7 @@ namespace Unity.Entities
         /// <typeparam name="T">The component type.</typeparam>
         /// <returns>A struct of type T containing the component value.</returns>
         /// <exception cref="ArgumentException">Thrown if the ArchetypeChunk object is invalid.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetChunkComponentData<T>(this EntityManager manager, ArchetypeChunk chunk) where T : class, IComponentData, new()
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -6137,6 +6318,7 @@ namespace Unity.Entities
         /// <param name="entity">The entity.</param>
         /// <typeparam name="T">The component type.</typeparam>
         /// <returns>A struct of type T containing the component value.</returns>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetChunkComponentData<T>(this EntityManager manager, Entity entity) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6158,6 +6340,7 @@ namespace Unity.Entities
         /// <param name="componentValue">The component data to set.</param>
         /// <typeparam name="T">The component type.</typeparam>
         /// <exception cref="ArgumentException">Thrown if the ArchetypeChunk object is invalid.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void SetChunkComponentData<T>(this EntityManager manager, ArchetypeChunk chunk, T componentValue) where T : class, IComponentData, new()
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -6169,7 +6352,9 @@ namespace Unity.Entities
             }
 #endif
             var metaChunkEntity = chunk.m_Chunk.MetaChunkEntity;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetComponentData<T>(metaChunkEntity, componentValue);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -6189,12 +6374,15 @@ namespace Unity.Entities
         /// <param name="entity">The entity.</param>
         /// <param name="componentData">The data to set.</param>
         /// <typeparam name="T">The type of component.</typeparam>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void AddComponentData<T>(this EntityManager manager, Entity entity, T componentData) where T : class, IComponentData, new()
         {
             var type = ComponentType.ReadWrite<T>();
 
             manager.AddComponent(entity, type);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetComponentData(entity, componentData);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -6214,6 +6402,7 @@ namespace Unity.Entities
         /// <param name="system">The system handle.</param>
         /// <param name="componentData">The data to set.</param>
         /// <typeparam name="T">The type of component.</typeparam>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void AddComponentData<T>(this EntityManager manager, SystemHandle system, T componentData) where T : class, IComponentData, new()
         {
             manager.AddComponentData(system.m_Entity, componentData);
@@ -6246,6 +6435,7 @@ namespace Unity.Entities
         /// removed and disposed before the new value is assigned.
         /// </param>
         /// <typeparam name="T">The managed component type.</typeparam>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void MoveComponent<T>(this EntityManager manager, Entity src, Entity dst) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6275,6 +6465,7 @@ namespace Unity.Entities
         /// <param name="manager">This entity manager.</param>
         /// <param name="entity">The entity.</param>
         /// <typeparam name="T">The type of component, which must implement IComponentData.</typeparam>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void AddChunkComponentData<T>(this EntityManager manager, Entity entity) where T : class, IComponentData, new()
         {
             manager.AddComponent(entity, ComponentType.ChunkComponent<T>());
@@ -6299,6 +6490,7 @@ namespace Unity.Entities
         /// <param name="entityQuery">The EntityQuery identifying the chunks to modify.</param>
         /// <param name="componentData">The data to set.</param>
         /// <typeparam name="T">The type of component, which must implement IComponentData.</typeparam>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void AddChunkComponentData<T>(this EntityManager manager, EntityQuery entityQuery, T componentData) where T : class, IComponentData, new()
         {
             var access = manager.GetCheckedEntityDataAccess();
@@ -6326,7 +6518,9 @@ namespace Unity.Entities
             for (int i = 0; i < chunks.Length; i++)
             {
                 var srcChunk = chunks[i].m_Chunk;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.SetComponentData(srcChunk.MetaChunkEntity, componentData);
+                #pragma warning restore 0618
             }
         }
     }

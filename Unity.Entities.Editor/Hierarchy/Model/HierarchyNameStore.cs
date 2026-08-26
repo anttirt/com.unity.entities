@@ -56,9 +56,9 @@ namespace Unity.Entities.Editor
             {
                 name.Clear();
                 FixedString32Bytes index = default;
-                index.Append(handle.Index);
+                index.Append(handle.ToEntity().Index);
                 FixedString32Bytes version = default;
-                version.Append(handle.Version);
+                version.Append(handle.ToEntity().Version);
                 name.AppendFormat(k_EntityFormat, index, version);
             }
 
@@ -66,9 +66,9 @@ namespace Unity.Entities.Editor
             {
                 name.Clear();
                 FixedString32Bytes index = default;
-                index.Append(handle.Index);
+                index.Append(handle.ToEntity().Index);
                 FixedString32Bytes version = default;
-                version.Append(handle.Version);
+                version.Append(handle.ToEntity().Version);
                 name.AppendFormat(k_EntityLowerInvariantFormat, index, version);
             }
 
@@ -76,9 +76,9 @@ namespace Unity.Entities.Editor
             {
                 name.Clear();
                 FixedString32Bytes index = default;
-                index.Append(handle.Index);
+                index.Append(handle.ToEntity().Index);
                 FixedString32Bytes version = default;
-                version.Append(handle.Version);
+                version.Append(handle.ToEntity().Version);
                 FixedString32Bytes kind = default;
                 index.Append((int) handle.Kind);
                 name.AppendFormat(k_HandleFormat, kind, index, version);
@@ -88,9 +88,9 @@ namespace Unity.Entities.Editor
             {
                 name.Clear();
                 FixedString32Bytes index = default;
-                index.Append(handle.Index);
+                index.Append(handle.ToEntity().Index);
                 FixedString32Bytes version = default;
-                version.Append(handle.Version);
+                version.Append(handle.ToEntity().Version);
                 FixedString32Bytes kind = default;
                 index.Append((int) handle.Kind);
                 name.AppendFormat(k_HandleLowerInvariantFormat, kind, index, version);
@@ -111,11 +111,7 @@ namespace Unity.Entities.Editor
         internal NativeParallelHashMap<HierarchyNodeHandle, FixedString64Bytes> NameByHandleLowerInvariant => m_NamesLowerInvariant;
 
 #if !DOTS_DISABLE_DEBUG_NAMES
-#if ENTITY_STORE_V1
-        internal EntityName* NameByEntity => m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameByEntity;
-#else
         internal EntityNameStoreAccess NameStoreAccess => m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameStoreAccess;
-#endif
         internal EntityNameStorageLowerInvariant EntityNameStorageLowerInvariant => m_EntityNameStorageLowerInvariant;
 #endif
 
@@ -156,7 +152,7 @@ namespace Unity.Entities.Editor
                     if (!m_World.EntityManager.GetCheckedEntityDataAccess()->Exists(handle.ToEntity()))
                         return false;
 
-                    return m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->GetEntityNameByEntityIndex(handle.Index).Index > 0;
+                    return m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->GetEntityName(handle.ToEntity()).Index > 0;
 #else
                     return false;
 #endif // !DOTS_DISABLE_DEBUG_NAMES
@@ -185,7 +181,7 @@ namespace Unity.Entities.Editor
 
 #if !DOTS_DISABLE_DEBUG_NAMES
                     var entityComponentStore = m_World.EntityManager.GetCheckedEntityDataAccessExclusive()->EntityComponentStore;
-                    var entry = entityComponentStore->GetEntityNameByEntityIndex(handle.Index);
+                    var entry = entityComponentStore->GetEntityName(handle.ToEntity());
 
                     if (entry.Index != 0 && entityComponentStore->Exists(handle.ToEntity()))
                     {
@@ -289,22 +285,22 @@ namespace Unity.Entities.Editor
             {
                 if ((changeTrackerEvent.EventType & GameObjectChangeTrackerEventType.SceneWasRenamed) != 0)
                 {
-                    var scene = EditorSceneManagerBridge.GetSceneByHandle(changeTrackerEvent.InstanceId);
+                    var scene = EditorSceneManagerBridge.GetSceneByEntityId(changeTrackerEvent.EntityId);
                     var sceneName = string.IsNullOrEmpty(scene.name) ? k_UntitledScene : scene.name;
                     if (!scene.isSubScene)
                         SetName(HierarchyNodeHandle.FromScene(scene), sceneName);
                 }
                 else if((changeTrackerEvent.EventType & GameObjectChangeTrackerEventType.Destroyed) != 0)
                 {
-                    RemoveName(HierarchyNodeHandle.FromGameObject(changeTrackerEvent.InstanceId));
+                    RemoveName(HierarchyNodeHandle.FromGameObject(changeTrackerEvent.EntityId));
                 }
                 else if ((changeTrackerEvent.EventType & GameObjectChangeTrackerEventType.CreatedOrChanged) != 0)
                 {
-                    var idToObject = EditorUtility.InstanceIDToObject(changeTrackerEvent.InstanceId) as GameObject;
+                    var idToObject = EditorUtility.EntityIdToObject(changeTrackerEvent.EntityId) as GameObject;
                     if (!idToObject)
                         continue;
 
-                    SetName(HierarchyNodeHandle.FromGameObject(changeTrackerEvent.InstanceId), idToObject.name);
+                    SetName(HierarchyNodeHandle.FromGameObject(changeTrackerEvent.EntityId), idToObject.name);
                 }
             }
         }
@@ -325,7 +321,7 @@ namespace Unity.Entities.Editor
             }
             else
             {
-                SetName(HierarchyNodeHandle.FromGameObject(gameObject.GetInstanceID()), gameObject.name);
+                SetName(HierarchyNodeHandle.FromGameObject(gameObject.GetEntityId()), gameObject.name);
                 foreach (Transform child in gameObject.transform)
                 {
                     RecursivelyAddGameObjectNames(child.gameObject);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Assertions;
+using UnityEngine;
 using Unity.Burst;
 
 namespace Unity.Entities
@@ -77,7 +78,7 @@ namespace Unity.Entities
 
         int m_FreeListIndex;
 
-        internal delegate void InstantiateCompanionComponentDelegate(int* srcArray, int componentCount, Entity* dstEntities, int* dstComponentReferenceIndices, int* dstComponentLinkIds, int* dstArray, int instanceCount, ManagedComponentStore managedComponentStore);
+        internal delegate void InstantiateCompanionComponentDelegate(int* srcArray, int componentCount, Entity* dstEntities, int* dstComponentReferenceIndices, UnityEngine.EntityId* dstComponentLinkIds, int* dstArray, int instanceCount, ManagedComponentStore managedComponentStore, EntityComponentStore* entityComponentStore);
         internal static InstantiateCompanionComponentDelegate InstantiateCompanionComponent;
 
         internal delegate void AssignCompanionComponentsToCompanionGameObjectsDelegate(EntityManager entityManager, NativeArray<Entity> entities);
@@ -774,11 +775,11 @@ namespace Unity.Entities
                         var srcArray = (int*)reader.ReadNextArray<int>(out var componentCount);
                         var entities = (Entity*)reader.ReadNextArray<Entity>(out var instanceCount);
                         var dstComponentReferenceIndices = (int*)reader.ReadNextArray<int>(out _);
-                        var dstComponentLinkIds = (int*)reader.ReadNextArray<int>(out _);
+                        var dstComponentLinkIds = (UnityEngine.EntityId*)reader.ReadNextArray<UnityEngine.EntityId>(out _);
                         var dstArray = (int*)reader.ReadNextArray<int>(out _);
 
                         if (InstantiateCompanionComponent != null)
-                            InstantiateCompanionComponent(srcArray, componentCount, entities, dstComponentReferenceIndices, dstComponentLinkIds, dstArray, instanceCount, this);
+                            InstantiateCompanionComponent(srcArray, componentCount, entities, dstComponentReferenceIndices, dstComponentLinkIds, dstArray, instanceCount, this, m_EntityComponentStore);
                         else
                         {
                             // InstantiateHybridComponent was not injected just copy the reference to the object and dont clone it

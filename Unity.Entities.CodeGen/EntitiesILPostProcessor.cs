@@ -16,20 +16,19 @@ using Unity.Burst;
 using System.Reflection;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.Assemblies;
 
 [assembly: InternalsVisibleTo("Unity.Entities.Hybrid.CodeGen")]
 namespace Unity.Entities.CodeGen
 {
     internal partial class EntitiesILPostProcessors : ILPostProcessor
     {
-        bool _ReferencesEntities;
-        bool _ReferencesJobs;
         public static string[] Defines { get; internal set; }
 
         static EntitiesILPostProcessor[] FindAllEntitiesILPostProcessors()
         {
             var processorTypes = new List<Type>();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var assembly in CurrentAssemblies.GetLoadedAssemblies())
             {
                 if (assembly.FullName.Contains(".CodeGen"))
                     processorTypes.AddRange(assembly.GetTypes().Where(t => t.IsSubclassOf(typeof(EntitiesILPostProcessor)) && !t.IsAbstract));
@@ -81,7 +80,7 @@ namespace Unity.Entities.CodeGen
                 {
                     postProcessor.runnerOfMe = this;
 
-                    postProcessor.Initialize(Defines, _ReferencesEntities, _ReferencesJobs);
+                    postProcessor.Initialize(Defines);
                     if (!postProcessor.WillProcess())
                         continue;
 
@@ -135,42 +134,24 @@ namespace Unity.Entities.CodeGen
             return this;
         }
 
-        // Today there is no mechanism for sorting which ILPostProcessor runs relative to another
-        // As such a sort order mechanism was added to this ILPP via running "EntitiesILPostProcessor"s
-        // and sorting by `SortWeight`. However, some "EntitiesILPostProcessor"s need to run even if an assembly
-        // doesn't references Entities.dll, so we extend the WillProcess implementation here to be inclusive
-        // to other assemblies until the CompilationPipeline.ILPostProcessing API is extended
         public override bool WillProcess(ICompiledAssembly compiledAssembly)
         {
-            _ReferencesEntities = false;
             if (compiledAssembly.Name == "Unity.Entities")
             {
-                _ReferencesEntities = true;
-                _ReferencesJobs = true;
-                return true;
-            }
-            if (compiledAssembly.Name == "Unity.Jobs")
-            {
-                _ReferencesEntities = false;
-                _ReferencesJobs = true;
                 return true;
             }
 
             if (compiledAssembly.Name.EndsWith("CodeGen.Tests", StringComparison.Ordinal))
                 return false;
 
-            for (int i = 0;
-                (!_ReferencesEntities || !_ReferencesJobs) // If we found both we can stop searching
-                && i < compiledAssembly.References.Length; ++i)
+            for (int i = 0; i < compiledAssembly.References.Length; ++i)
             {
                 var fileName = Path.GetFileNameWithoutExtension(compiledAssembly.References[i]);
                 if (fileName == "Unity.Entities")
-                    _ReferencesEntities = true;
-                else if (fileName == "Unity.Jobs")
-                    _ReferencesJobs = true;
+                    return true;
             }
 
-            return _ReferencesEntities || _ReferencesJobs;
+            return false;
         }
 
         class PostProcessorAssemblyResolver : Mono.Cecil.IAssemblyResolver
@@ -391,7 +372,11 @@ namespace Unity.Entities.CodeGen
 
         internal TypeDefinition _SystemBaseDelegatesFunctionDef; //SystemBaseDelegates.Function
         internal TypeDefinition _IRefCountedDef;
+        internal TypeDefinition _IDebugOnAddedDef;
+        internal TypeDefinition _IDebugOnRemovedDef;
         internal TypeReference _voidStarRef;
+
+        internal List<TypeDefinition> CollectedComponentTypes;
 
         internal TypeDefinition _TypeRegistryDef;
         internal TypeDefinition _TypeRegistry_GetBoxedEqualsFnDef;
@@ -457,6 +442,9 @@ namespace Unity.Entities.CodeGen
         {
             var attr = asm.MainModule.GetType(name);
 
+            // If not found directly, check type forwarders
+            attr ??= asm.MainModule.ExportedTypes.FirstOrDefault(t => t.FullName == name)?.Resolve();
+
             try
             {
                 return attr.GetConstructors().First();
@@ -485,6 +473,9 @@ namespace Unity.Entities.CodeGen
             // Initialize References
 
             _monoPInvokeAttributeCtorDef = GetCtorForAttribute(coreModule, "AOT.MonoPInvokeCallbackAttribute");
+            // AlwaysLinkAssemblyAttribute and PreserveAttribute were in CoreModule now they are in UnityEngine.Scripting. 
+            // However, to maintain compatibility with older versions of Unity we still try to load it from CoreModule first.
+            // GetCtorForAttribute will resolve type forwarders if needed.
             _alwaysLinkAssemblyAttributeCtorDef = GetCtorForAttribute(coreModule, "UnityEngine.Scripting.AlwaysLinkAssemblyAttribute");
             _preserveAttributeCtorDef = GetCtorForAttribute(coreModule, "UnityEngine.Scripting.PreserveAttribute");
             _readOnlyAttributeCtorDef = GetCtorForAttribute(coreModule, "Unity.Collections.ReadOnlyAttribute");
@@ -508,6 +499,8 @@ namespace Unity.Entities.CodeGen
             _BufferHeaderDef = entitiesAsmMain.GetType("Unity.Entities.BufferHeader");
             _SystemBaseDelegatesFunctionDef = entitiesAsmMain.GetType("Unity.Entities.SystemBaseDelegates/Function");
             _IRefCountedDef = entitiesAsmMain.GetType("Unity.Entities.IRefCounted");
+            _IDebugOnAddedDef = entitiesAsmMain.GetType("Unity.Entities.IDebugOnAdded");
+            _IDebugOnRemovedDef = entitiesAsmMain.GetType("Unity.Entities.IDebugOnRemoved");
 
             _TypeRegistryDef = entitiesAsmMain.GetType("Unity.Entities.TypeRegistry");
 
@@ -529,6 +522,8 @@ namespace Unity.Entities.CodeGen
             StaticTypeRegistryPostProcessor.BakingOnlyTypeFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "BakingOnlyTypeFlag").Constant;
             StaticTypeRegistryPostProcessor.TemporaryBakingTypeFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "TemporaryBakingTypeFlag").Constant;
             StaticTypeRegistryPostProcessor.IRefCountedComponentFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "IRefCountedComponentFlag").Constant;
+            StaticTypeRegistryPostProcessor.HasOnAddedCallbackFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "HasOnAddedCallbackFlag").Constant;
+            StaticTypeRegistryPostProcessor.HasOnRemovedCallbackFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "HasOnRemovedCallbackFlag").Constant;
             StaticTypeRegistryPostProcessor.IEquatableTypeFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "IEquatableTypeFlag").Constant;
             StaticTypeRegistryPostProcessor.EnableableComponentFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "EnableableComponentFlag").Constant;
             StaticTypeRegistryPostProcessor.CleanupComponentTypeFlag = (int)_TypeManagerDef.Fields.Single(t => t.Name == "CleanupComponentTypeFlag").Constant;
@@ -632,17 +627,13 @@ Entities initialization has therefore failed. Please report a bug via Help->Repo
     {
         public virtual int SortWeight => 0;
         public string[] Defines { get; private set; }
-        public bool ReferencesEntities { get; private set; }
-        public bool ReferencesJobs { get; private set; }
         protected AssemblyDefinition AssemblyDefinition;
 
         public EntitiesILPostProcessors runnerOfMe;
 
-        internal void Initialize(string[] compilationDefines, bool referencesEntities, bool referencesJobs)
+        internal void Initialize(string[] compilationDefines)
         {
             Defines = compilationDefines;
-            ReferencesEntities = referencesEntities;
-            ReferencesJobs = referencesJobs;
         }
 
         protected List<DiagnosticMessage> _diagnosticMessages = new List<DiagnosticMessage>();
@@ -665,7 +656,7 @@ Entities initialization has therefore failed. Please report a bug via Help->Repo
 
         public virtual bool WillProcess()
         {
-            return ReferencesEntities;
+            return true;
         }
 
         protected abstract bool PostProcessImpl(TypeDefinition[] componentSystemTypes);

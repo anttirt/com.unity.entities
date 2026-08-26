@@ -23,8 +23,6 @@ namespace Unity.Entities.Editor
         internal Entity Entity => EntityContainer.Entity;
         internal bool IsReadOnly => EntityContainer.IsReadOnly;
 
-        internal EntityAspectsCollectionContainer AspectsCollectionContainer => new EntityAspectsCollectionContainer(World, Entity, IsReadOnly);
-
         internal void SetContext(EntitySelectionProxy proxy, bool forceWritable = false)
         {
             if (!proxy.Exists)
@@ -70,7 +68,7 @@ namespace Unity.Entities.Editor
         }
 
         internal UnityEngine.Object GetSourceObject()
-            => this.TryGetComponentData(out EntityGuid guid) ? EditorUtility.InstanceIDToObject(guid.OriginatingId) : null;
+            => this.TryGetComponentData(out EntityGuid guid) ? EditorUtility.EntityIdToObject(guid.OriginatingEntityId) : null;
 
         static bool IsWorldReadOnly(World world)
         {
@@ -90,7 +88,9 @@ namespace Unity.Entities.Editor
                 return false;
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             component = context.EntityManager.GetComponentData<T>(context.Entity);
+            #pragma warning restore 0618
             return true;
         }
 
@@ -103,7 +103,9 @@ namespace Unity.Entities.Editor
                 return false;
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             component = context.EntityManager.GetChunkComponentData<T>(context.Entity);
+            #pragma warning restore 0618
             return true;
         }
     }
@@ -120,7 +122,9 @@ namespace Unity.Entities.Editor
                 return false;
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             component = context.EntityManager.GetComponentData<T>(context.Entity);
+            #pragma warning restore 0618
             return true;
         }
 
@@ -133,7 +137,9 @@ namespace Unity.Entities.Editor
                 return false;
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             component = context.EntityManager.GetChunkComponentData<T>(context.Entity);
+            #pragma warning restore 0618
             return true;
         }
     }

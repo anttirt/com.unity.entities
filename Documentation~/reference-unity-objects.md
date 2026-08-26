@@ -10,15 +10,15 @@ For example, you have a `GameObject` with an `Animator` object which you want to
 
 ## Using UnityObjectRef
 
-The following example shows how to define an `IComponentData` with a `UnityObjectRef` field and how to use a [baker](baking-baker-overview.md) to store a reference to the `GameObject` prefab during conversion:
+The following example shows how to define `IComponentData` types with `UnityObjectRef` fields and how to use a [baker](baking-baker-overview.md) to store a reference to the `GameObject` prefab during conversion. The first component (`AnimatorPrefabRef`) holds the prefab reference written by the baker; the second (`AnimatorInstanceRef`) is added later at runtime to hold the live `Animator` instance:
 
 [!code-cs[UnityObjectRef example](../DocCodeSamples.Tests/UnityObjectRefExamples.cs#unityobjectref-example)]
 
-You can use [`SystemAPI`](systems-systemapi.md) to access and instantiate the prefab:
+You can use [`SystemAPI`](systems-systemapi.md) to access and instantiate the prefab. The system below copies the entity's `LocalToWorld` to the spawned `GameObject` so multiple entities don't pile up at the same position, then adds the `AnimatorInstanceRef` to the entity:
 
 [!code-cs[UnityObjectRef Spawn System example](../DocCodeSamples.Tests/UnityObjectRefExamples.cs#unityobjectref-spawn-system-example)]
 
-You can also access and modify the `Animator` from a separate system. The following example shows how to adjust the animation speed dynamically:
+You can also access and modify the `Animator` from a separate system by querying the `AnimatorInstanceRef` and dereferencing the `UnityObjectRef` with `.Value`. The following example shows how to adjust the animation speed dynamically:
 [!code-cs[UnityObjectRef Animator example](../DocCodeSamples.Tests/UnityObjectRefExamples.cs#unityobjectref-anim-system-example)]
 
 
@@ -33,6 +33,10 @@ Unity builds these references into a set of `ContentArchive` instances that it o
 * Any objects that have direct references from normal scenes are built directly into Player data, which is separate from the archive data. 
 
 If an object is referenced by both normal and entity scenes it is duplicated in both sets of data and each has its own InstanceID at runtime. A normal scene can contain a `WeakObjectReference<T>` and you can use this reference to load from the archive data at runtime as long as the reference is also included in an entity scene. This setup only includes one copy of the asset in the build.
+
+## Limitations
+
+`UnityObjectRef<T>` is not supported inside [blob asset](blob-assets-concept.md) data. Unity resolves object references only in components and buffer elements, not in blob data. If a component needs both blob data and a reference to a Unity object, store the `UnityObjectRef<T>` on the component or buffer element that contains the `BlobAssetReference`.
 
 ## Additional resources
 

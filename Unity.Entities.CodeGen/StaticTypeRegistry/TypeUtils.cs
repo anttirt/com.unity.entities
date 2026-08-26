@@ -408,7 +408,9 @@ namespace Unity.Entities.CodeGen
                         continue;
 
                     var fieldType = typeResolver.Resolve(field.FieldType);
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     if (IsManagedType(fieldType, depth))
+                    #pragma warning restore 0618
                         return true;
                 }
 
@@ -636,7 +638,17 @@ namespace Unity.Entities.CodeGen
 
             if (typeToLookIn != null)
             {
-                GetFieldOffsetsOfRecurse((_, typeRef) => TypeReferenceEqualityComparer.AreEqual(typeRef.Resolve(), typeToFind), 0, typeToLookIn, offsets, archBits);
+
+                GetFieldOffsetsOfRecurse((_, typeRef) =>
+                                {
+                                    //we never look for pointer types
+                                    return (!typeRef.IsPointer) &&
+                                           TypeReferenceEqualityComparer.AreEqual(typeRef.Resolve(), typeToFind);
+                                },
+                                0,
+                                typeToLookIn,
+                                offsets,
+                                archBits);
             }
 
             return offsets;

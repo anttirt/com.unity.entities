@@ -14,7 +14,7 @@ using Object = UnityEngine.Object;
 
 namespace Unity.Entities.Tests.Conversion
 {
-    class TransformBakingTests
+    internal partial class TransformBakingTests
     {
         #region Setup
 
@@ -115,6 +115,7 @@ namespace Unity.Entities.Tests.Conversion
             internal static readonly Dictionary<GameObject, TransformUsageFlags> Flags = new Dictionary<GameObject, TransformUsageFlags>();
             internal static readonly Dictionary<GameObject, TransformUsageFlags> AdditionalFlags = new Dictionary<GameObject, TransformUsageFlags>();
             internal static int AdditionalCount = 0;
+
             public override void Bake(UnityEngine.Transform authoring)
             {
                 if (Flags.TryGetValue(authoring.gameObject, out var flags))

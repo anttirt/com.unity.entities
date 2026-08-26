@@ -3,7 +3,6 @@ using Unity.Collections;
 using Unity.Burst.Intrinsics;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Core;
-using Unity.Entities.CodeGeneratedJobForEach;
 using Unity.Jobs;
 
 namespace Unity.Entities
@@ -37,7 +36,6 @@ namespace Unity.Entities
         public EntityQueryBuilder WithAbsent<T>() => this;
         public EntityQueryBuilder WithPresent<T>() => this;
         public EntityQueryBuilder WithPresentRW<T>() => this;
-        public EntityQueryBuilder WithAspect<T>() => this;
         public EntityQueryBuilder WithOptions(EntityQueryOptions options) => this;
         public EntityQueryBuilder AddAdditionalQuery() => this;
         public EntityQuery Build(ref SystemState systemState) => default;
@@ -94,6 +92,13 @@ namespace Unity.Entities
     public sealed class WithChangeFilterAttribute : Attribute
     {
         public WithChangeFilterAttribute(params Type[] types){}
+    }
+
+    [AttributeUsage(AttributeTargets.Struct, AllowMultiple = true)]
+    public sealed class WithOptionsAttribute : Attribute
+    {
+        public WithOptionsAttribute(EntityQueryOptions option){}
+        public WithOptionsAttribute(params EntityQueryOptions[] options){}
     }
 
     public static class IJobEntityExtensions
@@ -259,7 +264,7 @@ namespace Unity.Entities
         public EnabledMask GetEnabledMask(ref DynamicComponentTypeHandle chunkComponentTypeHandle)
             => default;
 
-        public T GetSharedComponent<T>(SharedComponentTypeHandle<T> aspect2EcsTestSharedCompScAc) => default;
+        public T GetSharedComponent<T>(SharedComponentTypeHandle<T> sharedComponentTypeHandle) => default;
     }
 
     public unsafe struct BufferAccessor<T>
@@ -356,8 +361,6 @@ namespace Unity.Entities
         protected abstract void OnUpdate();
         protected internal ref SystemState CheckedStateRef => throw new Exception();
         protected new JobHandle Dependency { get; set; }
-        protected internal ForEachLambdaJobDescription Entities => new ForEachLambdaJobDescription();
-        protected internal LambdaSingleJobDescription Job => new LambdaSingleJobDescription();
 
         protected internal T GetComponent<T>(Entity entity) where T : unmanaged, IComponentData => default;
         protected internal void SetComponent<T>(Entity entity, T component) where T : unmanaged, IComponentData{}
@@ -528,6 +531,9 @@ namespace Unity.Entities
         // Components
         public static ComponentLookup<T> GetComponentLookup<T>(bool isReadOnly = false) where T : unmanaged, IComponentData => default;
         public static T GetComponent<T>(Entity entity) where T : struct, IComponentData => default;
+
+        public static bool TryGetComponent<T>(Entity entity, out T result) where T : struct, IComponentData => throw new Exception();
+
         public static void SetComponent<T>(Entity entity, T component) where T : struct, IComponentData {}
         public static bool HasComponent<T>(Entity entity) where T : struct, IComponentData => default;
         public static RefRO<T> GetComponentRO<T>(Entity entity) where T : unmanaged, IComponentData => default;
@@ -546,12 +552,12 @@ namespace Unity.Entities
         public static RefRW<T> GetSingletonRW<T>() where T : unmanaged, IComponentData => throw new Exception();
         public static T GetSingleton<T>() where T : unmanaged, IComponentData => throw new Exception();
 
-        // Aspects
-        public static T GetAspect<T>(Entity entity) where T : struct, IAspect => default;
-
         public static class ManagedAPI
         {
             public static T GetComponent<T>(Entity entity) where T : class => default;
+
+            public static bool TryGetComponent<T>(Entity entity, out T result) where T : class => throw new Exception();
+
             public static T GetSingleton<T>() where T : class => throw new Exception();
         }
 
@@ -597,15 +603,6 @@ namespace Unity.Entities
     }
 
     public interface IQueryTypeParameter {}
-    public interface IAspect : IQueryTypeParameter {}
-
-    public interface IAspectCreate<T> : IQueryTypeParameter where T : IAspect
-    {
-        T CreateAspect(Entity entity, ref SystemState system);
-        void AddComponentRequirementsTo(ref UnsafeList<ComponentType> all);
-        void CompleteDependencyBeforeRO(ref SystemState state);
-        void CompleteDependencyBeforeRW(ref SystemState state);
-    }
 
     public interface ISystemCompilerGenerated
     {
@@ -629,11 +626,15 @@ namespace Unity.Entities
     {
         Default = 0,
         IncludePrefab = 1,
+        IncludeDisabledEntities = 2,
+        [Obsolete(
+            "This enum value has been renamed to IncludeDisabledEntities. (RemovedAfter Entities 1.0) (UnityUpgradable) -> IncludeDisabledEntities",
+            false)]
         IncludeDisabled = 2,
         FilterWriteGroup = 4,
-        IgnoreEnabledBits = 8,
+        IgnoreComponentEnabledState = 8,
         IncludeSystems = 16,
-        IncludeDisabledEntities
+        IncludeMetaChunks = 32,
     }
 
     public class EntityQueryDesc : IEquatable<EntityQueryDesc>
@@ -670,6 +671,8 @@ namespace Unity.Entities
     {
         public T GetComponentObject<T>(Entity entity) => default;
 
+        public bool TryGetComponentObject<T>(Entity entity, out T result) => throw new Exception();
+
         private class StructuralChangeMethodAttribute : Attribute { }
 
         public int EntityOrderVersion => throw default;
@@ -691,10 +694,25 @@ namespace Unity.Entities
         public void CompleteDependencyBeforeRW<T>(){}
         public void CompleteDependencyBeforeRO<T>(){}
 
-        public T GetAspect<T>(Entity entity) where T : struct, IAspect => default;
-
         public void AddComponent<T>(EntityQuery query) {}
         public void AddComponentData<T>(Entity entity, T componentData) where T : class, IComponentData {}
+    }
+
+    public struct Simulate : IComponentData, IEnableableComponent
+    {
+    }
+
+    public abstract unsafe partial class ComponentSystemGroup : SystemBase
+    {
+        protected override void OnUpdate()
+        {
+
+        }
+    }
+
+    public class UpdateInGroupAttribute : Attribute
+    {
+        public UpdateInGroupAttribute(Type groupType) {}
     }
 
     namespace Serialization

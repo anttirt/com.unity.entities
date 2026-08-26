@@ -65,6 +65,9 @@ namespace Unity.Entities.Tests.TestSystemAPI
         public void GetComponentRW([Values] SystemAPIAccess access, [Values] MemberUnderneath memberUnderneath, [Values] ReadAccess readAccess) => GetTestSystemUnsafe().TestGetComponentRW(ref GetSystemStateRef(), access, memberUnderneath);
 
         [Test]
+        public void TryGetComponent([Values] SystemAPIAccess access, [Values] MemberUnderneath memberUnderneath, [Values] ReadAccess readAccess) => GetTestSystemUnsafe().TestTryGetComponent(ref GetSystemStateRef(), access, memberUnderneath);
+
+        [Test]
         public void SetComponent([Values] SystemAPIAccess access, [Values] MemberUnderneath memberUnderneath, [Values] ReadAccess readAccess) => GetTestSystemUnsafe().TestSetComponent(ref GetSystemStateRef(), access);
 
         [Test]
@@ -145,13 +148,6 @@ namespace Unity.Entities.Tests.TestSystemAPI
         public void TryGetSingletonBuffer([Values] SystemAPIAccess access, [Values] TypeArgumentExplicit typeArgumentExplicit) => GetTestSystemUnsafe().TestTryGetSingletonBuffer(ref GetSystemStateRef(), access, typeArgumentExplicit);
         [Test]
         public void HasSingleton([Values] SystemAPIAccess access, [Values] SingletonVersion singletonVersion) => GetTestSystemUnsafe().TestHasSingleton(ref GetSystemStateRef(), access, singletonVersion);
-        #endregion
-
-        #region Aspect
-
-        [Test]
-        public void GetAspectRW([Values] SystemAPIAccess access) => GetTestSystemUnsafe().TestGetAspectRW(ref GetSystemStateRef(), access);
-
         #endregion
 
         #region Handles
@@ -616,6 +612,57 @@ namespace Unity.Entities.Tests.TestSystemAPI
                             break;
                         case SystemAPIAccess.Using:
                             Assert.That(GetComponentRW<LocalTransform>(e).ValueRO, Is.EqualTo(t));
+                            break;
+                    }
+                    break;
+            }
+        }
+
+        [BurstCompile]
+        public void TestTryGetComponent(ref SystemState state, SystemAPIAccess access, MemberUnderneath memberUnderneath)
+        {
+            var e = state.EntityManager.CreateEntity();
+            var t = LocalTransform.FromPosition(0, 2, 0);
+            state.EntityManager.AddComponentData(e, t);
+
+            LocalTransform foundTransform;
+            switch (memberUnderneath)
+            {
+                case MemberUnderneath.WithMemberUnderneath:
+                    switch (access)
+                    {
+                        case SystemAPIAccess.SystemAPI:
+                            Assert.That(SystemAPI.TryGetComponent<LocalTransform>(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform.Position, Is.EqualTo(t.Position));
+
+                            Assert.That(SystemAPI.TryGetComponent(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform.Position, Is.EqualTo(t.Position));
+                            break;
+                        case SystemAPIAccess.Using:
+                            Assert.That(TryGetComponent<LocalTransform>(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform.Position, Is.EqualTo(t.Position));
+
+                            Assert.That(TryGetComponent(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform.Position, Is.EqualTo(t.Position));
+                            break;
+                    }
+                    break;
+                case MemberUnderneath.WithoutMemberUnderneath:
+                    switch (access)
+                    {
+                        case SystemAPIAccess.SystemAPI:
+                            Assert.That(SystemAPI.TryGetComponent<LocalTransform>(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform, Is.EqualTo(t));
+
+                            Assert.That(SystemAPI.TryGetComponent(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform, Is.EqualTo(t));
+                            break;
+                        case SystemAPIAccess.Using:
+                            Assert.That(TryGetComponent<LocalTransform>(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform, Is.EqualTo(t));
+
+                            Assert.That(TryGetComponent(e, out foundTransform), Is.True);
+                            Assert.That(foundTransform, Is.EqualTo(t));
                             break;
                     }
                     break;
@@ -1291,27 +1338,6 @@ namespace Unity.Entities.Tests.TestSystemAPI
                     break;
             }
         }
-        #endregion
-
-        #region Aspect
-
-        [BurstCompile]
-        public void TestGetAspectRW(ref SystemState state, SystemAPIAccess access)
-        {
-            var entity = state.EntityManager.CreateEntity(typeof(EcsTestData));
-            switch (access)
-            {
-                case SystemAPIAccess.SystemAPI:
-                    SystemAPI.GetAspect<EcsTestAspect0RW>(entity).EcsTestData.ValueRW.value = 5;
-                    break;
-                case SystemAPIAccess.Using:
-                    GetAspect<EcsTestAspect0RW>(entity).EcsTestData.ValueRW.value = 5;
-                    break;
-            }
-
-            Assert.AreEqual(5, GetComponent<EcsTestData>(entity).value);
-        }
-
         #endregion
 
         #region Handles

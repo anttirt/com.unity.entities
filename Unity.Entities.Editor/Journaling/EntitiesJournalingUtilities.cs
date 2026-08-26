@@ -12,6 +12,7 @@ namespace Unity.Entities.Editor
         public static void ExportToCSV()
         {
 #if !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             var filePath = EditorUtility.SaveFilePanel("Export to CSV", null, "entities-journaling-export", "csv");
             if (string.IsNullOrEmpty(filePath))
                 return;
@@ -52,6 +53,7 @@ namespace Unity.Entities.Editor
                 EditorUtility.ClearProgressBar();
                 fileStream.Dispose();
             }
+#pragma warning restore 0618            
 #endif
         }
 

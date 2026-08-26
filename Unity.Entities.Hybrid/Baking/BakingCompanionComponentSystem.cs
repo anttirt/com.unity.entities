@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -21,6 +22,18 @@ namespace Unity.Entities
         ProfilerMarker                          m_CreateCompanionGameObjectsMarker = new ProfilerMarker(k_CreateCompanionGameObjectsMarkerName);
         List<ComponentType>                     m_ComponentTypesOrderedByDependency = new();
         Dictionary<ComponentType, int>          m_ComponentTypeToDependencyOrder = new();
+        Dictionary<Type, TypeIndex>             m_CompanionComponentTypeIndexByType = new();
+
+        TypeIndex GetCompanionComponentTypeIndex(Type unityComponentType)
+        {
+            if (!m_CompanionComponentTypeIndexByType.TryGetValue(unityComponentType, out var typeIndex))
+            {
+                var closedType = typeof(CompanionComponent<>).MakeGenericType(unityComponentType);
+                typeIndex = TypeManager.GetTypeIndex(closedType);
+                m_CompanionComponentTypeIndexByType[unityComponentType] = typeIndex;
+            }
+            return typeIndex;
+        }
 
         void OrderByDependency(List<UnityEngine.Component> components)
         {
@@ -83,6 +96,14 @@ namespace Unity.Entities
                 EntityManager.RemoveComponent<CompanionLinkTransform>(m_RemoveCompanionComponentsQuery);
                 EntityManager.RemoveComponent<CompanionReference>(m_RemoveCompanionComponentsQuery);
                 EntityManager.RemoveComponent<CompanionGameObjectActiveCleanup>(m_RemoveCompanionComponentsQuery);
+
+                // Also strip the matching CompanionComponent<T> for every registered hybrid type.
+                // RemoveComponent against entities that don't have the type is a cheap no-op.
+                foreach (var registered in m_CompanionTypeSet)
+                {
+                    var companionComponentTypeIndex = GetCompanionComponentTypeIndex(registered.GetManagedType());
+                    EntityManager.RemoveComponent(m_RemoveCompanionComponentsQuery, ComponentType.FromTypeIndex(companionComponentTypeIndex));
+                }
 
                 var mcs = EntityManager.GetCheckedEntityDataAccess()->ManagedComponentStore;
 
@@ -188,7 +209,20 @@ namespace Unity.Entities
 
                                 if (foundType)
                                 {
-                                    EntityManager.AddComponentObject(entity, companionGameObject.GetComponent(type));
+                                    var hybridComponent = companionGameObject.GetComponent(type);
+                                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+                                    EntityManager.AddComponentObject(entity, hybridComponent);
+                                    #pragma warning restore 0618
+
+                                    // Mirror the managed slot with an unmanaged CompanionComponent<type>, so
+                                    // systems can use EntityManager.GetCompanion<T> without going through the
+                                    // managed-component API. Both paths point at the same companion-GameObject
+                                    // component instance.
+                                    var companionComponentTypeIndex = GetCompanionComponentTypeIndex(type);
+                                    EntityManager.AddComponent(entity, ComponentType.FromTypeIndex(companionComponentTypeIndex));
+                                    var access = EntityManager.GetCheckedEntityDataAccess();
+                                    var ptr = (EntityId*)access->GetComponentDataRawRW(entity, companionComponentTypeIndex);
+                                    *ptr = hybridComponent.GetEntityId();
                                 }
                                 else
                                 {
@@ -208,19 +242,21 @@ namespace Unity.Entities
                             if (EntityManager.HasComponent<CompanionLink>(entity))
                             {
                                 var link = EntityManager.GetComponentData<CompanionLink>(entity);
-                                CompanionLink.DestroyObject(link.Companion.Id.instanceId);
+                                CompanionLink.DestroyObject(link.Companion.Id.entityId);
                             }
 
                             if (EntityManager.HasComponent<CompanionGameObjectActiveCleanup>(entity))
                                 EntityManager.RemoveComponent<CompanionGameObjectActiveCleanup>(entity);
 
-                            var newInstanceID = companionGameObject.GetInstanceID();
-                            EntityManager.AddComponentData(entity, new CompanionLink { Companion = UnityObjectRef<GameObject>.FromInstanceID(newInstanceID) });
+                            var newEntityId = companionGameObject.GetEntityId();
+                            EntityManager.AddComponentData(entity, new CompanionLink { Companion = UnityObjectRef<GameObject>.FromInstanceID(newEntityId) });
                             EntityManager.AddComponentData(entity, new CompanionLinkTransform { CompanionTransform = companionGameObject.transform });
 
                             // We only add the CompanionReference in a serialised Bake, as this doesn't play nice with EntityDiffer
                             if (!bakingSystem.IsLiveConversion())
-                                EntityManager.AddComponentObject(entity, new CompanionReference { Companion = UnityObjectRef<GameObject>.FromInstanceID(newInstanceID)});
+                                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+                                EntityManager.AddComponentObject(entity, new CompanionReference { Companion = UnityObjectRef<GameObject>.FromInstanceID(newEntityId)});
+                                #pragma warning restore 0618
 
                             // Can't detach children before instantiate because that won't work with a prefab
                             for (int child = companionGameObject.transform.childCount - 1; child >= 0; child -= 1)

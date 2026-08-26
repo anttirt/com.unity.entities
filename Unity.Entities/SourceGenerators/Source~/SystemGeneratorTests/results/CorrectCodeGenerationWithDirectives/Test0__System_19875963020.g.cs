@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 namespace MyNamespace
@@ -17,7 +18,8 @@ namespace MyNamespace
 #line hidden
         }
 
-        #line 20 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
+        #pragma warning disable 0618
+        #line 22 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
         readonly struct IFE_1641826541_0
         {
             public struct ResolvedChunk
@@ -140,5 +142,6 @@ namespace MyNamespace
             __AssignQueries(ref state);
             __TypeHandle.__AssignHandles(ref state);
         }
+        #pragma warning restore 0618
     }
 }

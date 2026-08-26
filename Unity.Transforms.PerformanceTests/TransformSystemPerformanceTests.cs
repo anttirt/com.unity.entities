@@ -1,9 +1,10 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System.Collections.Generic;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Entities.Tests;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.PerformanceTesting;
 
@@ -179,17 +180,23 @@ namespace Unity.Transforms.PerformanceTests
         }
         partial class RandomizeTransforms : SystemBase
         {
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct Job : IJobEntity
             {
-                Entities
-                .ForEach((ref LocalTransform transform, ref LocalToWorld l2w, ref ExpectedLocalToWorld expected, ref RngComponent rng) =>
+                void Execute(ref LocalTransform transform, ref LocalToWorld l2w,
+                    ref ExpectedLocalToWorld expected, ref RngComponent rng)
                 {
                     transform.Position = rng.Rng.NextFloat3();
                     transform.Rotation = rng.Rng.NextQuaternionRotation();
                     transform.Scale = rng.Rng.NextFloat();
                     l2w.Value = float4x4.identity;
                     expected.Value = transform.ToMatrix();
-                }).ScheduleParallel(default).Complete();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                new Job().ScheduleParallel(new JobHandle()).Complete();
             }
         }
 

@@ -61,17 +61,8 @@ namespace Unity.Entities.Editor
             public const string EmptyMessage = k_Base + "__empty";
             public const string Toggle = k_Base + "__toggle";
             public const string ToggleContent = k_Base + "__toggle-content";
-            public const string HideActionIcon = k_Base + "__hide-action-icon";
             public const string FoldoutContentPadding = k_Base + "__foldout-content-padding";
             public const string HeaderBold = k_Base + "__header-bold";
-        }
-
-        public static class SystemDependencyView
-        {
-            const string k_Base = "system-dependency-view";
-
-            public const string Name = k_Base + "__name";
-            public const string GotoButtonContainer = k_Base + "__button-container";
         }
 
         public static class SystemListView
@@ -94,12 +85,9 @@ namespace Unity.Entities.Editor
         public static class QueryWithEntities
         {
             const string k_Base = "query-with-entities";
-            public const string Icon = k_Base + "__icon";
-            public const string OpenQueryWindowButton = k_Base + "__open-query-window-button";
-            public const string SeeAllContainer = k_Base + "__see-all-container";
-            public const string SeeAllButton = k_Base + "__see-all";
             public const string ToggleContent = k_Base + "__toggle-content";
             public const string EntityIcon = k_Base + "__entity-icon";
+            public const string SeeAll = k_Base + "__see-all";
         }
 
         public static class EntityView
@@ -112,13 +100,6 @@ namespace Unity.Entities.Editor
             public const string GoTo = k_Base + "__goto";
         }
 
-        public static class ComponentAttribute
-        {
-            const string k_Base = "component-attribute";
-            public const string Name = k_Base + "__name";
-            public const string Value = k_Base + "__value";
-        }
-
         public static class SystemScheduleWindow
         {
             const string SystemSchedule = "system-schedule";
@@ -127,15 +108,22 @@ namespace Unity.Entities.Editor
             public static class Toolbar
             {
                 const string k_Base = SystemSchedule + "-toolbar";
+                public const string Wrapper = k_Base + "__wrapper";
+                public const string Container = k_Base + "__container";
                 public const string LeftSide = k_Base + "__left";
                 public const string RightSide = k_Base + "__right";
+                public const string DetailViewToggle = k_Base + "__detail-view-toggle";
+                public const string NavigationButton = k_Base + "__navigation-button";
+                public const string BackButton = k_Base + "__back-button";
+                public const string ForwardButton = k_Base + "__forward-button";
+                public const string ToolbarSeparator = k_Base + "__toolbar-separator";
             }
 
             public static class TreeViewHeader
             {
                 const string Header = SystemSchedule + "-header";
                 public const string System = Header + "__system-label";
-                public const string World = Header + "__world-label";
+                public const string Scheduling = Header + "__scheduling-label";
                 public const string Namespace = Header + "__namespace-label";
                 public const string EntityCount = Header + "__entity-count-label";
                 public const string Time = Header + "__time-label";
@@ -148,13 +136,13 @@ namespace Unity.Entities.Editor
                 public const string EnabledContainer = Base + "__state-toggle-container";
                 public const string StateToggle = Base + "__state-toggle";
                 public const string SystemName = Base + "__name-label";
-                public const string WorldName = Base + "__world-label";
+                public const string SchedulingName = Base + "__scheduling-label";
                 public const string Namespace = Base + "__namespace-label";
-                public const string Matches = Base + "__entity-count-label";
+                public const string EntityCount = Base + "__entity-count-label";
                 public const string Time = Base + "__time-label";
 
                 public const string SystemNameColumn = Base + "__column-system-name";
-                public const string WorldNameColumn = Base + "__column-world-name";
+                public const string SchedulingNameColumn = Base + "__column-scheduling-name";
                 public const string NamespaceColumn = Base + "__column-namespace";
                 public const string EntityCountColumn = Base + "__column-entity-count";
                 public const string TimeColumn = Base + "__column-time";
@@ -243,7 +231,6 @@ namespace Unity.Entities.Editor
                 public const string Enabled = k_Base + "-enabled";
                 public const string Category = k_Base + "-category";
                 public const string Menu = k_Base + "-menu";
-                public const string AspectIcon = "aspect-icon";
                 public const string Shrink = "shrink";
             }
 
@@ -256,19 +243,6 @@ namespace Unity.Entities.Editor
                 public const string ChunkComponent = "chunk-component" + k_PostFix;
                 public const string ManagedComponent = "managed-component" + k_PostFix;
                 public const string BufferComponent = "buffer-component" + k_PostFix;
-            }
-
-            public static class AspectsTab
-            {
-                const string k_TabBase = EntityInspector + "-aspects-tab";
-                public const string Content = k_TabBase + "__content";
-            }
-
-            public static class RelationshipsTab
-            {
-                const string k_TabBase = EntityInspector + "-relationships-tab";
-                public const string Container = k_TabBase + "__container";
-                public const string SearchField = k_TabBase + "__search-field";
             }
 
             public static class ComponentsTab
@@ -304,22 +278,6 @@ namespace Unity.Entities.Editor
         {
             public static class Query
             {
-                public static class EntityQuery
-                {
-                    const string k_EntityQuery = "entity-query";
-
-                    public const string Container = k_EntityQuery + "__container";
-                    public const string HeaderMainTitle = k_EntityQuery + "__header__main-title__label";
-                    public const string HeaderSubTitle = k_EntityQuery + "__header__subtitle";
-                    public const string HeaderGoTo = k_EntityQuery + "__header__subtitle__goto";
-                    public const string ListView = k_EntityQuery + "__list-view";
-                    public const string SearchContainer = k_EntityQuery + "__search-element-container";
-
-                    public const string SystemQuery = "system-query";
-                    public const string ComponentQuery = "component-query";
-
-                }
-
                 public static class EntityInfo
                 {
                     const string k_EntityInfo = "entity-info";

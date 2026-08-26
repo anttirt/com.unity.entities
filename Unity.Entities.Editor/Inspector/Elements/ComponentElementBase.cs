@@ -7,15 +7,15 @@ using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
 {
-    abstract class ComponentElementBase : BindableElement
+    internal abstract class ComponentElementBase : BindableElement
     {
-        public int TypeIndex { get; private set; }
-        public ComponentPropertyType Type { get; private set; }
-
+        public ComponentPropertyType Type { get; }
         [CreateProperty] public string Path { get; private set; }
-        protected string DisplayName { get; private set; }
-        protected EntityInspectorContext Context { get; private set; }
-        protected EntityContainer Container { get; private set; }
+        public string DisplayName { get; }
+        
+        protected int TypeIndex { get; private set; }
+        protected EntityInspectorContext Context { get; }
+        protected EntityContainer Container { get; }
 
         protected ComponentElementBase(IComponentProperty property, EntityInspectorContext context)
         {

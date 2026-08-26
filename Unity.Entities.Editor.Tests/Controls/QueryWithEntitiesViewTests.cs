@@ -36,14 +36,18 @@ namespace Unity.Entities.Editor.Tests
             using var entities = m_World.EntityManager.CreateEntity(archetype, 2, m_World.UpdateAllocator.ToAllocator);
             for (var i = 0; i < entities.Length; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_World.EntityManager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp{ value = i == 0 ? 123 : 345});
+                #pragma warning restore 0618
 #if !DOTS_DISABLE_DEBUG_NAMES
                 m_World.EntityManager.SetName(entities[i], $"QueryWithEntitiesView_Entity{i}");
 #endif
             }
 
             m_Query = m_World.EntityManager.CreateEntityQuery(typeof(EntityGuid), typeof(EcsTestSharedComp));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Query.SetSharedComponentFilterManaged(new EcsTestSharedComp{value = 123});
+            #pragma warning restore 0618
         }
 
         [OneTimeTearDown]
@@ -64,8 +68,6 @@ namespace Unity.Entities.Editor.Tests
             var headerTitleLabel = el.HeaderName;
             Assert.That(headerTitleLabel, Is.Not.Null);
             Assert.That(headerTitleLabel.text, Is.EqualTo("Query #2"));
-            Assert.That(el.Q(className: UssClasses.QueryWithEntities.OpenQueryWindowButton), Is.Not.Null);
-            Assert.That(el.Q(className: UssClasses.QueryWithEntities.SeeAllContainer), Is.Not.Null);
         }
 
         [Test]
@@ -76,7 +78,6 @@ namespace Unity.Entities.Editor.Tests
             el.Update();
 
             Assert.That(el.HeaderName.text, Is.EqualTo("Query #0"));
-            Assert.That(el.Q(className: UssClasses.QueryWithEntities.SeeAllContainer).style.display.value, Is.EqualTo(DisplayStyle.None));
 
             var entityViews = el.Query<EntityView>().ToList();
             Assert.That(entityViews.Count, Is.EqualTo(1));

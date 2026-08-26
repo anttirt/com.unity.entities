@@ -11,6 +11,7 @@ using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Mathematics;
 using Unity.Profiling;
 using Unity.Transforms;
+using UnityEngine;
 using UnityEngine.Jobs;
 
 namespace Unity.Entities
@@ -49,7 +50,7 @@ namespace Unity.Entities
         }
 
         // Perform any work that doesn't rely on all the entities being created
-        public JobHandle Prepare(IncrementalHierarchy hierarchy, NativeList<int> changedTransforms)
+        public JobHandle Prepare(IncrementalHierarchy hierarchy, NativeList<EntityId> changedTransforms)
         {
             _JobHandle.Complete();
 
@@ -71,15 +72,11 @@ namespace Unity.Entities
         }
 
         // Perform any work that relies on all entities having been constructed
-        public void UpdateTransforms(UnsafeParallelHashMap<int, Entity> gameObjectToEntity, UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, ref bool hasTransformUsageChanged)
+        public void UpdateTransforms(UnsafeParallelHashMap<EntityId, Entity> gameObjectToEntity, UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, ref bool hasTransformUsageChanged)
         {
             using var marker = new ProfilerMarker("TransformHierarchyBaking.BakeToTransformAuthoring").Auto();
 
-#if UNITY_2022_2_14F1_OR_NEWER
             int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-            int maxThreadCount = JobsUtility.MaxJobThreadCount;
-#endif
             var changedUsage = new NativeArray<bool>(maxThreadCount, Allocator.TempJob);
 
             var parentsToForceTransform = new UnsafeDependencyStream<Entity>(Allocator.TempJob);
@@ -169,15 +166,15 @@ namespace Unity.Entities
             return (flags & TransformUsageFlags.NonUniformScale) != 0;
         }
 
-        static TransformUsageFlags GetTransformUsageFlagsFromIndex(int index, ref UnsafeParallelHashMap<int, Entity> gameObjectToEntity, ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, out Entity entity)
+        static TransformUsageFlags GetTransformUsageFlagsFromIndex(int index, ref UnsafeParallelHashMap<EntityId, Entity> gameObjectToEntity, ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, out Entity entity)
         {
-            if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetInstanceIdForIndex(index), out entity))
+            if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetEntityIdForIndex(index), out entity))
                 Debug.LogError("InternalError");
             transformUsages.TryGetValue(entity, out var parentTransformUsage);
             return parentTransformUsage.Flags;
         }
 
-        static bool IsAnyParentDynamicOrManual(int parentIndex, ref UnsafeParallelHashMap<int, Entity> gameObjectToEntity, ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages)
+        static bool IsAnyParentDynamicOrManual(int parentIndex, ref UnsafeParallelHashMap<EntityId, Entity> gameObjectToEntity, ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages)
         {
             while (parentIndex != -1)
             {
@@ -195,7 +192,7 @@ namespace Unity.Entities
             return false;
         }
 
-        static void CalculateGlobalTransformUsage(ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<int, Entity> gameObjectToEntity, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, Entity entity, int parentIndex, int threadIndex, ref UnsafeDependencyStream<Entity> parentsToForceTransform, out Entity outParent, out RuntimeTransformComponentFlags outUsage)
+        static void CalculateGlobalTransformUsage(ref SceneHierarchy sceneHierarchy, ref UnsafeParallelHashMap<EntityId, Entity> gameObjectToEntity, ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> transformUsages, Entity entity, int parentIndex, int threadIndex, ref UnsafeDependencyStream<Entity> parentsToForceTransform, out Entity outParent, out RuntimeTransformComponentFlags outUsage)
         {
             transformUsages.TryGetValue(entity, out var entityTransformUsage);
             var computedUsage = entityTransformUsage.Flags;
@@ -214,7 +211,7 @@ namespace Unity.Entities
                 if (parentIndex != -1 && IsAnyParentDynamicOrManual(parentIndex, ref gameObjectToEntity, ref sceneHierarchy, ref transformUsages))
                 {
                     // Access the immediate parent
-                    if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetInstanceIdForIndex(parentIndex), out outParent))
+                    if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetEntityIdForIndex(parentIndex), out outParent))
                         Debug.LogError($"Expected parent entity for parent id");
 
                     transformUsages.TryGetValue(outParent, out var parentTransformUsage);
@@ -250,7 +247,7 @@ namespace Unity.Entities
             else
             {
                 // Access the immediate parent
-                if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetInstanceIdForIndex(parentIndex), out outParent))
+                if (!gameObjectToEntity.TryGetValue(sceneHierarchy.GetEntityIdForIndex(parentIndex), out outParent))
                     Debug.LogError($"Expected parent entity for parent id");
 
                 transformUsages.TryGetValue(outParent, out var parentTransformUsage);
@@ -324,7 +321,7 @@ namespace Unity.Entities
             [ReadOnly]
             public SceneHierarchy                                    Hierarchy;
             [ReadOnly]
-            public UnsafeParallelHashMap<int, Entity>                        GameObjectToEntity;
+            public UnsafeParallelHashMap<EntityId, Entity>           GameObjectToEntity;
             public uint                                              ChangeVersion;
             public UnsafeDependencyStream<Entity>                    ParentsToForceTransform;
             [NativeDisableParallelForRestriction]
@@ -366,7 +363,7 @@ namespace Unity.Entities
                 {
                     var parentTransform = TransformAuthoringLookup[parents[i].Parent];
 
-                    var parentIndex = Hierarchy.GetIndexForInstanceId(parents[i].ParentInstanceID);
+                    var parentIndex = Hierarchy.GetIndexForEntityId(parents[i].ParentEntityId);
                     CalculateGlobalTransformUsage(ref Hierarchy, ref GameObjectToEntity, ref TransformUsages, entities[i], parentIndex, m_ThreadIndex, ref ParentsToForceTransform, out var runtimeParent, out var runtimeTransformUsage);
 
 
@@ -404,15 +401,15 @@ namespace Unity.Entities
             [ReadOnly] public NativeParallelHashMap<int, bool> ChangedIndices;
             public  uint                               ChangeVersion;
 
-            public void Execute(int index, TransformAccess transform)
+            public unsafe void Execute(int index, TransformAccess transform)
             {
                 if (!ChangedIndices.TryGetValue(index, out var selfChanged))
                      return;
 
                 var parentIndex = Hierarchy.GetParentForIndex(index);
-                var parentInstanceID = 0;
+                EntityId parentInstanceID = EntityId.None;
                 if (parentIndex != -1)
-                    parentInstanceID = Hierarchy.GetInstanceIdForIndex(parentIndex);
+                    parentInstanceID = Hierarchy.GetEntityIdForIndex(parentIndex);
 
                 TransformAuthoring value;
                 value.Position = transform.position;
@@ -426,8 +423,7 @@ namespace Unity.Entities
                 value.RuntimeTransformUsage = default;
                 value.RuntimeParent = default;
                 // This is a bit of a hack, in the flattened NativeList
-                value.AuthoringParent.Index = parentInstanceID;
-                value.AuthoringParent.Version = 0;
+                value.AuthoringParent = *(Entity*)((EntityId*)&parentInstanceID);
                 value.ChangeVersion = ChangeVersion;
 
                 TransformAuthorings[index] = value;
@@ -446,7 +442,7 @@ namespace Unity.Entities
             public ComponentLookup<TransformAuthoring> TransformAuthoring;
 
             [ReadOnly]
-            public UnsafeParallelHashMap<int, Entity> GameObjectToEntity;
+            public UnsafeParallelHashMap<EntityId, Entity> GameObjectToEntity;
             [ReadOnly]
             public UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> TransformUsages;
             public uint                                              ChangeVersion;
@@ -457,25 +453,25 @@ namespace Unity.Entities
             [NativeSetThreadIndex]
             internal int m_ThreadIndex;
 
-            public void Execute(int index)
+            public unsafe void Execute(int index)
             {
                 // TODO: Review the performance impact of this change.
                 var hasPossibleChange = HasTransformUsageChanged || !ChangedIndices.IsEmpty /*ChangedIndices.TryGetValue(index, out var selfChanged)*/;
                 if (!hasPossibleChange)
                     return;
 
-                // instanceID and primary entity we want to apply this to
-                int instanceID = Hierarchy.GetInstanceIdForIndex(index);
-                if (!GameObjectToEntity.TryGetValue(instanceID, out var entity))
+                // entityId and primary entity we want to apply this to
+                EntityId entityId = Hierarchy.GetEntityIdForIndex(index);
+                if (!GameObjectToEntity.TryGetValue(entityId, out var entity))
                     return;
 
                 // Need to transform the parent from instanceID to Entity
                 TransformAuthoring value = TransformAuthorings[index];
-                var parentInstanceID = value.AuthoringParent.Index;
-                GameObjectToEntity.TryGetValue(parentInstanceID, out value.AuthoringParent);
+                var parentEntityId = EntityId.FromULong(*(ulong*)&value.AuthoringParent);
+                GameObjectToEntity.TryGetValue(parentEntityId, out value.AuthoringParent);
 
                 // Calculate hierarchical transform usage
-                var parentIndex = Hierarchy.GetIndexForInstanceId(parentInstanceID);
+                var parentIndex = Hierarchy.GetIndexForEntityId(parentEntityId);
                 CalculateGlobalTransformUsage(ref Hierarchy, ref GameObjectToEntity, ref TransformUsages, entity, parentIndex, m_ThreadIndex, ref ParentsToForceTransform, out value.RuntimeParent, out value.RuntimeTransformUsage);
 
                 // Apply it only if it changed, so that we don't dirty change filtering

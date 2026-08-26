@@ -14,7 +14,7 @@ namespace Unity.Entities.SourceGen.SystemGenerator
         static readonly SuppressionDescriptor PartialStructWarningRule = new SuppressionDescriptor("SPDC0282", "CS0282",
             "Some DOTS types utilize codegen requiring the type to be partial.");
 
-        static readonly string[] _allowedPartialStructInterfaces = { "ISystem", "ISystemBase", "IJobEntity", "IAspect" };
+        static readonly string[] _allowedPartialStructInterfaces = { "ISystem", "ISystemBase", "IJobEntity" };
 
         public override ImmutableArray<SuppressionDescriptor> SupportedSuppressions => ImmutableArray.Create(PartialStructWarningRule);
 

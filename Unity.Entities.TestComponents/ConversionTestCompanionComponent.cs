@@ -1,3 +1,5 @@
+[assembly: Unity.Entities.RegisterGenericComponentType(typeof(Unity.Entities.CompanionComponent<Unity.Entities.Tests.ConversionTestCompanionComponent>))]
+
 namespace Unity.Entities.Tests
 {
 #pragma warning disable CS0649 // Field is never assigned to, and will always have its default value

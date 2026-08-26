@@ -15,7 +15,6 @@ namespace Unity.Transforms
     /// When adding or modifying this component, add and update the corresponding <see cref="LocalTransform"/> component.
     /// </remarks>
     /// <seealso cref="Child"/>
-    [Serializable]
     public struct Parent : IComponentData
     {
         /// <summary>
@@ -33,7 +32,6 @@ namespace Unity.Transforms
     /// The <see cref="ParentSystem"/> automatically adds and manages this component.  You shouldn't
     /// add, remove, or modify it in your code.
     /// </remarks>
-    [Serializable]
     public struct PreviousParent : ICleanupComponentData
     {
         /// <summary>
@@ -52,7 +50,6 @@ namespace Unity.Transforms
     /// When an entity with this component is destroyed, the <see cref="ParentSystem"/> will automatically remove the
     /// <see cref="Parent"/> components from each child entity.
     /// </remarks>
-    [Serializable]
     [InternalBufferCapacity(0)]
     public struct Child : ICleanupBufferElementData
     {

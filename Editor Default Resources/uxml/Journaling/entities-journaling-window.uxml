@@ -1,5 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" uee="Unity.Entities.Editor" editor-extension-mode="False">
-    <uie:Toolbar name="toolbar" class="entities-journaling-window__toolbar">
+    <uie:Toolbar name="toolbar" class="entities-journaling-window__toolbar" style="flex-wrap: wrap;">
+        <ui:HelpBox name="warning-box" message-type="Warning" style="flex-shrink: 0; width: 100%;"/>
         <ui:Toggle name="record" class="entities-journaling-window__record" />
         <ui:VisualElement class="entities-journaling-window__separator" />
         <ui:VisualElement name="export-container" class="entities-journaling-window__export-container">

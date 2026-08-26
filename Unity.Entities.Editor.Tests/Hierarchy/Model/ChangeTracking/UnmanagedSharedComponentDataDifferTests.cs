@@ -42,8 +42,10 @@ namespace Unity.Entities.Editor.Tests
         {
             var entityA = m_World.EntityManager.CreateEntity();
             var entityB = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator).Dispose();
 
             m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->IncrementGlobalSystemVersion();
@@ -59,7 +61,9 @@ namespace Unity.Entities.Editor.Tests
         public unsafe void UnmanagedSharedComponentDataDiffer_DetectReplacedChunk()
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             using (var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator))
             {
                 Assert.That(result.AddedSharedComponentCount, Is.EqualTo(1));
@@ -68,7 +72,9 @@ namespace Unity.Entities.Editor.Tests
             }
 
             m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->IncrementGlobalSystemVersion();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.SetSharedComponentManaged(entityA, new EcsTestSharedComp { value = 2 });
+            #pragma warning restore 0618
             using (var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator))
             {
                 Assert.That(result.AddedSharedComponentCount, Is.EqualTo(1));
@@ -82,9 +88,13 @@ namespace Unity.Entities.Editor.Tests
         public void UnmanagedSharedComponentDataDiffer_DetectNewEntity()
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityB = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 2 });
+            #pragma warning restore 0618
 
             using var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator);
             Assert.That(result.AddedSharedComponentCount, Is.EqualTo(2));
@@ -109,9 +119,13 @@ namespace Unity.Entities.Editor.Tests
         public unsafe void UnmanagedSharedComponentDataDiffer_DetectNewAndMissingEntityInExistingChunk()
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityB = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
 
             m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator).Dispose();
 
@@ -126,7 +140,9 @@ namespace Unity.Entities.Editor.Tests
 
             m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->IncrementGlobalSystemVersion();
             var entityC = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityC, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             using (var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator))
             {
                 Assert.That(result.AddedSharedComponentCount, Is.EqualTo(1));
@@ -139,16 +155,22 @@ namespace Unity.Entities.Editor.Tests
         public unsafe void UnmanagedSharedComponentDataDiffer_DetectMovedEntitiesAsNewAndRemoved()
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityB = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
 
             m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator).Dispose();
 
             m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->IncrementGlobalSystemVersion();
             m_World.EntityManager.RemoveComponent<EcsTestSharedComp>(entityA);
             var entityC = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityC, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
 
             using var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator);
             Assert.That(result.AddedSharedComponentCount, Is.EqualTo(2));
@@ -165,7 +187,9 @@ namespace Unity.Entities.Editor.Tests
         public unsafe void UnmanagedSharedComponentDataDiffer_DetectMissingChunk([Values(10, 100, 129, 500, 1000)] int entityCount)
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
 
             var entities = new NativeArray<Entity>(entityCount, Allocator.Persistent);
             try
@@ -173,7 +197,9 @@ namespace Unity.Entities.Editor.Tests
                 for (var i = 0; i < entityCount; i++)
                 {
                     var e = m_World.EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_World.EntityManager.AddSharedComponentManaged(e, new EcsTestSharedComp { value = 2 });
+                    #pragma warning restore 0618
                     entities[i] = e;
                 }
 
@@ -204,13 +230,19 @@ namespace Unity.Entities.Editor.Tests
         public unsafe void UnmanagedSharedComponentDataDiffer_DetectEntityMovingFromOneChunkToAnother()
         {
             var entityA = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityA, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             var entityB = m_World.EntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(entityB, new EcsTestSharedComp { value = 2 });
+            #pragma warning restore 0618
 
             m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator).Dispose();
             m_World.EntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->IncrementGlobalSystemVersion();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.SetSharedComponentManaged(entityB, new EcsTestSharedComp { value = 1 });
+            #pragma warning restore 0618
             using var result = m_Differ.GatherComponentChanges(m_World.EntityManager, m_World.EntityManager.UniversalQuery, World.UpdateAllocator.ToAllocator);
             Assert.That(result.AddedSharedComponentCount, Is.EqualTo(1));
             Assert.That(result.RemovedSharedComponentCount, Is.EqualTo(1));

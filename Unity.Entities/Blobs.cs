@@ -640,7 +640,13 @@ namespace Unity.Entities
         {
             using (var asset = builder.CreateBlobAssetReference<T>(Allocator.TempJob))
             {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+                writer.ImHexPattern.WriteTypeWithPosition<int>("BlobVersion", writer.Position);
+#endif
                 writer.Write(version);
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+                writer.ImHexPattern.WriteTypeWithPosition<BlobAssetReference<T>>("Asset", writer.Position);
+#endif
                 writer.Write(asset);
             }
         }
@@ -798,6 +804,12 @@ namespace Unity.Entities
         /// <summary>
         /// The number of elements in the array.
         /// </summary>
+        /// <remarks>
+        /// Unity assigns the length of the array when you call <see cref="BlobBuilder.CreateBlobAssetReference{T}"/>, so until
+        /// then this property returns 0. To get the number of elements before that point, use the
+        /// <see cref="BlobBuilderArray{T}.Length"/> property of the <see cref="BlobBuilderArray{T}"/> that
+        /// <see cref="BlobBuilder.Allocate{T}(ref BlobArray{T}, int)"/> returns.
+        /// </remarks>
         public int Length
         {
             get { return m_Length; }
@@ -808,6 +820,15 @@ namespace Unity.Entities
         /// </summary>
         /// <remarks>You can only use unsafe pointers in [unsafe contexts].
         /// [unsafe contexts]: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/unsafe-code
+        /// </remarks>
+        /// <remarks>
+        /// Don't call this method before you call <see cref="BlobBuilder.CreateBlobAssetReference{T}"/>. Unity assigns the array's
+        /// internal offset at that point, so until then this method returns a pointer to the <see cref="BlobArray{T}"/> field
+        /// itself instead of to the array data, and the <see cref="Length"/> property returns 0. This method performs no
+        /// validation and reports no error in this case.
+        ///
+        /// To get a pointer to the array data before that point, use the <see cref="BlobBuilderArray{T}.GetUnsafePtr"/> method of
+        /// the <see cref="BlobBuilderArray{T}"/> that <see cref="BlobBuilder.Allocate{T}(ref BlobArray{T}, int)"/> returns.
         /// </remarks>
         /// <returns>An unsafe pointer.</returns>
         public void* GetUnsafePtr()
@@ -879,6 +900,15 @@ namespace Unity.Entities
         }
 
         /// <summary>
+        /// Returns a <see cref="ReadOnlySpan{T}"/> view of the blob array data.
+        /// </summary>
+        /// <returns>A read-only span over the array elements.</returns>
+        public unsafe ReadOnlySpan<T> AsSpan()
+        {
+            return new ReadOnlySpan<T>(GetUnsafePtr(), m_Length);
+        }
+
+        /// <summary>
         /// Copies the elements of this BlobArray to a new managed array.
         /// </summary>
         /// <returns>An array containing copies of the elements of the BlobArray.</returns>
@@ -935,6 +965,13 @@ namespace Unity.Entities
         /// </summary>
         /// <returns>The C# string.</returns>
         public new string ToString() => ToString((byte*)Data.GetUnsafePtr(), Length);
+
+        /// <summary>
+        /// Returns a <see cref="ReadOnlySpan{Byte}"/> view of the UTF-8 encoded string data,
+        /// excluding the null terminator.
+        /// </summary>
+        /// <returns>A read-only span over the UTF-8 bytes.</returns>
+        public ReadOnlySpan<byte> AsSpan() => new ReadOnlySpan<byte>(Data.GetUnsafePtr(), Length);
 
         internal static string ToString(byte* data, int lengthInBytes)
         {
@@ -1023,7 +1060,13 @@ namespace Unity.Entities
             var blobAssetLength = blob.m_data.Header->Length;
             var serializeReadyHeader = BlobAssetHeader.CreateForSerialize(blobAssetLength, blob.m_data.Header->Hash);
 
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            binaryWriter.ImHexPattern.WriteTypeWithPosition<BlobAssetHeader>("serializeReadyHeader", binaryWriter.Position);
+#endif
             binaryWriter.WriteBytes(&serializeReadyHeader, sizeof(BlobAssetHeader));
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+            binaryWriter.ImHexPattern.WriteTypeWithPosition<T>("blobData", binaryWriter.Position);
+#endif
             binaryWriter.WriteBytes(blob.m_data.Header + 1, blobAssetLength);
         }
 

@@ -80,7 +80,7 @@ namespace Unity.Entities
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
 #pragma warning disable 414
             [ReadOnly] public EntityQuerySafetyHandles safety;
-#pragma warning restore
+#pragma warning restore 414
             // Only used for JobsUtility.PatchBufferMinMaxRanges; the user must also pass this array into the job struct
             // T if they need these indices inside their Execute() implementation. If null, this array will
             // be ignored.
@@ -118,8 +118,8 @@ namespace Unity.Entities
         /// <param name="query">The query selecting chunks with the necessary components.</param>
         /// <param name="dependsOn">The handle identifying already scheduled jobs that must complete before this job is executed.
         /// For example, a job that writes to a component cannot run in parallel with other jobs that read or write that component.
-        /// Jobs that only read the same components can run in parallel.
-        ///
+        /// Jobs that only read the same components can run in parallel.<br/>
+        /// <br/>
         /// Most frequently, an appropriate value for this parameter is <see cref="SystemState.Dependency"/> to ensure
         /// that jobs registered with the safety system are taken into account as input dependencies.</param>
         /// <typeparam name="T">The specific <see cref="IJobChunk"/> implementation type.</typeparam>
@@ -142,8 +142,8 @@ namespace Unity.Entities
         /// <param name="query">The query selecting chunks with the necessary components.</param>
         /// <param name="dependsOn">The handle identifying already scheduled jobs that must complete before this job is executed.
         /// For example, a job that writes to a component cannot run in parallel with other jobs that read or write that component.
-        /// Jobs that only read the same components can run in parallel.
-        ///
+        /// Jobs that only read the same components can run in parallel.<br/>
+        /// <br/>
         /// Most frequently, an appropriate value for this parameter is <see cref="SystemState.Dependency"/> to ensure
         /// that jobs registered with the safety system are taken into account as input dependencies.</param>
         /// <typeparam name="T">The specific <see cref="IJobChunk"/> implementation type.</typeparam>
@@ -165,8 +165,8 @@ namespace Unity.Entities
         /// <param name="query">The query selecting chunks with the necessary components.</param>
         /// <param name="dependsOn">The handle identifying already scheduled jobs that must complete before this job is executed.
         /// For example, a job that writes to a component cannot run in parallel with other jobs that read or write that component.
-        /// Jobs that only read the same components can run in parallel.
-        ///
+        /// Jobs that only read the same components can run in parallel.<br/>
+        /// <br/>
         /// Most frequently, an appropriate value for this parameter is <see cref="SystemState.Dependency"/> to ensure
         /// that jobs registered with the safety system are taken into account as input dependencies.</param>
         /// <typeparam name="T">The specific <see cref="IJobChunk"/> implementation type.</typeparam>
@@ -189,8 +189,8 @@ namespace Unity.Entities
         /// <param name="query">The query selecting chunks with the necessary components.</param>
         /// <param name="dependsOn">The handle identifying already scheduled jobs that must complete before this job is executed.
         /// For example, a job that writes to a component cannot run in parallel with other jobs that read or write that component.
-        /// Jobs that only read the same components can run in parallel.
-        ///
+        /// Jobs that only read the same components can run in parallel.<br/>
+        /// <br/>
         /// Most frequently, an appropriate value for this parameter is <see cref="SystemState.Dependency"/> to ensure
         /// that jobs registered with the safety system are taken into account as input dependencies.</param>
         /// <typeparam name="T">The specific <see cref="IJobChunk"/> implementation type.</typeparam>

@@ -6,7 +6,6 @@ enum QueryType
     RefRO,
     UnmanagedSharedComponent,
     ManagedSharedComponent,
-    Aspect,
     DynamicBuffer,
     ValueTypeComponent,
     ManagedComponent,

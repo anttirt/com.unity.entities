@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.PerformanceTesting;
+using UnityEngine.Assemblies;
 
 namespace Unity.Entities.Editor.PerformanceTests
 {
@@ -56,7 +57,7 @@ namespace Unity.Entities.Editor.PerformanceTests
         public void Trie_ScaleTest()
         {
             var allTypes = new HashSet<string>();
-            var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var allAssemblies = CurrentAssemblies.GetLoadedAssemblies();
             foreach (var assembly in allAssemblies)
             {
                 var types = assembly.GetTypes();

@@ -62,7 +62,7 @@ namespace Unity.Entities.Editor.PerformanceTests
                 result.Dispose();
         }
 
-        [Test, Performance, Ignore("Only used for comparison; do not run on CI")]
+        [Test, Performance, Explicit("Only used for comparison; do not run on CI")]
         public void String_Contains(
             [Values(StringComparison.Ordinal, StringComparison.OrdinalIgnoreCase)]
             StringComparison stringComparisonMethod

@@ -35,7 +35,10 @@ namespace Unity.Entities.Editor
                 if (systemWorld is not {IsCreated: true})
                     return;
 
-                AddSystem(new SystemProxy(wrapper.System, WorldProxyManager.GetWorldProxyForGivenWorld(systemWorld)), parent);
+                if (!WorldProxyManager.TryGetWorldProxy(systemWorld, out var worldProxy))
+                    return;
+
+                AddSystem(new SystemProxy(wrapper.System, worldProxy), parent);
                 return;
             }
 

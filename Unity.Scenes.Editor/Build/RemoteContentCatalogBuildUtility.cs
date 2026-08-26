@@ -59,7 +59,7 @@ namespace Unity.Entities.Content
                 archivePaths.AddRange(Directory.GetFiles(Path.Combine(tmpBuildFolder, EntityScenesPaths.k_EntitySceneSubDir), "*.*", SearchOption.TopDirectoryOnly));
                 var publishFolder = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Builds", $"{buildFolder}-RemoteContent");
                 archivePaths.Sort();
-                PublishContent(archivePaths, tmpBuildFolder, publishFolder, f => new string[] { "all" });
+                PublishContent(archivePaths, tmpBuildFolder, publishFolder, f => new string[] { "all" } );
             }
         }
 
@@ -100,7 +100,8 @@ namespace Unity.Entities.Content
         static void DoCopy(string src, string dst)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(dst));
-            File.Copy(src, dst, true);
+            // Use FileUtil to ensure VFS paths are correctly resolved
+            FileUtil.ReplaceFile(src, dst);
         }
 
         /// <summary>
@@ -171,13 +172,13 @@ namespace Unity.Entities.Content
                     //all .bin files are added to a special group named "local_catalogs" - this group is always delivered even if there is no initial content set specified.
                     //this is to ensure that the RuntimeContentManager initialization has the correct catalog
                     if (Path.GetExtension(relPath) == ".bin")
-                        contentSets = contentSets.Concat(new string[] { ContentDeliveryGlobalState.kLocalCatalogsContentSet });
+                        contentSets = contentSets.Concat(new string[] {ContentDeliveryGlobalState.kLocalCatalogsContentSet });
 
                     //each files is checked to see if it is a dependency of any files or subscenes - if so, it is added to the content set that is named with the object id or subscene guid
                     if (depMap.TryGetValue(relPath, out var referencedBy))
                         contentSets = contentSets.Concat(referencedBy);
 
-                    //content sets are created for directories 
+                    //content sets are created for directories
                     contentSets = contentSets.Concat(new string[] { Path.GetDirectoryName(relPath) });
 
                     var loc = new RemoteContentLocation();
@@ -396,5 +397,8 @@ namespace Unity.Entities.Content
             foreach (var d in deps)
                 RecurseDependencies(ref rtcc, archiveToObjectIds, sourceFolder, objSetName, d, remapFunc);
         }
+
+
+
     }
 }

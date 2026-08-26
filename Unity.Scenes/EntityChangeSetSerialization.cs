@@ -7,6 +7,7 @@ using Unity.Collections.NotBurstCompatible;
 using Unity.Entities;
 using Unity.Entities.Serialization;
 using UnityEditor;
+using UnityEngine;
 
 namespace Unity.Scenes
 {
@@ -87,7 +88,7 @@ namespace Unity.Scenes
             bufferReader->ReadNext<ulong>(out var destroyedBlobAssets, Allocator.Persistent);
             bufferReader->ReadNext<byte>(out var blobAssetData, Allocator.Persistent);
 
-            var unityObjects = new NativeArray<int>(globalObjectIDs.Length, Allocator.Temp);
+            var unityObjects = new NativeArray<EntityId>(globalObjectIDs.Length, Allocator.Temp);
             resolver.ResolveObjects(globalObjectIDs, unityObjects);
             var reader = new ManagedObjectBinaryReader(bufferReader, unityObjects);
 
@@ -242,7 +243,7 @@ namespace Unity.Scenes
             WriteSharedComponentDataChanges(buffer, writer, entityChangeSet.SetSharedComponents, entityChangeSet.UnmanagedSharedComponentData);
             WriteManagedComponentDataChanges(buffer, writer, setManagedComponentWithoutCompanionLinks);
 
-            var objectTable = unityObjectRefs.InstanceIDs.ToArrayNBC();
+            var objectTable = unityObjectRefs.EntityIds.ToArrayNBC();
             var globalObjectIds = new GlobalObjectId[objectTable.Length];
             GlobalObjectId.GetGlobalObjectIdsSlow(objectTable, globalObjectIds);
 

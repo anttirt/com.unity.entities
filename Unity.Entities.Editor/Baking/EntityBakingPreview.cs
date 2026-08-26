@@ -5,9 +5,10 @@ using Unity.Collections;
 using Unity.Editor.Bridge;
 using Unity.Editor.Legacy;
 using Unity.Mathematics;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Pool;
 using Object = UnityEngine.Object;
 
 namespace Unity.Entities.Editor
@@ -198,9 +199,9 @@ namespace Unity.Entities.Editor
             m_GameObjectTargets.AddRange(targets.OfType<GameObject>());
 
             var mainTarget = m_GameObjectTargets.First();
-            var instanceId = mainTarget.GetInstanceID();
+            var entityId = mainTarget.GetEntityId();
 
-            m_State = SessionState<State>.GetOrCreate($"{nameof(EntityBakingPreview)}.{nameof(State)}.{instanceId}");
+            m_State = SessionState<State>.GetOrCreate($"{nameof(EntityBakingPreview)}.{nameof(State)}.{entityId}");
             m_SharedState = SessionState<SharedState>.GetOrCreate(k_SharedStateKey);
             m_RuntimeComponentsDrawer = new RuntimeComponentsDrawer();
             m_RuntimeComponentsDrawer.OnDeselectComponent += typeIndex => m_State.SelectedComponentTypes.Remove(typeIndex);
@@ -527,50 +528,31 @@ namespace Unity.Entities.Editor
             if (targets.Count == 1)
             {
                 // Fast path for single target.
-                using (var componentTypes = targets[0].EntityManager.GetComponentTypes(targets[0].Entity))
-                {
-                    componentTypes.Sort(s_ComponentTypeNameComparer);
+                using var componentTypes = targets[0].EntityManager.GetComponentTypes(targets[0].Entity);
+                componentTypes.Sort(s_ComponentTypeNameComparer);
 
-                    foreach (var componentType in componentTypes)
-                    {
-                        result.Add(componentType);
-                    }
+                foreach (var componentType in componentTypes)
+                {
+                    result.Add(componentType);
                 }
             }
             else
             {
                 // Slow path for multi target using the intersection.
-                using (var intersection = Pooling.GetList<ComponentType>())
-                using (var hash = Pooling.GetHashSet<ComponentType>())
+                using var _ = HashSetPool<ComponentType>.Get(out var intersectionSet);
+                for (var i = 0; i < targets.Count; i++)
                 {
-                    for (var i = 0; i < targets.Count; i++)
-                    {
-                        using (var componentTypes = targets[i].EntityManager.GetComponentTypes(targets[i].Entity))
-                        {
-                            if (i == 0)
-                            {
-                                foreach (var type in componentTypes)
-                                {
-                                    intersection.List.Add(type);
-                                    hash.Set.Add(type);
-                                }
-                            }
-                            else
-                            {
-                                foreach (var type in hash.Set)
-                                {
-                                    if (!componentTypes.Contains(type))
-                                    {
-                                        intersection.List.Remove(type);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    foreach (var type in intersection.List.OrderBy(e => e, s_ComponentTypeNameComparer))
-                        result.Add(type);
+                    using var componentTypes = targets[i].EntityManager.GetComponentTypes(targets[i].Entity);
+                    if (i == 0)
+                        intersectionSet.UnionWith(componentTypes);
+                    else
+                        intersectionSet.IntersectWith(componentTypes);
                 }
+
+                using var __ = ListPool<ComponentType>.Get(out var sortedList);
+                sortedList.AddRange(intersectionSet);
+                sortedList.Sort(s_ComponentTypeNameComparer);
+                result.AddRange(sortedList);
             }
         }
 

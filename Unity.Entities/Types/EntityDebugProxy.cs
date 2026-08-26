@@ -31,7 +31,6 @@ namespace Unity.Entities
 
         public static World GetWorld(Entity entity)
         {
-#if !ENTITY_STORE_V1
             unsafe
             {
                 if (!EntityComponentStore.s_entityStore.Data.Exists(entity))
@@ -64,19 +63,6 @@ namespace Unity.Entities
                     }
                 }
             }
-#else
-            if (!JobsUtility.IsExecutingJob)
-            {
-                foreach (var world in World.All)
-                {
-                    if (world.Unmanaged.ExecutingSystem != default)
-                        return world;
-                }
-            }
-
-            if (World.DefaultGameObjectInjectionWorld != null && World.DefaultGameObjectInjectionWorld.IsCreated)
-                return World.DefaultGameObjectInjectionWorld;
-#endif
             return null;
         }
 
@@ -88,21 +74,6 @@ namespace Unity.Entities
 
         public World World => _World;
 
-#if ENTITY_STORE_V1
-        public Entity_[] Worlds
-        {
-            get
-            {
-                var proxy = new List<Entity_>();
-                foreach (var world in World.All)
-                {
-                    if (new DebuggerDataAccess(world).Exists(_Entity))
-                        proxy.Add(new Entity_(world, _Entity, true));
-                }
-                return proxy.ToArray();
-            }
-        }
-#endif
     }
 
     /// <summary>

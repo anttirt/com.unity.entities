@@ -39,7 +39,7 @@ namespace Unity.Entities.Editor
             {
                 unchecked
                 {
-                    var worldName = Value.World.Name;
+                    var worldName = Value.World?.Name ?? string.Empty;
                     const StringComparison comp = StringComparison.InvariantCultureIgnoreCase;
                     if (worldName.IndexOf("Editor World", comp) >= 0 || worldName.IndexOf("Default World", comp) >=  0)
                         worldName = "Editor And Default World";

@@ -7,6 +7,7 @@ using Unity.Scenes;
 using Unity.Scenes.Editor;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Search;
 using UnityEngine;
 using UnityEngine.LowLevel;
 using UnityEngine.SceneManagement;
@@ -19,6 +20,10 @@ namespace Unity.Entities.Editor.Tests
     {
         PlayerLoopSystem m_PrevPlayerLoop;
         TestWithCustomDefaultGameObjectInjectionWorld m_CustomInjectionWorld;
+        // m_Configuration.ShowUnityNamespaceSystems is loaded from EditorUserSettings and
+        // persists across editor sessions, so each test captures the user's setting in SetUp,
+        // forces it ON for a known starting state, and restores the captured value in TearDown.
+        bool m_PreviousShowUnityNamespaceSystems;
         World m_DefaultWorld;
         World m_TestWorld;
         ComponentSystemGroup m_TestSystemGroup;
@@ -30,7 +35,7 @@ namespace Unity.Entities.Editor.Tests
         SubScene m_SubScene;
         GameObject m_SubSceneRoot;
         bool m_PreviousLiveConversionState;
-        const string k_SystemScheduleEditorWorld = "Editor World";
+        const string k_SystemScheduleEditorWorld = "SystemWindow Test World";
         const string k_SystemScheduleTestWorld = "SystemScheduleTestWorld";
         const string k_AssetsFolderRoot = "Assets";
         const string k_SceneExtension = "unity";
@@ -84,7 +89,7 @@ namespace Unity.Entities.Editor.Tests
         {
             m_PrevPlayerLoop = PlayerLoop.GetCurrentPlayerLoop();
             m_CustomInjectionWorld.Setup();
-            DefaultWorldInitialization.Initialize("Editor World", true);
+            DefaultWorldInitialization.Initialize(k_SystemScheduleEditorWorld, true);
             m_DefaultWorld = World.DefaultGameObjectInjectionWorld;
 
             CreateTestSystems(m_DefaultWorld);
@@ -92,6 +97,12 @@ namespace Unity.Entities.Editor.Tests
             m_SystemScheduleWindow.WorldProxyManager.RebuildWorldProxyForGivenWorld(m_DefaultWorld);
             m_SystemScheduleWindow.SelectedWorld = m_DefaultWorld;
             m_WorldProxy = m_SystemScheduleWindow.WorldProxyManager.GetWorldProxyForGivenWorld(m_DefaultWorld);
+
+            m_PreviousShowUnityNamespaceSystems = m_SystemScheduleWindow.m_Configuration.ShowUnityNamespaceSystems;
+            m_SystemScheduleWindow.m_Configuration.ShowUnityNamespaceSystems = true;
+            var setupTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            if (setupTreeView != null)
+                setupTreeView.ShowUnityNamespaceSystems = true;
         }
 
         [TearDown]
@@ -99,6 +110,9 @@ namespace Unity.Entities.Editor.Tests
         {
             m_CustomInjectionWorld.TearDown();
             PlayerLoop.SetPlayerLoop(m_PrevPlayerLoop);
+
+            if (m_SystemScheduleWindow != null && m_SystemScheduleWindow.m_Configuration != null)
+                m_SystemScheduleWindow.m_Configuration.ShowUnityNamespaceSystems = m_PreviousShowUnityNamespaceSystems;
 
             if (!EditorApplication.isPlaying)
                 SystemScheduleTestUtilities.DestroySystemsWindow(m_SystemScheduleWindow);
@@ -126,25 +140,37 @@ namespace Unity.Entities.Editor.Tests
         }
 
         [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
         public IEnumerator SystemScheduleWindow_SearchForSingleComponent()
         {
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
-            m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>().Search("c=SystemScheduleTestData1");
+            
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("c=SystemScheduleTestData1");
+            
+            while (searchView.results.pending)
+                yield return null; 
 
             var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
             Assert.That(systemTreeView.m_ListViewFilteredItems.Count, Is.EqualTo(1));
-            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault()?.Node.Name, Is.EqualTo("System Schedule Test System 1"));
+            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault().data?.Node.Name, Is.EqualTo("System Schedule Test System 1"));
         }
 
         [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
         public IEnumerator SystemScheduleWindow_SearchForSystemName()
         {
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
-            m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>().Search("SystemScheduleTestSystem1");
+            
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("SystemScheduleTestSystem1");
 
+            while (searchView.results.pending)
+                yield return null; 
+            
             var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
             Assert.That(systemTreeView.m_ListViewFilteredItems.Count, Is.EqualTo(1));
-            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault()?.Node.Name, Is.EqualTo("System Schedule Test System 1"));
+            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault().data?.Node.Name, Is.EqualTo("System Schedule Test System 1"));
 
             var result = m_SystemScheduleWindow.WorldProxyManager.GetWorldProxyForGivenWorld(m_DefaultWorld);
             Assert.That(result, Is.Not.Null);
@@ -153,6 +179,7 @@ namespace Unity.Entities.Editor.Tests
         }
 
         [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
         public IEnumerator SystemScheduleWindow_NonStandardRootSystem_SearchForSystemName()
         {
             var rootSystemGroup = m_DefaultWorld.CreateSystemManaged<ManualCreationSystemGroup>();
@@ -162,14 +189,59 @@ namespace Unity.Entities.Editor.Tests
             PlayerLoop.SetPlayerLoop(testPlayerLoop);
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(ManualCreationSystemGroup));
-            m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>().Search("ManualCreationSystemGroup");
-
+            
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("ManualCreationSystemGroup");
+            
+            while (searchView.results.pending)
+                yield return null;
+            
             var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
             Assert.That(systemTreeView.m_ListViewFilteredItems.Count, Is.EqualTo(1));
-            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault()?.Node.Name, Is.EqualTo("Manual Creation System Group"));
+            Assert.That(systemTreeView.m_ListViewFilteredItems.FirstOrDefault().data?.Node.Name, Is.EqualTo("Manual Creation System Group"));
 
             var result = m_SystemScheduleWindow.WorldProxyManager.GetWorldProxyForGivenWorld(m_DefaultWorld);
             Assert.That(result, Is.Not.Null);
+        }
+        
+        [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
+        public IEnumerator SystemScheduleWindow_SearchForNamespace()
+        {
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("ns=Unity.Entities.Editor.Tests");
+
+            while (searchView.results.pending)
+                yield return null;
+
+            var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            var items = systemTreeView.m_ListViewFilteredItems;
+
+            Assert.That(items.Count, Is.GreaterThan(0));
+            var foundIndex = items.FindIndex(x => ((ComponentGroupNode) (x.data?.Node))?.FullName == typeof(SystemScheduleTestGroup).FullName);
+            Assert.That(foundIndex, Is.Not.EqualTo(-1), $"Should find a system of type {nameof(SystemScheduleTestGroup)}, but failed to do so.");
+        }
+
+        [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
+        public IEnumerator SystemScheduleWindow_SearchForParent()
+        {
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("parent=SystemScheduleTestGroup");
+
+            while (searchView.results.pending)
+                yield return null;
+
+            var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            var items = systemTreeView.m_ListViewFilteredItems;
+
+            Assert.That(items.Count, Is.EqualTo(2), "Should find exactly 2 systems with SystemScheduleTestGroup as parent");
+            Assert.That(items.Any(x => x.data?.Node.Name == "System Schedule Test System 1"), Is.True, "Should find SystemScheduleTestSystem1");
+            Assert.That(items.Any(x => x.data?.Node.Name == "System Schedule Test System 2"), Is.True, "Should find SystemScheduleTestSystem2");
         }
 
         [Test]
@@ -186,11 +258,16 @@ namespace Unity.Entities.Editor.Tests
             Assert.That(wsdUnmanaged.Category, Is.EqualTo(SystemCategory.Unmanaged));
         }
 
-        [Test]
-        public void SystemScheduleWindow_SearchForNonExistingSystem()
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_SearchForNonExistingSystem()
         {
-            m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>().Search("raasdfasd");
-            Assert.That(m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().m_ListViewFilteredItems.Count, Is.EqualTo(0));
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("raasdfasd");
+            
+            while (searchView.results.pending)
+                yield return null;
+            
+            Assert.That(searchView.results.Count, Is.EqualTo(0));
         }
 
         [Test]
@@ -211,33 +288,43 @@ namespace Unity.Entities.Editor.Tests
             Assert.That(m_DefaultWorld.Version, Is.Not.EqualTo(previousWorldVersion));
         }
 
-        [Test]
-        public void SystemScheduleWindow_SearchBuilder_ParseSearchString()
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_SystemSearchView_ParseSearchString()
         {
-            var searchElement = m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>();
-            searchElement.Search("c=Com1 C=Com2 randomName Sd:System1");
-            var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
-            var parseResult = systemTreeView.SearchFilter;
-
-            Assert.That(parseResult.Input, Is.EqualTo( "c=Com1 C=Com2 randomName Sd:System1" ));
-            Assert.That(parseResult.ComponentNames, Is.EquivalentTo(new[] { "Com1", "Com2" }));
-            Assert.That(parseResult.DependencySystemNames, Is.EquivalentTo(new[] { "System1" }));
-            Assert.That(parseResult.ErrorComponentType, Is.EqualTo( "Com1" ));
-
-            searchElement.Search("c=   com1 C=Com2");
-            Assert.That(systemTreeView.SearchFilter.ComponentNames, Is.EquivalentTo(new[] { string.Empty, "Com2"}));
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText("c=Com1 C=Com2 randomName Sd:System1");
+            
+            while (searchView.results.pending)
+                yield return null;            
+            
+            var parseResult = searchView.results;
+            
+            Assert.That(parseResult.context.searchText, Is.EqualTo( "c=Com1 C=Com2 randomName Sd:System1"));
+            Assert.That(parseResult.context.searchWords, Is.EquivalentTo(new[] { "c=com1", "c=com2", "randomname" }));
+            Assert.That(parseResult.context.textFilters, Is.EquivalentTo(new[] { "sd:system1" }));
+            
+            searchView.SetSearchText("c=   com1 C=Com2");
+            
+            while (searchView.results.pending)
+                yield return null;
+            
+            Assert.That(parseResult.context.searchWords, Is.EquivalentTo(new[] { "c=", "com1", "c=com2" }));
         }
 
-        [Test]
-        public void SystemScheduleWindow_SearchBuilder_ParseSearchString_EmptyString()
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_SystemSearchView_ParseSearchString_EmptyString()
         {
-            m_SystemScheduleWindow.rootVisualElement.Q<SearchElement>().Search(string.Empty);
-            var parseResult =  m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().SearchFilter;
-
-            Assert.That(parseResult.Input, Is.EqualTo(string.Empty));
-            Assert.That(parseResult.ComponentNames, Is.Empty);
-            Assert.That(parseResult.DependencySystemNames, Is.Empty);
-            Assert.That(parseResult.ErrorComponentType, Is.EqualTo(string.Empty));
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            searchView.SetSearchText(string.Empty);
+            
+            while (searchView.results.pending)
+                yield return null;            
+            
+            var parseResult = searchView.results;
+            
+            Assert.That(parseResult.context.searchText, Is.EqualTo(string.Empty));
+            Assert.That(parseResult.context.searchWords, Is.Empty);
+            Assert.That(parseResult.context.textFilters, Is.Empty);
         }
 
         [UnityTest]
@@ -276,7 +363,8 @@ namespace Unity.Entities.Editor.Tests
             PlayerLoop.SetPlayerLoop(previousPlayerLoop);
 
             m_SystemScheduleWindow.Update();
-            Assert.That(m_SystemScheduleWindow.SelectedWorld.Name, Is.EqualTo(k_SystemScheduleEditorWorld));
+            Assert.That(m_SystemScheduleWindow.SelectedWorld.Name, Is.Not.Null);
+            Assert.That(m_SystemScheduleWindow.SelectedWorld.Name, Is.Not.EqualTo(k_SystemScheduleTestWorld));
 
             if (m_TestWorld is { IsCreated: true })
                 m_TestWorld.Dispose();
@@ -286,7 +374,7 @@ namespace Unity.Entities.Editor.Tests
         public IEnumerator SystemScheduleWindow_HashCodeForTwoSystemsWithSameType()
         {
             var previousPlayerLoop = PlayerLoop.GetCurrentPlayerLoop();
-            m_SystemScheduleWindow.m_Configuration.ShowFullPlayerLoop = false;
+            m_SystemScheduleWindow.m_Configuration.ShowAllWorlds = false;
 
             // Create test system in default world.
             var defaultWorld = World.DefaultGameObjectInjectionWorld;
@@ -321,33 +409,37 @@ namespace Unity.Entities.Editor.Tests
             Assert.That(testSystemInDefaultWorldHash, Is.Not.EqualTo(testSystemInTestWorldHash));
         }
 
-        [Ignore("Unstable case UUM-119382")]
         [UnityTest]
         public IEnumerator SystemScheduleWindow_ScheduleSystemInDifferentWorld()
         {
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
 
-            var oldSystemCount = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().m_SystemTreeView.items.Count();
+            var oldSystemCount = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().MultiColumnTreeViewElement.GetTreeCount();
 
             m_TestWorld = new World(k_SystemScheduleTestWorld);
             var managedSystem = m_TestWorld.GetOrCreateSystemManaged<SystemScheduleTestSystem>();
 
-            var simulationSystemGroup = World.DefaultGameObjectInjectionWorld.GetOrCreateSystemManaged<SimulationSystemGroup>();
-            simulationSystemGroup.AddSystemToUpdateList(managedSystem);
-            simulationSystemGroup.SortSystems();
+            try
+            {
+                var simulationSystemGroup = World.DefaultGameObjectInjectionWorld.GetOrCreateSystemManaged<SimulationSystemGroup>();
+                simulationSystemGroup.AddSystemToUpdateList(managedSystem);
+                simulationSystemGroup.SortSystems();
 
-            yield return null;
-            yield return null;
+                yield return null;
+                yield return null;
 
-            var newSystemCount = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().m_SystemTreeView.items.Count();
+                var newSystemCount = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().MultiColumnTreeViewElement.GetTreeCount();
 
-            Assert.That(oldSystemCount, Is.EqualTo(newSystemCount));
+                Assert.That(oldSystemCount, Is.EqualTo(newSystemCount));
+            }
+            finally
+            {
+                if (managedSystem != null)
+                    World.DefaultGameObjectInjectionWorld.GetOrCreateSystemManaged<SimulationSystemGroup>().RemoveSystemFromUpdateList(managedSystem);
 
-            if (managedSystem != null)
-                World.DefaultGameObjectInjectionWorld.GetOrCreateSystemManaged<SimulationSystemGroup>().RemoveSystemFromUpdateList(managedSystem);
-
-            if (m_TestWorld.IsCreated)
-                m_TestWorld.Dispose();
+                if (m_TestWorld.IsCreated)
+                    m_TestWorld.Dispose();
+            }
         }
 
         [UnityTest]
@@ -359,7 +451,7 @@ namespace Unity.Entities.Editor.Tests
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out var testGroupItem);
-            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItem.SystemToggleState.AllEnabled));
+            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.AllEnabled));
         }
 
         [UnityTest]
@@ -371,7 +463,7 @@ namespace Unity.Entities.Editor.Tests
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out var testGroupItem);
-            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItem.SystemToggleState.Mixed));
+            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.Mixed));
         }
 
         [UnityTest]
@@ -383,7 +475,7 @@ namespace Unity.Entities.Editor.Tests
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out var testGroupItem);
-            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItem.SystemToggleState.Mixed));
+            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.Mixed));
         }
 
         [UnityTest]
@@ -395,7 +487,127 @@ namespace Unity.Entities.Editor.Tests
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>().CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out var testGroupItem);
-            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItem.SystemToggleState.Disabled));
+            Assert.That(testGroupItem.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.Disabled));
         }
+
+        [Test]
+        public void SystemScheduleWindow_ShowUnityNamespaceSystems_DefaultsToTrue()
+        {
+            var config = new SystemScheduleWindow.SystemsWindowConfiguration();
+            Assert.That(config.ShowUnityNamespaceSystems, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_ShowUnityNamespaceSystems_WhenEnabled_ShowsUnityNamespacedSystems()
+        {
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var treeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            Assert.That(treeView.ShowUnityNamespaceSystems, Is.True, "Filter should default to on (show Unity systems).");
+            Assert.That(treeView.CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out _), Is.True,
+                "Unity-namespaced test systems should be visible when the toggle is on.");
+        }
+
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_ShowUnityNamespaceSystems_WhenDisabled_HidesUnityNamespacedSystems()
+        {
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var treeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            Assert.That(treeView.CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out _), Is.True,
+                "Pre-condition: test group should be in the tree while the toggle is on.");
+
+            m_SystemScheduleWindow.m_Configuration.ShowUnityNamespaceSystems = false;
+            treeView.ShowUnityNamespaceSystems = false;
+            m_SystemScheduleWindow.RebuildTreeView();
+            yield return null;
+
+            Assert.That(treeView.CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out _), Is.False,
+                "SystemScheduleTestGroup (Unity.Entities.Editor.Tests namespace) should be hidden when the toggle is off.");
+            Assert.That(treeView.CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestSystem1), out _), Is.False,
+                "Child systems of a hidden group should also be filtered out.");
+        }
+
+        [UnityTest]
+        public IEnumerator SystemScheduleWindow_ShowUnityNamespaceSystems_WhenDisabled_HidesGroupWhoseDescendantsAreAllUnityNamespaced()
+        {
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var treeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+            m_SystemScheduleWindow.m_Configuration.ShowUnityNamespaceSystems = false;
+            treeView.ShowUnityNamespaceSystems = false;
+            m_SystemScheduleWindow.RebuildTreeView();
+            yield return null;
+
+            // SystemScheduleTestGroup is Unity-namespaced and its only descendants in this fixture
+            // (SystemScheduleTestSystem1/2) are also Unity-namespaced, so the whole subtree should
+            // collapse out. We deliberately don't assert on SimulationSystemGroup here because the
+            // default editor world may pull in non-Unity-namespaced systems from other loaded test
+            // assemblies (e.g. DocCodeSamples), which would keep that ancestor visible.
+            Assert.That(treeView.CheckIfTreeViewContainsGivenSystemType(typeof(SystemScheduleTestGroup), out _), Is.False,
+                "A Unity-namespaced group whose descendants are all Unity-namespaced should collapse when the filter is off.");
+        }
+
+        [UnityTest]
+        [Ignore("Disabled for Instability https://jira.unity3d.com/browse/UUM-147320")]
+        public IEnumerator SystemScheduleWindow_RepeatedSearch_MaintainsCorrectToggleState()
+        {
+            m_TestSystemGroup.Enabled = true;
+            m_TestSystem1.Enabled = true;
+            m_TestSystem2.Enabled = false;
+
+            yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
+
+            var searchView = m_SystemScheduleWindow.SystemSearchView;
+            var treeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
+
+            searchView.SetWorld(m_DefaultWorld);
+
+            // Repeatedly search and clear to verify enabled/disabled state remains consistent
+            for (int iteration = 0; iteration < 5; iteration++)
+            {
+                searchView.SetSearchText("SystemScheduleTestSystem");
+
+                while (searchView.results.pending)
+                    yield return null;
+
+                yield return null;
+
+                var items = treeView.m_ListViewFilteredItems;
+                TreeViewItemData<SystemTreeViewItemData> system1Item = default;
+                TreeViewItemData<SystemTreeViewItemData> system2Item = default;
+
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (items[i].data?.Node.Name == "System Schedule Test System 1")
+                        system1Item = items[i];
+                    else if (items[i].data?.Node.Name == "System Schedule Test System 2")
+                        system2Item = items[i];
+                }
+
+                Assert.That(system1Item.data, Is.Not.Null,
+                    $"Iteration {iteration}: Should find System1 in search results");
+                Assert.That(system2Item.data, Is.Not.Null,
+                    $"Iteration {iteration}: Should find System2 in search results");
+
+                Assert.That(system1Item.data.SystemProxy.Enabled, Is.True,
+                    $"Iteration {iteration}: System1 enabled state should remain consistent");
+                Assert.That(system2Item.data.SystemProxy.Enabled, Is.False,
+                    $"Iteration {iteration}: System2 enabled state should remain consistent");
+
+                Assert.That(system1Item.data.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.AllEnabled),
+                    $"Iteration {iteration}: System1 toggle state should be AllEnabled");
+                Assert.That(system2Item.data.GetSystemToggleState(), Is.EqualTo(SystemTreeViewItemData.SystemToggleState.Disabled),
+                    $"Iteration {iteration}: System2 toggle state should be Disabled");
+
+                searchView.SetSearchText("");
+
+                while (searchView.results.pending)
+                    yield return null;
+
+                yield return null;
+            }
+        }
+
     }
 }

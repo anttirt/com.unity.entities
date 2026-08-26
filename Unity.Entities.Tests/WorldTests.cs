@@ -506,7 +506,9 @@ namespace Unity.Entities.Tests
             using(var world = new World("WorldX"))
             {
                var entity = world.EntityManager.CreateEntity();
+               #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                world.EntityManager.AddComponentObject(entity, managedWithRefCount);
+               #pragma warning restore 0618
                UnityEngine.Assertions.Assert.AreEqual(1, managedWithRefCount.RefCount);
             }
             UnityEngine.Assertions.Assert.AreEqual(0, managedWithRefCount.RefCount);

@@ -2,10 +2,10 @@
     "name": "Unity.Entities.UI.Editor",
     "rootNamespace": "",
     "references": [
+        "Unity.Collections",
         "Unity.Properties",
-        "Unity.Entities.UI",
-        "Unity.Serialization",
-        "Unity.Serialization.Editor"
+        "Unity.Entities",
+        "Unity.Entities.UI"
     ],
     "includePlatforms": [
         "Editor"

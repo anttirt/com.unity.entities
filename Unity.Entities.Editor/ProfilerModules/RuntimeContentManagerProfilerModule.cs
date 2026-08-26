@@ -156,6 +156,14 @@ class RuntimeContentManagerProfilerModuleView : ProfilerModuleViewController
         RuntimeContentManagerProfiler.Initialize();
         using (var frameData = ProfilerDriver.GetHierarchyFrameDataView((int)frame, 0, HierarchyFrameDataView.ViewModes.Default, HierarchyFrameDataView.columnDontSort, false))
         {
+            if (!frameData.valid)
+            {
+                // No valid data for this frame - clear the tree so stale data from a previously selected frame isn't shown.
+                m_tree.SetRootItems(new List<TreeViewItemData<RCMProfilerFrameUIData>>());
+                m_tree.Rebuild();
+                return;
+            }
+
             int itemId = 0;
             var archivesData = frameData.GetFrameMetaData<RuntimeContentManagerProfilerFrameData>(RuntimeContentManagerProfiler.Guid, 0);
             var filesData = frameData.GetFrameMetaData<RuntimeContentManagerProfilerFrameData>(RuntimeContentManagerProfiler.Guid, 1);

@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using Unity.Assertions;
 using Unity.Burst;
+using Unity.Burst.CompilerServices;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -33,6 +34,26 @@ namespace Unity.Entities
 
                 if (entities != null)
                     entities += allocateCount;
+            }
+        }
+
+        public void AllocateAndAssignChunksToExistingEntities(Archetype* archetype, Entity* existingEntities, int count)
+        {
+            var archetypeChunkFilter = new ArchetypeChunkFilter();
+            archetypeChunkFilter.Archetype = archetype;
+
+            while (count != 0)
+            {
+                var chunk = GetChunkWithEmptySlots(ref archetypeChunkFilter);
+                var unusedCount = archetype->ChunkCapacity - chunk.Count;
+                var allocateCount = math.min(count, unusedCount);
+
+                ChunkDataUtility.AssignChunkToExistingEntities(archetype, chunk, existingEntities, allocateCount);
+
+                count -= allocateCount;
+
+                if (existingEntities != null)
+                    existingEntities += allocateCount;
             }
         }
 
@@ -197,6 +218,24 @@ namespace Unity.Entities
             }
         }
 
+        public void InstantiateExistingEntities(Entity srcEntity, Entity* existingEntities, int instanceCount)
+        {
+            AssertEntityExists(srcEntity);
+
+            if (HasComponent(srcEntity, m_LinkedGroupType, out _))
+            {
+                var header = (BufferHeader*)GetComponentDataWithTypeRO(srcEntity, m_LinkedGroupType);
+                var entityPtr = (Entity*)BufferHeader.GetElementPointer(header);
+                var entityCount = header->Length;
+
+                InstantiateExistingEntitiesGroup(entityPtr, entityCount, existingEntities, instanceCount, true);
+            }
+            else
+            {
+                InstantiateExistingEntitiesGroup(&srcEntity, 1, existingEntities, instanceCount, true);
+            }
+        }
+
         public void InstantiateEntities(Entity* srcEntity, Entity* outputEntities, int entityCount, bool removePrefab)
         {
             InstantiateEntitiesGroup(srcEntity, entityCount, outputEntities, false, 1, removePrefab);
@@ -228,7 +267,7 @@ namespace Unity.Entities
             }
         }
 
-        struct InstantiateRemapChunk
+        internal struct InstantiateRemapChunk
         {
             public ChunkIndex Chunk;
             public int IndexInChunk;
@@ -272,6 +311,7 @@ namespace Unity.Entities
 
             if (!archetype->CleanupNeeded)
             {
+                FireOnRemovedCallbacks(chunk, archetype, batch.StartIndex, batch.Count);
                 ChunkDataUtility.Deallocate(archetype, batch);
             }
             else
@@ -356,6 +396,54 @@ namespace Unity.Entities
                 var allocateCount = math.min(instanceCount - instanceBeginIndex, unusedCount);
 
                 ChunkDataUtility.AllocateClone(dstArchetype, chunk, outputEntities + instanceBeginIndex, allocateCount, srcEntity);
+
+                FireOnAddedCallbacks(chunk, dstArchetype, indexInChunk, allocateCount);
+
+                if (remapChunks != null)
+                {
+                    remapChunks[remapChunksCount].Chunk = chunk;
+                    remapChunks[remapChunksCount].IndexInChunk = indexInChunk;
+                    remapChunks[remapChunksCount].AllocatedCount = allocateCount;
+                    remapChunks[remapChunksCount].InstanceBeginIndex = instanceBeginIndex;
+                    remapChunksCount++;
+                }
+
+                instanceBeginIndex += allocateCount;
+            }
+
+            return remapChunksCount;
+        }
+
+        int InstantiateExistingEntitiesOne(Entity srcEntity, Entity* existingEntities, int instanceCount, InstantiateRemapChunk* remapChunks, int remapChunksCount, bool removePrefab)
+        {
+            var src = GetEntityInChunk(srcEntity);
+            var srcArchetype = GetArchetype(src.Chunk);
+
+            var dstArchetype = removePrefab ? srcArchetype->InstantiateArchetype : srcArchetype->CopyArchetype;
+
+            var archetypeChunkFilter = new ArchetypeChunkFilter();
+            archetypeChunkFilter.Archetype = dstArchetype;
+
+            var srcSharedComponentValues = srcArchetype->Chunks.GetSharedComponentValues(src.Chunk.ListIndex);
+            if (RequiresBuildingResidueSharedComponentIndices(srcArchetype, dstArchetype))
+            {
+                BuildResidueSharedComponentIndices(srcArchetype, dstArchetype, srcSharedComponentValues, archetypeChunkFilter.SharedComponentValues);
+            }
+            else
+            {
+                // Always copy shared component indices since GetChunkWithEmptySlots might reallocate the storage of SharedComponentValues
+                srcSharedComponentValues.CopyTo(archetypeChunkFilter.SharedComponentValues, 0, dstArchetype->NumSharedComponents);
+            }
+
+            int instanceBeginIndex = 0;
+            while (instanceBeginIndex != instanceCount)
+            {
+                var chunk = GetChunkWithEmptySlots(ref archetypeChunkFilter);
+                var indexInChunk = chunk.Count;
+                var unusedCount = dstArchetype->ChunkCapacity - indexInChunk;
+                var allocateCount = math.min(instanceCount - instanceBeginIndex, unusedCount);
+
+                ChunkDataUtility.AllocateCloneForExistingEntities(dstArchetype, chunk, existingEntities + instanceBeginIndex, allocateCount, srcEntity);
 
                 if (remapChunks != null)
                 {
@@ -450,44 +538,88 @@ namespace Unity.Entities
                 Memory.Unmanaged.Free(allocation, Allocator.Temp);
         }
 
+        void InstantiateExistingEntitiesGroup(Entity* srcEntities, int srcEntityCount, Entity* existingEntities, int instanceCount, bool removePrefab)
+        {
+            int totalCount = srcEntityCount * instanceCount;
+
+            var tempAllocSize = sizeof(Entity) * totalCount +
+                sizeof(InstantiateRemapChunk) * totalCount + sizeof(Entity) * instanceCount;
+            byte* allocation;
+            const int kMaxStackAllocSize = 16 * 1024;
+
+            if (tempAllocSize > kMaxStackAllocSize)
+            {
+                allocation = (byte*)Memory.Unmanaged.Allocate(tempAllocSize, 16, Allocator.Temp);
+            }
+            else
+            {
+                var temp = stackalloc byte[tempAllocSize];
+
+                allocation = temp;
+            }
+
+            var entityRemap = (Entity*)allocation;
+            var remapChunks = (InstantiateRemapChunk*)(entityRemap + totalCount);
+            var childEntities = (Entity*)(remapChunks + totalCount);
+
+            var remapChunksCount = 0;
+
+            for (int i = 0; i != srcEntityCount; i++)
+            {
+                var srcEntity = srcEntities[i];
+
+                if (i == 0)
+                {
+                    remapChunksCount = InstantiateExistingEntitiesOne(srcEntity, existingEntities, instanceCount, remapChunks, remapChunksCount, removePrefab);
+
+                    for (int r = 0; r != instanceCount; r++)
+                    {
+                        var ptr = entityRemap + (r * srcEntityCount + i);
+                        *ptr = existingEntities[r];
+                    }
+                }
+                else
+                {
+                    remapChunksCount = InstantiateEntitiesOne(srcEntity, childEntities, instanceCount, remapChunks, remapChunksCount, true);
+
+                    for (int r = 0; r != instanceCount; r++)
+                    {
+                        var ptr = entityRemap + (r * srcEntityCount + i);
+                        *ptr = childEntities[r];
+                    }
+                }
+            }
+
+
+            for (int i = 0; i != remapChunksCount; i++)
+            {
+                var chunk = remapChunks[i].Chunk;
+                var dstArchetype = GetArchetype(chunk);
+                var allocatedCount = remapChunks[i].AllocatedCount;
+                var indexInChunk = remapChunks[i].IndexInChunk;
+                var instanceBeginIndex = remapChunks[i].InstanceBeginIndex;
+
+                var localRemap = entityRemap + instanceBeginIndex * srcEntityCount;
+
+                EntityRemapUtility.PatchEntitiesForPrefab(dstArchetype->ScalarEntityPatches + 1, dstArchetype->ScalarEntityPatchCount - 1,
+                    dstArchetype->BufferEntityPatches, dstArchetype->BufferEntityPatchCount,
+                    chunk.Buffer, indexInChunk, allocatedCount, srcEntities, localRemap, srcEntityCount);
+
+                if (dstArchetype->HasManagedEntityRefs)
+                {
+                    ManagedChangesTracker.PatchEntitiesForPrefab(dstArchetype, chunk, indexInChunk, allocatedCount, srcEntities, localRemap, srcEntityCount, Allocator.Temp);
+                }
+            }
+
+            if (tempAllocSize > kMaxStackAllocSize)
+                Memory.Unmanaged.Free(allocation, Allocator.Temp);
+        }
+
         EntityBatchInChunk GetFirstEntityBatchInChunk(Entity* entities, int count)
         {
             // This is optimized for the case where the array of entities are allocated contiguously in the chunk
             // Thus the compacting of other elements can be batched
 
-#if ENTITY_STORE_V1
-            // Calculate baseEntityIndex & chunk
-            var baseEntityIndex = entities[0].Index;
-
-            var versions = m_VersionByEntity;
-            var chunkData = m_EntityInChunkByEntity;
-
-            var chunk = versions[baseEntityIndex] == entities[0].Version
-                ? m_EntityInChunkByEntity[baseEntityIndex].Chunk
-                : ChunkIndex.Null;
-            var indexInChunk = chunkData[baseEntityIndex].IndexInChunk;
-            var batchCount = 0;
-
-            while (batchCount < count)
-            {
-                var entityIndex = entities[batchCount].Index;
-                var curChunk = chunkData[entityIndex].Chunk;
-                var curIndexInChunk = chunkData[entityIndex].IndexInChunk;
-
-                if (versions[entityIndex] == entities[batchCount].Version)
-                {
-                    if (curChunk != chunk || curIndexInChunk != indexInChunk + batchCount)
-                        break;
-                }
-                else
-                {
-                    if (chunk != ChunkIndex.Null)
-                        break;
-                }
-
-                batchCount++;
-            }
-#else
 
             var entityInChunk = Exists(entities[0]) ? GetEntityInChunk(entities[0]) : default;
             var chunk = entityInChunk.Chunk;
@@ -507,7 +639,6 @@ namespace Unity.Entities
 
             Assert.IsTrue(chunk == ChunkIndex.Null || indexInChunk < chunk.Count);
             Assert.IsTrue(chunk == ChunkIndex.Null || indexInChunk + batchCount <= chunk.Count);
-#endif
 
             return new EntityBatchInChunk
             {
@@ -517,80 +648,6 @@ namespace Unity.Entities
             };
         }
 
-#if ENTITY_STORE_V1
-        public static JobHandle GetCreatedAndDestroyedEntities(EntityComponentStore* store, NativeList<int> state, NativeList<Entity> createdEntities, NativeList<Entity> destroyedEntities, bool async)
-        {
-            // Early outwhen no entities were created or destroyed compared to the last time this method was called
-            if (state.Length != 0 && store->m_EntityCreateDestroyVersion == state[0])
-            {
-                createdEntities.Clear();
-                destroyedEntities.Clear();
-                return default;
-            }
-
-            var jobData = new GetOrCreateDestroyedEntitiesJob
-            {
-                State = state,
-                CreatedEntities = createdEntities,
-                DestroyedEntities = destroyedEntities,
-                Store = store
-            };
-
-            if (async)
-                return jobData.Schedule();
-            else
-            {
-                jobData.Run();
-                return default;
-            }
-        }
-
-        [BurstCompile]
-        internal struct GetOrCreateDestroyedEntitiesJob : IJob
-        {
-            public NativeList<int>    State;
-            public NativeList<Entity> CreatedEntities;
-            public NativeList<Entity> DestroyedEntities;
-
-            [NativeDisableUnsafePtrRestriction]
-            public EntityComponentStore* Store;
-
-            public void Execute()
-            {
-                var capacity = Store->m_EntitiesCapacity;
-                var versionByEntity = Store->m_VersionByEntity;
-                var entityInChunkByEntity = Store->m_EntityInChunkByEntity;
-
-                CreatedEntities.Clear();
-                DestroyedEntities.Clear();
-                State.Resize(capacity + 1, NativeArrayOptions.ClearMemory);
-
-                State[0] = Store->m_EntityCreateDestroyVersion;
-                var state = State.AsArray().GetSubArray(1, capacity);
-
-                for (int i = 0; i != capacity; i++)
-                {
-                    if (state[i] == versionByEntity[i])
-                        continue;
-
-                    // Was a valid entity but version was incremented, thus destroyed
-                    if (state[i] != 0)
-                    {
-                        DestroyedEntities.Add(new Entity { Index = i, Version = state[i] });
-                        state[i] = 0;
-                    }
-
-                    // It is now a valid entity, but version has changed
-                    if (entityInChunkByEntity[i].Chunk != ChunkIndex.Null &&
-                        !Store->GetArchetype(entityInChunkByEntity[i].Chunk)->HasChunkHeader)
-                    {
-                        CreatedEntities.Add(new Entity { Index = i, Version = versionByEntity[i] });
-                        state[i] = versionByEntity[i];
-                    }
-                }
-            }
-        }
-#else
         public static JobHandle GetCreatedAndDestroyedEntities(EntityComponentStore* store, NativeList<int> state, NativeList<Entity> createdEntities, NativeList<Entity> destroyedEntities, bool async)
         {
             JobHandle jobHandle = default;
@@ -717,6 +774,5 @@ namespace Unity.Entities
                 OldState.CopyFrom(NewState);
             }
         }
-#endif
     }
 }

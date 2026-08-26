@@ -575,7 +575,7 @@ namespace Unity.Entities.Editor
             }
             else if (Handle.Kind == NodeKind.Scene)
             {
-                var scene = EditorSceneManagerBridge.GetSceneByHandle(Handle.Index);
+                var scene = EditorSceneManagerBridge.GetSceneByEntityId(Handle.ToEntityId());
 
                 m_SubSceneState.text = scene.isLoaded ? string.Empty : L10n.Tr("(not loaded)");
                 style.opacity = scene.isLoaded ? 1f : 0.5f;
@@ -624,15 +624,11 @@ namespace Unity.Entities.Editor
 
         void OnOpenPrefab(EventBase evt)
         {
-            var prefabInstance = EditorUtility.InstanceIDToObject(m_Model.GetInstanceId(Handle)) as GameObject;
+            var prefabInstance = EditorUtility.EntityIdToObject(m_Model.GetInstanceId(Handle)) as GameObject;
             var assetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(prefabInstance);
             var defaultPrefabMode = PreferencesProviderBridge.GetDefaultPrefabModeForHierarchy();
             var alternativePrefabMode = (defaultPrefabMode == PrefabStage.Mode.InContext) ? PrefabStage.Mode.InIsolation : PrefabStage.Mode.InContext;
-#if UNITY_2023_2_OR_NEWER
             var mode = ((IPointerEvent)evt).modifiers.HasFlag(EventModifiers.Alt) ? alternativePrefabMode : defaultPrefabMode;
-#else
-            var mode = ((IMouseEvent)evt).modifiers.HasFlag(EventModifiers.Alt) ? alternativePrefabMode : defaultPrefabMode;
-#endif
             PrefabStageUtility.OpenPrefab(assetPath, prefabInstance, mode);
         }
 

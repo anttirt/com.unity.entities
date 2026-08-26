@@ -69,7 +69,7 @@ public partial class JobEntityDescription
         if (m_CheckUserDefinedQueryForScheduling)
         {
             writer.WriteLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-            writer.WriteLine($"public static int GetRequiredComponentTypeCount() => {m_ComponentTypesInExecuteMethod.Count}{m_AspectTypesInExecuteMethod.Select(a => $" + {a.TypeSymbol.ToFullName()}.GetRequiredComponentTypeCount()").SeparateBy("")};");
+            writer.WriteLine($"public static int GetRequiredComponentTypeCount() => {m_ComponentTypesInExecuteMethod.Count};");
 
             writer.WriteLine();
             writer.WriteLine("public static void AddRequiredComponentTypes(ref global::System.Span<Unity.Entities.ComponentType> components)");
@@ -77,29 +77,6 @@ public partial class JobEntityDescription
             writer.Indent++;
             for (var index = 0; index < m_ComponentTypesInExecuteMethod.Count; index++)
                 writer.WriteLine($"components[{index}] = {m_ComponentTypesInExecuteMethod[index].ToString()};");
-            if (m_AspectTypesInExecuteMethod.Count > 0)
-            {
-                writer.WriteLine($"int startAddIndex = {m_ComponentTypesInExecuteMethod.Count};");
-
-                for (var index = 0; index < m_AspectTypesInExecuteMethod.Count; index++)
-                {
-                    var aspect = m_AspectTypesInExecuteMethod[index];
-                    var aspectFullName = aspect.TypeSymbol.ToFullName();
-
-                    writer.WriteLine($"int aspect{index}ComponentTypeCount = {aspectFullName}.GetRequiredComponentTypeCount();");
-                    writer.WriteLine($"global::System.Span<global::Unity.Entities.ComponentType> aspect{index}Components = stackalloc global::Unity.Entities.ComponentType[aspect{index}ComponentTypeCount];");
-                    writer.WriteLine($"{aspectFullName}.AddRequiredComponentTypes(ref aspect{index}Components);");
-                    writer.WriteLine($@"for (int i = 0; i < aspect{index}ComponentTypeCount; i++)");
-                    writer.WriteLine("{");
-                    writer.Indent++;
-                    writer.WriteLine($"components[startAddIndex + i] = aspect{index}Components[i];");
-                    writer.Indent--;
-                    writer.WriteLine("}");
-
-                    if (index < m_AspectTypesInExecuteMethod.Count - 1)
-                        writer.WriteLine( $"startAddIndex += aspect{index}ComponentTypeCount;");
-                }
-            }
             writer.Indent--;
             writer.WriteLine("}");
 

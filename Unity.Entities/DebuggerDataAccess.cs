@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Unity.Collections.LowLevel.Unsafe;
 
 namespace Unity.Entities
@@ -76,7 +77,9 @@ namespace Unity.Entities
 #endif
         }
 
+        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
         object GetComponentObject(Entity entity, ComponentType componentType)
+        #pragma warning restore 0618
         {
             int* ptr = (int*)EntityComponentStore.Debugger_GetComponentDataWithTypeRO(ComponentStore, entity, componentType.TypeIndex);
             if (ptr == null)
@@ -166,9 +169,13 @@ namespace Unity.Entities
            // object obj = null;
             if (typeInfo.Category == TypeManager.TypeCategory.ComponentData)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (TypeManager.IsManagedComponent(typeIndex))
+                #pragma warning restore 0618
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     return GetComponentObject(entity, type);
+                    #pragma warning restore 0618
                 }
                 else
                 {
@@ -185,7 +192,9 @@ namespace Unity.Entities
             }
             else if (typeInfo.Category == TypeManager.TypeCategory.UnityEngineObject)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 return GetComponentObject(entity, type);
+                #pragma warning restore 0618
             }
             else if (typeInfo.Category == TypeManager.TypeCategory.BufferData)
             {
@@ -200,9 +209,10 @@ namespace Unity.Entities
                 var elementSize = TypeManager.GetTypeInfo(typeIndex).ElementSize;
                 byte* basePtr = BufferHeader.GetElementPointer(header);
 
-                var dstPtr = UnsafeUtility.PinGCArrayAndGetDataAddress(array, out var handle);
+                GCHandle handle = GCHandle.Alloc(array, GCHandleType.Pinned);
+                void* dstPtr = (void*)handle.AddrOfPinnedObject();
                 UnsafeUtility.MemCpy(dstPtr, basePtr, elementSize * length);
-                UnsafeUtility.ReleaseGCObject(handle);
+                handle.Free();
 
                 return array;
             }

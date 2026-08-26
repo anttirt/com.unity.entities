@@ -45,6 +45,7 @@ namespace Unity.Entities
         const int              kMaxReadJobHandles = 17;
         const int              kMaxTypes = TypeManager.MaximumTypesCount;
 
+
         // Indexed by TypeIndex
         ushort*                m_TypeArrayIndices;
         DependencyHandle*      m_DependencyHandles;
@@ -93,15 +94,16 @@ namespace Unity.Entities
         public void OnCreate(WorldUnmanaged world)
         {
             m_World = world;
-            m_TypeArrayIndices = (ushort*)Memory.Unmanaged.Allocate(sizeof(ushort) * kMaxTypes, 16, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Jobs.Dependencies", Allocator.Persistent);
+            m_TypeArrayIndices = (ushort*)Memory.Unmanaged.Allocate(sizeof(ushort) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemSet(m_TypeArrayIndices, 0xFF, sizeof(ushort) * kMaxTypes);
 
-            m_ReadJobFences = (JobHandle*)Memory.Unmanaged.Allocate(sizeof(JobHandle) * kMaxReadJobHandles * kMaxTypes, 16, Allocator.Persistent);
+            m_ReadJobFences = (JobHandle*)Memory.Unmanaged.Allocate(sizeof(JobHandle) * kMaxReadJobHandles * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemClear(m_ReadJobFences, sizeof(JobHandle) * kMaxReadJobHandles * kMaxTypes);
 
             EntityTypeIndex = TypeManager.GetTypeIndex<Entity>();
 
-            m_DependencyHandles = (DependencyHandle*)Memory.Unmanaged.Allocate(sizeof(DependencyHandle) * kMaxTypes, 16, Allocator.Persistent);
+            m_DependencyHandles = (DependencyHandle*)Memory.Unmanaged.Allocate(sizeof(DependencyHandle) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemClear(m_DependencyHandles, sizeof(DependencyHandle) * kMaxTypes);
 
             m_DependencyHandlesCount = 0;
@@ -170,11 +172,12 @@ namespace Unity.Entities
         {
             GetCombinedDependencyForAllTypes().Complete();
 
-            Memory.Unmanaged.Free(m_TypeArrayIndices, Allocator.Persistent);
-            Memory.Unmanaged.Free(m_DependencyHandles, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Jobs.Dependencies", Allocator.Persistent);
+            Memory.Unmanaged.Free(m_TypeArrayIndices, memoryLabel);
+            Memory.Unmanaged.Free(m_DependencyHandles, memoryLabel);
             m_DependencyHandles = null;
 
-            Memory.Unmanaged.Free(m_ReadJobFences, Allocator.Persistent);
+            Memory.Unmanaged.Free(m_ReadJobFences, memoryLabel);
             m_ReadJobFences = null;
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -635,7 +638,8 @@ namespace Unity.Entities
         public void Init()
         {
             Depth = 0;
-            _forEachQueryMasks = (EntityQueryMask*)Memory.Unmanaged.Allocate(sizeof(EntityQueryMask) * kMaxNestedForEachDisallowStructuralChange, 16, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Safety.StructuralChange", Allocator.Persistent);
+            _forEachQueryMasks = (EntityQueryMask*)Memory.Unmanaged.Allocate(sizeof(EntityQueryMask) * kMaxNestedForEachDisallowStructuralChange, 16, memoryLabel);
         }
 
         internal void BeginIsInForEach(EntityQueryImpl* query)
@@ -690,7 +694,8 @@ namespace Unity.Entities
 
         public void Dispose()
         {
-            Memory.Unmanaged.Free(_forEachQueryMasks, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Safety.StructuralChange", Allocator.Persistent);
+            Memory.Unmanaged.Free(_forEachQueryMasks, memoryLabel);
         }
     }
 #endif

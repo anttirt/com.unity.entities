@@ -1,5 +1,6 @@
 ﻿using System;
 using Unity.Mathematics;
+using UnityEngine;
 
 namespace Unity.Entities
 {
@@ -91,8 +92,8 @@ namespace Unity.Entities
         /// </summary>
         public Entity Parent;
         /// <summary>
-        /// Represents a unique Instance ID of the GameObject that created the additional entity.
+        /// Represents a unique entityId of the GameObject that created the additional entity.
         /// </summary>
-        public int    ParentInstanceID;
+        public EntityId    ParentEntityId;
     }
 }

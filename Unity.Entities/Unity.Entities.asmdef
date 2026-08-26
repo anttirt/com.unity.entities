@@ -8,7 +8,6 @@
         "Unity.Mathematics.Extensions",
         "Unity.Properties",
         "Unity.Properties.Reflection",
-        "Unity.Serialization",
         "Unity.Profiling.Core"
     ],
     "includePlatforms": [],

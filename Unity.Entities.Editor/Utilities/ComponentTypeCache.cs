@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine.Pool;
 
 namespace Unity.Entities.Editor
 {
@@ -88,13 +89,13 @@ namespace Unity.Entities.Editor
         {
             var strLower = str.ToLowerInvariant();
 
-            using (var hashPool = PooledHashSet<Type>.Make())
+            using (var _ = HashSetPool<Type>.Get(out var hashPool))
             {
                 foreach (var nameType in m_ComponentNameTypes)
                 {
                     if (nameType.Name.IndexOf(strLower) >= 0)
                     {
-                        if (hashPool.Set.Add(nameType.Type))
+                        if (hashPool.Add(nameType.Type))
                             yield return nameType.Type;
                     }
                 }

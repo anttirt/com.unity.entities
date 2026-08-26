@@ -53,7 +53,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return m_editorLiveConversionTest.UpdateEditorAndWorld(w);
             {
                 var go = new GameObject("TestGameObject");
-                int goId = go.GetInstanceID();
+                int goId = go.GetEntityId();
 
                 Undo.RegisterCreatedObjectUndo(go, "Test Create");
                 IncrementalConversionTestSystem.CaptureNext(subScene.SceneGUID);
@@ -104,9 +104,9 @@ namespace Unity.Scenes.Editor.Tests
             yield return m_editorLiveConversionTest.UpdateEditorAndWorld(w);
             {
                 var root = new GameObject("Root");
-                int rootId = root.GetInstanceID();
+                int rootId = root.GetEntityId();
                 var child = new GameObject("Child");
-                int childId = child.GetInstanceID();
+                int childId = child.GetEntityId();
                 child.transform.SetParent(root.transform);
 
                 Undo.RegisterCreatedObjectUndo(root, "Test Create");
@@ -159,7 +159,7 @@ namespace Unity.Scenes.Editor.Tests
             var subScene = m_editorLiveConversionTest.CreateEmptySubScene("TestSubScene", true);
             SceneManager.SetActiveScene(subScene.EditingScene);
             var go = new GameObject("Go");
-            var goId = go.GetInstanceID();
+            var goId = go.GetEntityId();
 
             var w = m_editorLiveConversionTest.GetLiveConversionWorldForEditMode();
             yield return m_editorLiveConversionTest.UpdateEditorAndWorld(w);
@@ -182,7 +182,7 @@ namespace Unity.Scenes.Editor.Tests
             var subScene = m_editorLiveConversionTest.CreateEmptySubScene("TestSubScene", true);
             SceneManager.SetActiveScene(subScene.EditingScene);
             var go = new GameObject();
-            var goId = go.GetInstanceID();
+            var goId = go.GetEntityId();
 
             var w = m_editorLiveConversionTest.GetLiveConversionWorldForEditMode();
             yield return m_editorLiveConversionTest.UpdateEditorAndWorld(w);

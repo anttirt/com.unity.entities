@@ -50,7 +50,9 @@ namespace Unity.Entities
                         .WithEntityAccess()
                         .WithOptions(EntityQueryOptions.IncludeDisabledEntities | EntityQueryOptions.IncludePrefab))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 ecb.AddComponent(entity, new CompanionReference { Companion = link.ValueRO.Companion });
+                #pragma warning restore 0618
             }
             ecb.Playback(state.EntityManager);
         }
@@ -95,7 +97,7 @@ namespace Unity.Entities
             // Activate
             if (!toActivate.IsEmpty)
             {
-                using var companionLinksToActivate = toActivate.ToComponentDataArray<CompanionLink>(Allocator.Temp).Reinterpret<int>();
+                using var companionLinksToActivate = toActivate.ToComponentDataArray<CompanionLink>(Allocator.Temp).Reinterpret<EntityId>();
                 GameObject.SetGameObjectsActive(companionLinksToActivate, true);
                 state.EntityManager.AddComponent<CompanionGameObjectActiveCleanup>(toActivate);
             }
@@ -103,7 +105,7 @@ namespace Unity.Entities
             // Deactivate
             if (!toDeactivate.IsEmpty)
             {
-                using var companionLinksToDeactivate = toDeactivate.ToComponentDataArray<CompanionLink>(Allocator.Temp).Reinterpret<int>();
+                using var companionLinksToDeactivate = toDeactivate.ToComponentDataArray<CompanionLink>(Allocator.Temp).Reinterpret<EntityId>();
                 GameObject.SetGameObjectsActive(companionLinksToDeactivate, false);
                 state.EntityManager.RemoveComponent<CompanionGameObjectActiveCleanup>(toDeactivate);
             }

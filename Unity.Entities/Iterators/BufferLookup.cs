@@ -299,7 +299,7 @@ namespace Unity.Entities
         /// <exception cref="ArgumentException">The <see cref="Entity"/> does not exist.</exception>
         /// <param name="entity">The entity whose component should be checked.</param>
         /// <seealso cref="SetBufferEnabled"/>
-        [Obsolete("Use SetBufferEnabled (RemovedAfter: Entities pre-1.0) (UnityUpgradeable) -> IsBufferEnabled(*)")]
+        [Obsolete("Use IsBufferEnabled (RemovedAfter: Entities pre-1.0) (UnityUpgradable) -> IsBufferEnabled(*)")]
         public void IsComponentEnabled(Entity entity) => IsBufferEnabled(entity);
 
         /// <summary>Obsolete. Use <see cref="SetBufferEnabled"/> instead.</summary>
@@ -314,7 +314,7 @@ namespace Unity.Entities
         /// <param name="entity">The entity whose component should be enabled or disabled.</param>
         /// <param name="value">True if the specified component should be enabled, or false if it should be disabled.</param>
         /// <seealso cref="IsBufferEnabled"/>
-        [Obsolete("Use SetBufferEnabled (RemovedAfter: Entities pre-1.0) (UnityUpgradeable) -> SetBufferEnabled(*)")]
+        [Obsolete("Use SetBufferEnabled (RemovedAfter: Entities pre-1.0) (UnityUpgradable) -> SetBufferEnabled(*)")]
         public void SetComponentEnabled(Entity entity, bool value) => SetBufferEnabled(entity, value);
 
         /// <summary>

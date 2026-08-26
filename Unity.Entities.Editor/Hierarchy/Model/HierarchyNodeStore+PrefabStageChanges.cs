@@ -17,11 +17,11 @@ namespace Unity.Entities.Editor
             for (var i = 0; i < events.Length; i++)
             {
                 var changeTrackerEvent = events[i];
-                var gameObject = EditorUtility.InstanceIDToObject(changeTrackerEvent.InstanceId) as GameObject;
+                var gameObject = EditorUtility.EntityIdToObject(changeTrackerEvent.EntityId) as GameObject;
 
                 if ((changeTrackerEvent.EventType & GameObjectChangeTrackerEventType.Destroyed) != 0)
                 {
-                    var deletedHandle = HierarchyNodeHandle.FromGameObject(changeTrackerEvent.InstanceId);
+                    var deletedHandle = HierarchyNodeHandle.FromGameObject(changeTrackerEvent.EntityId);
 
                     if (Exists(deletedHandle))
                         RemoveNode(deletedHandle);
@@ -42,7 +42,7 @@ namespace Unity.Entities.Editor
                         for (var j = i; j < events.Length; j++)
                         {
                             var evt = events[j];
-                            if (evt.InstanceId == parent.Index && (evt.EventType & GameObjectChangeTrackerEventType.Destroyed) == 0)
+                            if (evt.EntityId == parent && (evt.EventType & GameObjectChangeTrackerEventType.Destroyed) == 0)
                             {
                                 // replace the current event with the one found
                                 events[i] = evt;
@@ -102,7 +102,7 @@ namespace Unity.Entities.Editor
                 {
                     if (!Exists(parent))
                     {
-                        Debug.Log($"[{changeTrackerEvent.EventType}]: Ignoring GameObject {gameObject.name} ({gameObject.GetInstanceID()}), expected parent {parent} does not exist in the hierarchy");
+                        Debug.Log($"[{changeTrackerEvent.EventType}]: Ignoring GameObject {gameObject.name} ({gameObject.GetEntityId()}), expected parent {parent} does not exist in the hierarchy");
                     }
                     else
                     {

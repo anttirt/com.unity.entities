@@ -296,6 +296,7 @@ namespace Unity.Entities.CodeGen
             // It's possible for the whole assembly to disable auto creation so check for it
             var disableAsmAutoCreation = AssemblyDefinition.CustomAttributes.Any(attr => attr.AttributeType.Name == "DisableAutoCreationAttribute");
             var componentSystemBaseClass = AssemblyDefinition.MainModule.ImportReference(typeof(ComponentSystemBase)).Resolve();
+            var disableRegistration = AssemblyDefinition.CustomAttributes.Any(a => a.AttributeType.Name.Contains("DisableAutoTypeRegistrationAttribute"));
 
             foreach (var type in AssemblyDefinition.MainModule.GetAllTypes())
             {
@@ -304,7 +305,7 @@ namespace Unity.Entities.CodeGen
                     // Generic components are handled below
                     if (type.HasGenericParameters) continue;
 
-                    if (AddTypeToListIfSupported(components, type)) continue;
+                    if (!disableRegistration && AddTypeToListIfSupported(components, type)) continue;
 
                     // If we're here the type isn't a component so see if it's a system
 
@@ -374,8 +375,11 @@ namespace Unity.Entities.CodeGen
             if (components.Count > 0 || systemList.Count > 0)
             {
                 InitializeForTypeGeneration();
+
+                runnerOfMe.CollectedComponentTypes = new List<TypeDefinition>(components.Count);
                 foreach (var type in components)
                 {
+                    runnerOfMe.CollectedComponentTypes.Add(type.Resolve());
                     typeGenInfoList.Add(BuildComponentType(type));
                 }
 
@@ -466,7 +470,9 @@ namespace Unity.Entities.CodeGen
                     .Resolve()))
                 ret.TypeFlags |= TypeManager.SystemTypeInfo.kIsSystemGroupFlag;
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeUtilsInstance.IsManagedType(type, 0))
+            #pragma warning restore 0618
                 ret.TypeFlags |= TypeManager.SystemTypeInfo.kIsSystemManagedFlag;
 
             if (type.TypeImplements(AssemblyDefinition.MainModule.ImportReference(typeof(ISystemStartStop))))

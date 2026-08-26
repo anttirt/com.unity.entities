@@ -266,6 +266,63 @@ public partial class SystemApiContextSyntaxWalker
                             ArgumentThatMightInvolveSystemApiInvocation1: entityArg,
                             ArgumentThatMightInvolveSystemApiInvocation2: default);
                     }
+                    case CandidateType.TryGetComponent when isManagedApi:
+                    {
+                        if (!_systemDescription.TryGetSystemStateParameterName(candidateSyntax,
+                                out var systemStateExpression))
+                            return default;
+
+                        var args = invocationExpressionSyntax.ArgumentList.Arguments.ToArray();
+                        if (args.Length != 2)
+                            return default;
+
+                        var (entityArg, resultArg) =
+                            args[0].NameColon?.Name.Identifier.ValueText == "result"
+                                ? (args[1], args[0])
+                                : (args[0], args[1]);
+
+                        typeArgument = typeArgument.TypeKind == TypeKind.TypeParameter
+                            ? semanticModel.GetTypeInfo(resultArg.Expression).Type
+                            : typeArgument;
+
+                        // Because we are partially patching the node with an open parenthesis with no accompanying closing parenthesis, we need to increment `_numClosingBracketsForNestedSystemApiInvocations` by one.
+                        _numClosingBracketsForNestedSystemApiInvocations++;
+
+                        return ($"{systemStateExpression}.EntityManager.TryGetComponentObject<{typeArgument}>(",
+                            ReplacedWith.InvocationWithMissingSystemApiArguments,
+                            ArgumentThatMightInvolveSystemApiInvocation1: entityArg,
+                            ArgumentThatMightInvolveSystemApiInvocation2: resultArg);
+                    }
+                    case CandidateType.TryGetComponent:
+                    {
+                        var args = invocationExpressionSyntax.ArgumentList.Arguments.ToArray();
+                        if (args.Length != 2)
+                            return default;
+
+                        var (entityArg, resultArg) =
+                            args[0].NameColon?.Name.Identifier.ValueText == "result"
+                                ? (args[1], args[0])
+                                : (args[0], args[1]);
+
+                        if (!_systemDescription.TryGetSystemStateParameterName(candidateSyntax,
+                                out var systemStateExpression))
+                            return default;
+
+                        typeArgument = typeArgument.TypeKind == TypeKind.TypeParameter
+                            ? semanticModel.GetTypeInfo(resultArg.Expression).Type
+                            : typeArgument;
+
+                        var lookup = _systemDescription.QueriesAndHandles.GetOrCreateComponentLookupField(typeArgument, true);
+
+                        // Because we are partially patching the node with an open parenthesis with no accompanying closing parenthesis, we need to increment `_numClosingBracketsForNestedSystemApiInvocations` by one.
+                        _numClosingBracketsForNestedSystemApiInvocations++;
+
+                        return (
+                            $"global::Unity.Entities.Internal.InternalCompilerInterface.TryGetComponentAfterCompletingDependency<{typeArgument.ToFullName()}>(ref __TypeHandle.{lookup}, ref {systemStateExpression}, ",
+                            ReplacedWith.InvocationWithMissingSystemApiArguments,
+                            ArgumentThatMightInvolveSystemApiInvocation1: entityArg,
+                            ArgumentThatMightInvolveSystemApiInvocation2: resultArg);
+                    }
                     case CandidateType.SetComponent:
                     {
                         var args = invocationExpressionSyntax.ArgumentList.Arguments.ToArray();
@@ -397,7 +454,10 @@ public partial class SystemApiContextSyntaxWalker
                                 ? (args[1], args[0])
                                 : (args[0], args[1]);
 
-                        if (isSystemApi)
+                        // ComponentLookup<T> requires T : struct, IComponentData, so for managed
+                        // (class-based) components we fall through to the EntityManager overload —
+                        // the same path used when the call resolves to ManagedAPI.SetComponentEnabled.
+                        if (isSystemApi && !typeArgument.IsReferenceType)
                         {
                             var lookup =
                                 _systemDescription.QueriesAndHandles.GetOrCreateComponentLookupField(typeArgument,
@@ -600,31 +660,6 @@ public partial class SystemApiContextSyntaxWalker
                         return ($"{queryFieldName}.{memberAccess}()",
                             ReplacedWith.InvocationWithFullArgumentList,
                             ArgumentThatMightInvolveSystemApiInvocation1: default,
-                            ArgumentThatMightInvolveSystemApiInvocation2: default);
-                    }
-
-                    // Aspect
-                    case CandidateType.Aspect:
-                    {
-                        var @readonly = candidateSyntax.Flags == CandidateFlags.ReadOnly;
-
-                        if (!_systemDescription.TryGetSystemStateParameterName(candidateSyntax,
-                                out var systemStateExpression))
-                            return default;
-
-                        var entityArg = invocationExpressionSyntax.ArgumentList.Arguments.First();
-                        var aspectLookup =
-                            _systemDescription.QueriesAndHandles.GetOrCreateAspectLookup(typeArgument, @readonly);
-
-                        var typeFullName = typeArgument.ToFullName();
-
-                        // Because we are partially patching the node with an open parenthesis with no accompanying closing parenthesis, we need to increment `_numClosingBracketsForNestedSystemApiInvocations` by one.
-                        _numClosingBracketsForNestedSystemApiInvocations++;
-
-                        return (
-                            $"global::Unity.Entities.Internal.InternalCompilerInterface.GetAspectAfterCompletingDependency<{typeFullName}.Lookup, {typeFullName}>(ref __TypeHandle.{aspectLookup}, ref {systemStateExpression}, {(@readonly ? "true" : "false")}, ",
-                            ReplacedWith.InvocationWithMissingSystemApiArguments,
-                            ArgumentThatMightInvolveSystemApiInvocation1: entityArg,
                             ArgumentThatMightInvolveSystemApiInvocation2: default);
                     }
 

@@ -46,7 +46,9 @@ In the Editor, you can use the Systems window (**Window &gt; Entities &gt; Syste
 
 To view all the low-level methods that form part of the Unity [player loop](https://docs.unity3d.com/ScriptReference/LowLevel.PlayerLoop.html), including non entities-related methods:
 
-* In the **Systems** window, in the More menu (⋮), enable the **Show Full Player Loop** setting.
+* In the **Systems** window, in the More menu (⋮), enable the **Show Player Loop** setting.
+
+To view the update order relationships between a system and the other systems, select the system in the **Systems** window and check the labels in the **Scheduling** column.
 
 For more information, refer to the [Systems window](editor-systems-window.md) documentation.
 

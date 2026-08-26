@@ -235,10 +235,13 @@ namespace Unity.Scenes
             }
             else
             {
-                var resolvedSectionEntities = dstEntities.GetBuffer<ResolvedSectionEntity>(sceneEntity);
-                if (resolvedSectionEntities.Length > 0)
+                if (dstEntities.HasBuffer<ResolvedSectionEntity>(sceneEntity))
                 {
-                    sectionEntity = resolvedSectionEntities[0].SectionEntity;
+                    var resolvedSectionEntities = dstEntities.GetBuffer<ResolvedSectionEntity>(sceneEntity);
+                    if (resolvedSectionEntities.Length > 0)
+                    {
+                        sectionEntity = resolvedSectionEntities[0].SectionEntity;
+                    }
                 }
             }
 
@@ -253,7 +256,9 @@ namespace Unity.Scenes
 
             if (sectionEntity != Entity.Null)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 dstEntities.SetSharedComponentManaged(_AddedScenesQuery, new SceneTag {SceneEntity = sectionEntity});
+                #pragma warning restore 0618
             }
 
             EditorUpdateUtility.EditModeQueuePlayerLoopUpdate();

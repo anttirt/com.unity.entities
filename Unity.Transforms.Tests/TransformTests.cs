@@ -1,6 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -746,12 +746,17 @@ namespace Unity.Entities.Tests
         [UpdateBefore(typeof(TransformSystemGroup))]
         public partial class TestTransformWriteGroupSystem : SystemBase
         {
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct Job : IJobEntity
             {
-                Entities.ForEach((ref LocalToWorld localToWorld, in TestWriteGroupComponent test) =>
+                void Execute(ref LocalToWorld localToWorld, in TestWriteGroupComponent test)
                 {
                     localToWorld.Value = new float4x4(float3x3.identity, new float3(test.Value));
-                }).ScheduleParallel();
+                }
+            }
+            protected override void OnUpdate()
+            {
+                new Job().ScheduleParallel();
             }
         }
 

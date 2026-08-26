@@ -36,8 +36,10 @@ namespace Unity.Entities.Tests
 
                 var entityGuid = CreateEntityGuid();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
+                #pragma warning restore 0618
 
                 const EntityManagerDifferOptions options = EntityManagerDifferOptions.IncludeForwardChangeSet |
                     EntityManagerDifferOptions.IncludeReverseChangeSet |
@@ -81,8 +83,10 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
+                #pragma warning restore 0618
 
                 const EntityManagerDifferOptions options = EntityManagerDifferOptions.IncludeForwardChangeSet |
                     EntityManagerDifferOptions.IncludeReverseChangeSet;
@@ -136,8 +140,10 @@ namespace Unity.Entities.Tests
                 var entityGuid = CreateEntityGuid();
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -145,8 +151,10 @@ namespace Unity.Entities.Tests
                 }
 
                 // Mutate some component data.
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 10 });
+                #pragma warning restore 0618
 
                 // The entityGuid value is the same so it should not be picked up during change tracking.
                 // We should only see the one data change.
@@ -206,10 +214,12 @@ namespace Unity.Entities.Tests
                     SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData2))
                 }, Allocator.Temp);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entities[0], CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entities[1], CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entities[2], CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entities[3], CreateEntityGuid());
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -263,8 +273,10 @@ namespace Unity.Entities.Tests
             using (var differ = new EntityManagerDiffer(SrcEntityManager, SrcWorld.UpdateAllocator.ToAllocator))
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestSharedComp));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetSharedComponentManaged(entity, default(EcsTestSharedComp));
+                #pragma warning restore 0618
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
                     Assert.IsTrue(changes.HasForwardChangeSet);
@@ -276,8 +288,10 @@ namespace Unity.Entities.Tests
                     Assert.AreEqual(1, changes.ForwardChangeSet.SetSharedComponents.Length);
                 }
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetSharedComponentManaged(entity, new EcsTestSharedComp { value = 1});
                 SrcEntityManager.SetSharedComponentManaged(entity, default(EcsTestSharedComp));
+                #pragma warning restore 0618
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
                     Assert.IsFalse(changes.HasForwardChangeSet);
@@ -292,8 +306,10 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestSharedComp));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetSharedComponentManaged(entity, new EcsTestSharedComp { value = 2 });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -316,8 +332,10 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestSharedCompWithRefCount));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetSharedComponentManaged(entity, new EcsTestSharedCompWithRefCount(&RefCount1));
+                #pragma warning restore 0618
 
                 Assert.AreEqual(1, RefCount1);
 
@@ -376,7 +394,9 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestEmptyEnableable1), typeof(EcsTestEmptyEnableable2), typeof(EcsTestDataEnableable), typeof(EcsTestDataEnableable2));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                #pragma warning restore 0618
                 SrcEntityManager.SetComponentEnabled<EcsTestEmptyEnableable1>(entity, true);
                 SrcEntityManager.SetComponentEnabled<EcsTestEmptyEnableable2>(entity, false);
                 SrcEntityManager.SetComponentEnabled<EcsTestDataEnableable>(entity, true);
@@ -428,7 +448,9 @@ namespace Unity.Entities.Tests
 
                 SrcEntityManager.SetComponentEnabled<EcsTestEmptyEnableable1>(entity, false); // empty component
                 SrcEntityManager.SetComponentEnabled<EcsTestDataEnableable>(entity, false); // non-empty component
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new EcsTestDataEnableable2{value0 = 1}); // Changes to component, but no enableable bit change
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -470,7 +492,9 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestEnableableBuffer1), typeof(EcsTestEnableableBuffer2));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                #pragma warning restore 0618
                 SrcEntityManager.SetComponentEnabled<EcsTestEnableableBuffer1>(entity, true);
                 SrcEntityManager.SetComponentEnabled<EcsTestEnableableBuffer2>(entity, false);
 
@@ -548,7 +572,9 @@ namespace Unity.Entities.Tests
             using (var differ = new EntityManagerDiffer(SrcEntityManager, SrcWorld.UpdateAllocator.ToAllocator))
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                #pragma warning restore 0618
                 SrcEntityManager.SetName(entity, "Old Name");
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
@@ -581,11 +607,15 @@ namespace Unity.Entities.Tests
                 // Setup two entities, entity1 and entity2, and have the entity2 refer to entity1.
                 var entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
                 var entity1Guid = CreateEntityGuid();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1, entity1Guid);
+                #pragma warning restore 0618
 
                 var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataEntity));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity2, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity2, new EcsTestDataEntity
+                #pragma warning restore 0618
                 {
                     value1 = entity1
                 });
@@ -595,9 +625,13 @@ namespace Unity.Entities.Tests
                 // Destroy entity1 and recreate it.
                 SrcEntityManager.DestroyEntity(entity1);
                 entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1, entity1Guid);
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity2, new EcsTestDataEntity
+                #pragma warning restore 0618
                 {
                     value1 = entity1
                 });
@@ -631,91 +665,6 @@ namespace Unity.Entities.Tests
 #if !DOTS_DISABLE_DEBUG_NAMES
 // TODO - rewrite this test now that the assumption that entity indices are identical in both worlds
 // has been invalidated
-#if ENTITY_STORE_V1
-        [Test]
-        [TestCase(100)]
-        public void EntityDiffer_GetChanges_EntityReferenceChange_DependsOnGUID_NameByIndexAligned(int entityCount)
-        {
-            const EntityManagerDifferOptions options = EntityManagerDifferOptions.IncludeForwardChangeSet |
-                    EntityManagerDifferOptions.IncludeReverseChangeSet |
-                    EntityManagerDifferOptions.FastForwardShadowWorld;
-
-            var entityArray1 = new NativeArray<Entity>(entityCount, Allocator.Temp);
-            var entityGuidArray1 = new NativeArray<EntityGuid>(entityCount, Allocator.Temp);
-            var entityArray2 = new NativeArray<Entity>(entityCount, Allocator.Temp);
-            var entityGuidArray2 = new NativeArray<EntityGuid>(entityCount, Allocator.Temp);
-
-            using (var differ = new EntityManagerDiffer(SrcEntityManager, Allocator.Temp))
-            {
-                for (int i = 0; i < entityCount; i++)
-                {
-                    // Setup two entities, entity1 and entity2, and have the entity2 refer to entity1.
-                    var entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
-                    var entity1Guid = CreateEntityGuid();
-                    SrcEntityManager.SetComponentData(entity1, entity1Guid);
-                    entityArray1[i] = entity1;
-                    entityGuidArray1[i] = entity1Guid;
-
-                    var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataEntity));
-                    var entity2Guid = CreateEntityGuid();
-                    SrcEntityManager.SetComponentData(entity2, entity2Guid);
-                    SrcEntityManager.SetComponentData(entity2, new EcsTestDataEntity
-                    {
-                        value1 = entity1
-                    });
-                    entityArray2[i] = entity2;
-                    entityGuidArray2[i] = entity2Guid;
-                }
-
-                // apply the first changes, this is not what we're testing
-                differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator);
-
-                for (int i = 0; i < entityCount / 2; i++)
-                {
-                    // Destroy entity1 and recreate it.
-                    SrcEntityManager.DestroyEntity(entityArray1[i]);
-                    entityArray1[i] = SrcEntityManager.CreateEntity(typeof(EntityGuid));
-                    SrcEntityManager.SetComponentData(entityArray1[i], entityGuidArray1[i]);
-
-                    SrcEntityManager.SetComponentData(entityArray2[i], new EcsTestDataEntity
-                    {
-                        value1 = entityArray1[i]
-                    });
-                }
-
-                using (var changes = differ.GetChanges(options, SrcWorld.UpdateAllocator.ToAllocator))
-                {
-                    var ShadowEntityManager = differ.ShadowEntityManager;
-
-                    // Confirm that two worlds' have the same entity capacity
-                    Assert.AreEqual(SrcEntityManager.EntityCapacity, ShadowEntityManager.EntityCapacity);
-                    for(int i = 0; i < SrcEntityManager.EntityCapacity; i++)
-                    {
-                        var srcEntity = SrcEntityManager.GetEntityByEntityIndex(i);
-                        var srcNameIndex = SrcEntityManager.GetNameIndexByEntityIndex(i);
-
-                        var dstEntity = ShadowEntityManager.GetEntityByEntityIndex(i);
-                        var dstNameIndex = ShadowEntityManager.GetNameIndexByEntityIndex(i);
-
-                        // After fast forward shadow world, the EntityInChunkByEntity of the shawdow world and
-                        // incremental convertion world line up with the same EntityGuid.  And the NameByEnity
-                        // of the shawdow world and incremental convertion world also line up.
-                        if (SrcEntityManager.Exists(srcEntity))
-                        {
-                            Assert.IsTrue(ShadowEntityManager.Exists(dstEntity));
-                            Assert.AreEqual(SrcEntityManager.GetComponentData<EntityGuid>(srcEntity), ShadowEntityManager.GetComponentData<EntityGuid>(dstEntity));
-                            Assert.AreEqual(srcNameIndex, dstNameIndex);
-                        }
-                    }
-                }
-            }
-
-            entityArray1.Dispose();
-            entityGuidArray1.Dispose();
-            entityArray2.Dispose();
-            entityGuidArray2.Dispose();
-        }
-#endif
 #endif
 
         [Test]
@@ -740,7 +689,9 @@ namespace Unity.Entities.Tests
                     var entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
                     var entity1Guid = CreateEntityGuid();
                     var entity1Name = new FixedString64Bytes("entityName1_" + i.ToString());
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity1, entity1Guid);
+                    #pragma warning restore 0618
                     SrcEntityManager.SetName(entity1, entity1Name);
                     entityArray1[i] = entity1;
                     entityGuidArray1[i] = entity1Guid;
@@ -749,8 +700,10 @@ namespace Unity.Entities.Tests
                     var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataEntity));
                     var entity2Guid = CreateEntityGuid();
                     var entity2Name = new FixedString64Bytes("entityName2_" + i.ToString());
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity2, entity2Guid);
                     SrcEntityManager.SetComponentData(entity2, new EcsTestDataEntity
+                    #pragma warning restore 0618
                     {
                         value1 = entity1
                     });
@@ -769,12 +722,16 @@ namespace Unity.Entities.Tests
                     // Destroy entity1 and recreate it.
                     SrcEntityManager.DestroyEntity(entityArray1[i]);
                     entityArray1[i] = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entityArray1[i], entityGuidArray1[i]);
+                    #pragma warning restore 0618
                     var entity1Name = new FixedString64Bytes("entityName1_new_" + i.ToString());
                     SrcEntityManager.SetName(entityArray1[i], entity1Name);
                     entityNameArray1[i] = entity1Name;
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entityArray2[i], new EcsTestDataEntity
+                    #pragma warning restore 0618
                     {
                         value1 = entityArray1[i]
                     });
@@ -801,7 +758,9 @@ namespace Unity.Entities.Tests
                     var entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
                     var entity1Guid = CreateEntityGuid();
                     var entity1Name = new FixedString64Bytes("entityName1_" + i.ToString());
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity1, entity1Guid);
+                    #pragma warning restore 0618
                     SrcEntityManager.SetName(entity1, entity1Name);
                     entityArray1[i] = entity1;
                     entityGuidArray1[i] = entity1Guid;
@@ -810,8 +769,10 @@ namespace Unity.Entities.Tests
                     var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataEntity));
                     var entity2Guid = CreateEntityGuid();
                     var entity2Name = new FixedString64Bytes("entityName2_" + i.ToString());
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity2, entity2Guid);
                     SrcEntityManager.SetComponentData(entity2, new EcsTestDataEntity
+                    #pragma warning restore 0618
                     {
                         value1 = entity1
                     });
@@ -825,10 +786,6 @@ namespace Unity.Entities.Tests
                 {
                     var ShadowEntityManager = differ.ShadowEntityManager;
 
-#if ENTITY_STORE_V1
-                    // Confirm that two worlds' have the same entity capacity
-                    Assert.AreEqual(SrcEntityManager.EntityCapacity, ShadowEntityManager.EntityCapacity);
-#endif
 
                     var summaryString = EntityChangeSetFormatter.PrintSummary(changes.ForwardChangeSet, SrcEntityManager);
                 }
@@ -852,14 +809,20 @@ namespace Unity.Entities.Tests
             {
                 // Setup three entities, entity1a, entity1b and entity2, and have the entity2 refer to the other two.
                 var entity1a = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1a, CreateEntityGuid());
+                #pragma warning restore 0618
 
                 var entity1b = SrcEntityManager.CreateEntity(typeof(EntityGuid));
                 var entity1bGuid = CreateEntityGuid();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1b, entity1bGuid);
+                #pragma warning restore 0618
 
                 var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity2, CreateEntityGuid());
+                #pragma warning restore 0618
                 var buf = SrcEntityManager.AddBuffer<EcsComplexEntityRefElement>(entity2);
                 buf.Add(new EcsComplexEntityRefElement {Entity = entity1a});
                 buf.Add(new EcsComplexEntityRefElement {Entity = entity1b});
@@ -869,7 +832,9 @@ namespace Unity.Entities.Tests
                 // Destroy entity1b and recreate it.
                 SrcEntityManager.DestroyEntity(entity1b);
                 entity1b = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1b, entity1bGuid);
+                #pragma warning restore 0618
                 buf = SrcEntityManager.GetBuffer<EcsComplexEntityRefElement>(entity2);
                 buf[1] = new EcsComplexEntityRefElement {Entity = entity1b};
 
@@ -911,8 +876,10 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference0
                 });
@@ -920,7 +887,9 @@ namespace Unity.Entities.Tests
                 // apply the first changes, that's not what we're testing
                 differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference1
                 });
@@ -959,7 +928,9 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                #pragma warning restore 0618
                 var buf = SrcEntityManager.AddBuffer<EcsTestDataBlobAssetElement>(entity);
                 buf.Add(new EcsTestDataBlobAssetElement {blobElement = blobAssetReference0});
                 buf.Add(new EcsTestDataBlobAssetElement {blobElement = blobAssetReference1});
@@ -1002,8 +973,10 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestManagedCompWithRefCount));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, managedRefComponent);
+                #pragma warning restore 0618
 
                 Assert.AreEqual(1, managedRefComponent.RefCount);
 
@@ -1076,16 +1049,20 @@ namespace Unity.Entities.Tests
                 var entity2 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
                 var entity3 = SrcEntityManager.CreateEntity(typeof(EntityGuid));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity0, entityGuid0);
                 SrcEntityManager.SetComponentData(entity1, entityGuid1);
                 SrcEntityManager.SetComponentData(entity2, entityGuid2);
                 SrcEntityManager.SetComponentData(entity3, entityGuid3);
+                #pragma warning restore 0618
 
                 Assert.DoesNotThrow(GetChanges);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1, entityGuid0);
                 SrcEntityManager.SetComponentData(entity2, entityGuid0);
                 SrcEntityManager.SetComponentData(entity3, entityGuid0);
+                #pragma warning restore 0618
 
                 var regexMain = new Regex($"DuplicateEntityGuidException");
                 LogAssert.Expect(LogType.Exception, regexMain);
@@ -1093,8 +1070,10 @@ namespace Unity.Entities.Tests
                 var dup0 = Assert.Throws<DuplicateEntityGuidException>(GetChanges).DuplicateEntityGuids;
                 Assert.That(dup0, Is.EquivalentTo(new[] { new DuplicateEntityGuid(entityGuid0, 3) }));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity0, entityGuid1);
                 SrcEntityManager.SetComponentData(entity3, entityGuid1);
+                #pragma warning restore 0618
 
                 LogAssert.Expect(LogType.Exception, regexMain);
                 var dup1 = Assert.Throws<DuplicateEntityGuidException>(GetChanges).DuplicateEntityGuids;
@@ -1119,7 +1098,9 @@ namespace Unity.Entities.Tests
                     Assert.IsFalse(changes.AnyChanges);
                 }
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new EcsCleanup1 {Value = 10});
+                #pragma warning restore 0618
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
                     Assert.IsFalse(changes.AnyChanges);
@@ -1147,7 +1128,9 @@ namespace Unity.Entities.Tests
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator)) {}
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.AddSharedComponentManaged(SrcEntityManager.UniversalQuery, new SharedData1(9));
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1199,9 +1182,11 @@ namespace Unity.Entities.Tests
 
                 var entityGuid = CreateEntityGuid();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
+                #pragma warning restore 0618
 
                 const EntityManagerDifferOptions options = EntityManagerDifferOptions.IncludeForwardChangeSet |
                     EntityManagerDifferOptions.IncludeReverseChangeSet |
@@ -1247,9 +1232,11 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData), typeof(EcsTestManagedComponent));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
+                #pragma warning restore 0618
 
                 const EntityManagerDifferOptions options = EntityManagerDifferOptions.IncludeForwardChangeSet |
                     EntityManagerDifferOptions.IncludeReverseChangeSet;
@@ -1307,9 +1294,11 @@ namespace Unity.Entities.Tests
                 var entityGuid = CreateEntityGuid();
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData), typeof(EcsTestManagedComponent));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1317,9 +1306,11 @@ namespace Unity.Entities.Tests
                 }
 
                 // Mutate some component data.
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 10 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeOtherString" });
+                #pragma warning restore 0618
 
                 // The entityGuid value is the same so it should not be picked up during change tracking.
                 // We should only see the two data changes.
@@ -1376,9 +1367,11 @@ namespace Unity.Entities.Tests
                 var entityGuid = CreateEntityGuid();
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData), typeof(EcsTestManagedComponent));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1386,7 +1379,9 @@ namespace Unity.Entities.Tests
                 }
 
                 // Only mutate managed component.
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeOtherString" });
+                #pragma warning restore 0618
 
                 // The entityGuid value is the same so it should not be picked up during change tracking.
                 // We should only see the two data changes.
@@ -1443,9 +1438,11 @@ namespace Unity.Entities.Tests
                 var entityGuid = CreateEntityGuid();
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestData), typeof(EcsTestManagedComponent));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, entityGuid);
                 SrcEntityManager.SetComponentData(entity, new EcsTestData { value = 9 });
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1453,7 +1450,9 @@ namespace Unity.Entities.Tests
                 }
 
                 // Only mutate managed component.
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.GetComponentData<EcsTestManagedComponent>(entity).value = "SomeOtherString";
+                #pragma warning restore 0618
 
                 // The entityGuid value is the same so it should not be picked up during change tracking.
                 // We should only see the two data changes.
@@ -1509,9 +1508,11 @@ namespace Unity.Entities.Tests
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestSharedComp), typeof(EcsTestManagedComponent));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new EcsTestManagedComponent { value = "SomeString" });
                 SrcEntityManager.SetSharedComponentManaged(entity, new EcsTestSharedComp { value = 2 });
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1536,8 +1537,10 @@ namespace Unity.Entities.Tests
 
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference0
                 });
@@ -1561,7 +1564,9 @@ namespace Unity.Entities.Tests
 
                 var blobAssetReference1 = BlobAssetReference<int>.Create(20);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference1
                 });
@@ -1601,16 +1606,20 @@ namespace Unity.Entities.Tests
 
                 var entity0 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity0, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity0, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference0
                 });
 
                 var entity1 = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity1, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity1, new EcsTestDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobAssetReference1
                 });
@@ -1663,8 +1672,10 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < 100; i++)
                     {
                         var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                         SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef { value = blobAssetReference });
+                        #pragma warning restore 0618
                     }
 
                     using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
@@ -1690,7 +1701,9 @@ namespace Unity.Entities.Tests
             using (var differ = new EntityManagerDiffer(SrcEntityManager, SrcWorld.UpdateAllocator.ToAllocator))
             {
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(EcsTestDataBlobAssetRef));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                #pragma warning restore 0618
 
                 using (var changes = differ.GetChanges(EntityManagerDifferOptions.Default, SrcWorld.UpdateAllocator.ToAllocator))
                 {
@@ -1719,7 +1732,9 @@ namespace Unity.Entities.Tests
                 try
                 {
                     var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid));
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                    #pragma warning restore 0618
                     var buffer = SrcEntityManager.AddBuffer<EcsTestDataBlobAssetElement>(entity);
 
                     for (var i = 0; i < blobAssetReferences.Length; i++)
@@ -1764,7 +1779,9 @@ namespace Unity.Entities.Tests
                 {
                     var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid));
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
+                    #pragma warning restore 0618
 
                     var buffer = SrcEntityManager.AddBuffer<EcsTestDataBlobAssetElement>(entity);
 
@@ -1828,9 +1845,11 @@ namespace Unity.Entities.Tests
 
                     blobAssetReferences[i] = BlobAssetReference<int>.Create(i);
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                     SrcEntityManager.SetComponentData(entity, new EcsTestData4());
                     SrcEntityManager.SetComponentData(entity, new EcsTestDataBlobAssetRef
+                    #pragma warning restore 0618
                     {
                         value = blobAssetReferences[i]
                     });
@@ -1882,8 +1901,10 @@ namespace Unity.Entities.Tests
 
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(ManagedComponentWithBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new ManagedComponentWithBlobAssetRef
+                #pragma warning restore 0618
                 {
                     Value = blobAssetReference0
                 });
@@ -1902,7 +1923,9 @@ namespace Unity.Entities.Tests
 
                 var blobAssetReference1 = BlobAssetReference<int>.Create(20);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, new ManagedComponentWithBlobAssetRef
+                #pragma warning restore 0618
                 {
                     Value = blobAssetReference1
                 });
@@ -1943,8 +1966,10 @@ namespace Unity.Entities.Tests
 
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(SharedComponentWithBlobAssetRef));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetSharedComponentManaged(entity, new SharedComponentWithBlobAssetRef
+                #pragma warning restore 0618
                 {
                     Value = blobAssetReference0
                 });
@@ -1968,7 +1993,9 @@ namespace Unity.Entities.Tests
                 var blobAssetReference1 = BlobAssetReference<int>.Create(20);
                 blobAssetReference0.Dispose();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetSharedComponentManaged(entity, new SharedComponentWithBlobAssetRef
+                #pragma warning restore 0618
                 {
                     Value = blobAssetReference1
                 });
@@ -2003,6 +2030,7 @@ namespace Unity.Entities.Tests
 
         class ScriptableObjectWithBlobAssetRef : UnityEngine.ScriptableObject
         {
+            [NonSerialized]
             public BlobAssetReference<int> Value;
         }
 
@@ -2016,8 +2044,10 @@ namespace Unity.Entities.Tests
 
                 var entity = SrcEntityManager.CreateEntity(typeof(EntityGuid), typeof(ManagedComponentWithScriptableObject));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.SetComponentData(entity, CreateEntityGuid());
                 SrcEntityManager.SetComponentData(entity, new ManagedComponentWithScriptableObject
+                #pragma warning restore 0618
                 {
                     Value = scriptableObject
                 });
@@ -2043,8 +2073,8 @@ namespace Unity.Entities.Tests
         [Test]
         public void EntityDiffer_GatherLinkedEntityGroupChanges_DetectsSimpleChanges()
         {
-            var a = new EntityGuid(1, 0, 0, 0);
-            var b = new EntityGuid(2, 0, 0, 0);
+            var a = new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0);
+            var b = new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0);
             var before = new NativeList<EntityGuid>(1, SrcWorld.UpdateAllocator.ToAllocator);
             var after = new NativeList<EntityGuid>(2, SrcWorld.UpdateAllocator.ToAllocator);
             var additions = new NativeList<LinkedEntityGroupChange>(16, SrcWorld.UpdateAllocator.ToAllocator);
@@ -2110,9 +2140,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void EntityDiffer_GatherLinkedEntityGroupChanges_DetectsCombinedChanges()
         {
-            var a = new EntityGuid(1, 0, 0, 0);
-            var b = new EntityGuid(2, 0, 0, 0);
-            var c = new EntityGuid(3, 0, 0, 0);
+            var a = new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0);
+            var b = new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0);
+            var c = new EntityGuid(CreateTestEntityId(3), EntityId.None, 0, 0);
             var additions = new NativeList<LinkedEntityGroupChange>(16, SrcWorld.UpdateAllocator.ToAllocator);
             var removals = new NativeList<LinkedEntityGroupChange>(16, SrcWorld.UpdateAllocator.ToAllocator);
             var before = new NativeList<EntityGuid>(1, SrcWorld.UpdateAllocator.ToAllocator)

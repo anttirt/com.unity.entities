@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace Unity.Scenes.Hybrid.Tests
 {
+    #pragma warning disable EA0017 // intentionally a managed shared component
     public struct SharedWithMaterial : ISharedComponentData, IEquatable<SharedWithMaterial>
     {
         public Material material;
@@ -24,6 +25,7 @@ namespace Unity.Scenes.Hybrid.Tests
             return (material != null ? material.GetHashCode() : 0);
         }
     }
+    #pragma warning restore EA0017
 
     [DisallowMultipleComponent]
     public class AuthoringWithMaterial : MonoBehaviour
@@ -44,7 +46,9 @@ namespace Unity.Scenes.Hybrid.Tests
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
             // The material asset must be created before on the main thread not at import time
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged(entity, new SharedWithMaterial(){material = SubSceneTests.GetBasicMaterial()});
+            #pragma warning restore 0618
 
             AddComponent<SingletonTag1>(entity); // Add a non-enableable tag we can search for as a singleton
             AddComponent<EnableableTag1>(entity);

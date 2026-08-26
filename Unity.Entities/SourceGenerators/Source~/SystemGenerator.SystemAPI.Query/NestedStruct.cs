@@ -51,16 +51,6 @@ static class NestedStruct
 
             switch (arg.Type)
             {
-                case QueryType.Aspect:
-                    fieldName = $"{arg.Name}_ResolvedChunk";
-                    fieldDeclaration = $"public {arg.TypeSymbolFullName}.ResolvedChunk {fieldName};";
-                    elementInReturnedTuple = $"{fieldName}[index]";
-                    yield return
-                    (
-                        new Field(fieldDeclaration, fieldName),
-                        new ArgumentInReturnedType(elementInReturnedTuple)
-                    );
-                    break;
                 case QueryType.TagComponent:
                     fieldName = "";
                     fieldDeclaration = "";
@@ -229,21 +219,6 @@ static class NestedStruct
 
             switch (arg.Type)
             {
-                case QueryType.Aspect:
-                    fieldName = $"{arg.Name}_AspectTypeHandle";
-                    fieldDeclaration = $"{arg.TypeSymbolFullName}.TypeHandle {fieldName};";
-                    fieldAssignment = $"{fieldName} = new {arg.TypeSymbolFullName}.TypeHandle(ref systemState);";
-                    resolvedChunkInitializerArgument = $"{fieldName}.Resolve(archetypeChunk);";
-
-                    yield return
-                    (
-                        new Field(
-                            fieldDeclaration,
-                            fieldName,
-                            fieldAssignment),
-                        new ArgumentInReturnedType(resolvedChunkInitializerArgument)
-                    );
-                    break;
                 case QueryType.TagComponent:
                     fieldName = "";
                     fieldDeclaration = "";

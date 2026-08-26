@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Unity.Collections;
+using UnityEngine;
 
 namespace Unity.Entities.Editor.Tests
 {
@@ -153,7 +154,7 @@ namespace Unity.Entities.Editor.Tests
         [Test]
         public void RemoveNode_WhenNodeIsNotEntityWithNoChildren_IsRemovedCorrectly()
         {
-            var node = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(1));
+            var node = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(1)));
             var root = m_HierarchyNodeStore.GetNode(HierarchyNodeHandle.Root);
             Assert.That(m_HierarchyNodeStore.Exists(node), Is.EqualTo(true));
             Assert.That(root.GetChildCount(), Is.EqualTo(1));
@@ -179,8 +180,8 @@ namespace Unity.Entities.Editor.Tests
         [Test]
         public void RemoveNode_WhenNodeIsNotEntityWithChildren_IsRemovedCorrectly()
         {
-            var parent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(1));
-            var child = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(2), parent);
+            var parent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(1)));
+            var child = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(2)), parent);
 
             Assert.That(m_HierarchyNodeStore.Exists(parent), Is.EqualTo(true));
             Assert.That(m_HierarchyNodeStore.Exists(child), Is.EqualTo(true));
@@ -437,10 +438,10 @@ namespace Unity.Entities.Editor.Tests
         [Test]
         public void Parenting_WhenRemoveParentWithRemoveChildrenRecursivelyFlag_RemovesAllChildren()
         {
-            var grandparent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(1));
-            var parent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(2), grandparent);
-            var childA = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(3), parent);
-            var childB = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(4), parent);
+            var grandparent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(1)));
+            var parent = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(2)), grandparent);
+            var childA = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(3)), parent);
+            var childB = m_HierarchyNodeStore.AddNode(HierarchyNodeHandle.FromGameObject(EntityId.FromULong(4)), parent);
 
             Assert.That(childA.GetParent(), Is.EqualTo(parent));
             Assert.That(childB.GetParent(), Is.EqualTo(parent));

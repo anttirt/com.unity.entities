@@ -32,7 +32,7 @@ For information on how to manage chunk memory, refer to [Managing chunk allocati
 
 ## Archetypes in the Editor
 
-The [Archetypes window](editor-archetypes-window.md) lists the archetypes of all the worlds in your project and it shows the amount of allocated and unused memory of each archetype.
+The [Entities Memory Profiler module](profiler-module-memory.md) lists the archetypes of all the worlds in your project and shows the amount of allocated and unused memory of each archetype.
 
 In the Editor, the following icon represents an Archetype: ![Archetype icon - a hexagon with lines intersecting it.](images/editor-archetype-icon.png) . 
 
@@ -40,4 +40,4 @@ In the Editor, the following icon represents an Archetype: ![Archetype icon - a 
 
 * [Structural changes concepts](concepts-structural-changes.md)
 * [Managing chunk allocations](performance-chunk-allocations.md)
-* [Archetypes window](editor-archetypes-window.md)
+* [Entities Memory Profiler module](profiler-module-memory.md)

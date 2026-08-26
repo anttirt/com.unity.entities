@@ -23,7 +23,6 @@
 .hierarchy-item__icon
 {
     flex: 0 0 16px;
-
     width: 16px;
     height: 16px;
     margin-right: 2px;

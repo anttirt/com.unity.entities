@@ -29,29 +29,29 @@ namespace Unity.Entities.Editor
 
     class HierarchyPrefabStageChangeTracker : IDisposable
     {
-        NativeParallelHashSet<int> m_InstanceId;
-        NativeParallelHashMap<int, int> m_Parents;
-        NativeParallelHashSet<int> m_Existing;
+        NativeParallelHashSet<EntityId> m_EntityId;
+        NativeParallelHashMap<EntityId, EntityId> m_Parents;
+        NativeParallelHashSet<EntityId> m_Existing;
 
-        List<int> m_Removed = new List<int>();
+        List<EntityId> m_Removed = new List<EntityId>();
 
         public HierarchyPrefabStageChangeTracker(Allocator allocator)
         {
-            m_InstanceId = new NativeParallelHashSet<int>(16, allocator);
-            m_Parents = new NativeParallelHashMap<int, int>(16, allocator);
-            m_Existing = new NativeParallelHashSet<int>(16, allocator);
+            m_EntityId = new NativeParallelHashSet<EntityId>(16, allocator);
+            m_Parents = new NativeParallelHashMap<EntityId, EntityId>(16, allocator);
+            m_Existing = new NativeParallelHashSet<EntityId>(16, allocator);
         }
 
         public void Clear()
         {
-            m_InstanceId.Clear();
+            m_EntityId.Clear();
             m_Parents.Clear();
             m_Existing.Clear();
         }
 
         public void Dispose()
         {
-            m_InstanceId.Dispose();
+            m_EntityId.Dispose();
             m_Parents.Dispose();
             m_Existing.Dispose();
         }
@@ -73,7 +73,7 @@ namespace Unity.Entities.Editor
                 GatherChangesRecursive(root, events, m_Existing);
             }
 
-            foreach (var id in m_InstanceId)
+            foreach (var id in m_EntityId)
             {
                 if (!m_Existing.Contains(id))
                     m_Removed.Add(id);
@@ -81,43 +81,43 @@ namespace Unity.Entities.Editor
 
             foreach (var id in m_Removed)
             {
-                m_InstanceId.Remove(id);
+                m_EntityId.Remove(id);
                 events.Add(new GameObjectChangeTrackerEvent(id, GameObjectChangeTrackerEventType.Destroyed));
             }
 
             if (null == stage)
             {
-                m_InstanceId.Clear();
+                m_EntityId.Clear();
                 m_Parents.Clear();
             }
         }
 
-        void GatherChangesRecursive(GameObject obj, NativeList<GameObjectChangeTrackerEvent> events, NativeParallelHashSet<int> existing)
+        void GatherChangesRecursive(GameObject obj, NativeList<GameObjectChangeTrackerEvent> events, NativeParallelHashSet<EntityId> existing)
         {
-            var instanceId = obj.GetInstanceID();
+            var entityId = obj.GetEntityId();
 
-            existing.Add(instanceId);
+            existing.Add(entityId);
 
-            if (!m_InstanceId.Contains(instanceId))
+            if (!m_EntityId.Contains(entityId))
             {
-                events.Add(new GameObjectChangeTrackerEvent(instanceId, GameObjectChangeTrackerEventType.CreatedOrChanged));
-                m_InstanceId.Add(instanceId);
+                events.Add(new GameObjectChangeTrackerEvent(entityId, GameObjectChangeTrackerEventType.CreatedOrChanged));
+                m_EntityId.Add(entityId);
             }
 
-            var parentId = obj.transform.parent ? obj.transform.parent.gameObject.GetInstanceID() : 0;
+            var parentId = obj.transform.parent ? obj.transform.parent.gameObject.GetEntityId() : EntityId.None;
 
-            if (m_Parents.TryGetValue(instanceId, out var currentParentId))
+            if (m_Parents.TryGetValue(entityId, out var currentParentId))
             {
                 if (currentParentId != parentId)
                 {
-                    events.Add(new GameObjectChangeTrackerEvent(instanceId, GameObjectChangeTrackerEventType.ChangedParent));
-                    m_Parents[instanceId] = parentId;
+                    events.Add(new GameObjectChangeTrackerEvent(entityId, GameObjectChangeTrackerEventType.ChangedParent));
+                    m_Parents[entityId] = parentId;
                 }
             }
-            else if (parentId != 0)
+            else if (parentId != EntityId.None)
             {
-                events.Add(new GameObjectChangeTrackerEvent(instanceId, GameObjectChangeTrackerEventType.ChangedParent));
-                m_Parents.Add(instanceId, parentId);
+                events.Add(new GameObjectChangeTrackerEvent(entityId, GameObjectChangeTrackerEventType.ChangedParent));
+                m_Parents.Add(entityId, parentId);
             }
 
             foreach (Transform child in obj.transform)

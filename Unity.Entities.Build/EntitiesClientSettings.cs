@@ -77,7 +77,6 @@ namespace Unity.Entities.Build
             AssetDatabase.Refresh();
         }
 
-#if UNITY_2023_2_OR_NEWER
         private void OnEnable()
         {
             if (!AssetDatabase.IsAssetImportWorkerProcess())
@@ -85,13 +84,9 @@ namespace Unity.Entities.Build
                 ((IEntitiesPlayerSettings)this).RegisterCustomDependency();
             }
         }
-#endif
 
         private void OnDisable()
         {
-#if !UNITY_2023_2_OR_NEWER
-            Save();
-#else
             //We can't call the RegisterCustomDependency here. We still save the asset (because it must be)
             //But the depedency is going to be update when the scriptable is re-enabled.
             if (AssetDatabase.IsAssetImportWorkerProcess())
@@ -105,7 +100,6 @@ namespace Unity.Entities.Build
                 ((IEntitiesPlayerSettings)this).RegisterCustomDependency();
                 AssetDatabase.Refresh();
             }
-#endif
         }
     }
 

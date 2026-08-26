@@ -23,7 +23,9 @@ namespace Unity.Entities.Tests
         public void SetupEntity(Entity entity, int value, int sharedValue)
         {
             m_Manager.SetComponentData(entity, new EcsTestData(value));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(sharedValue));
+            #pragma warning restore 0618
             var buffer = m_Manager.GetBuffer<EcsIntElement>(entity);
             buffer.ResizeUninitialized(value);
             for (int i = 0; i < value; ++i)
@@ -36,7 +38,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData2), typeof(EcsTestSharedComp));
             m_Manager.SetComponentData(entity, new EcsTestData2(value));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(sharedValue));
+            #pragma warning restore 0618
             return entity;
         }
 
@@ -232,7 +236,9 @@ namespace Unity.Entities.Tests
 
             // Only update shared value == 1
             var unique = new List<EcsTestSharedComp>(0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged(unique);
+            #pragma warning restore 0618
             var sharedFilterValue = 1;
             var sharedFilterIndex = -1;
             for (int i = 0; i < unique.Count; i++)
@@ -1396,6 +1402,31 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public unsafe void DynamicComponentTypeHandle_GetComponentDataPtrRO_Works()
+        {
+            var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            m_Manager.SetComponentData(entity, new EcsTestData { value = 17 });
+
+            var dynamicHandle = m_Manager.GetDynamicComponentTypeHandle(ComponentType.ReadOnly<EcsTestData>());
+            var chunk = m_Manager.GetChunk(entity);
+
+            var ptr = (EcsTestData*)chunk.GetComponentDataPtrRO(ref dynamicHandle);
+            Assert.IsTrue(ptr != null);
+            Assert.AreEqual(17, ptr[0].value);
+        }
+
+        [Test]
+        public unsafe void DynamicComponentTypeHandle_GetComponentDataPtrRO_TypeNotInChunk_ReturnsNull()
+        {
+            var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            var dynamicHandle = m_Manager.GetDynamicComponentTypeHandle(ComponentType.ReadOnly<EcsTestData2>());
+            var chunk = m_Manager.GetChunk(entity);
+
+            var ptr = chunk.GetComponentDataPtrRO(ref dynamicHandle);
+            Assert.IsTrue(ptr == null);
+        }
+
+        [Test]
         public unsafe void ComponentTypeHandle_ComponentWithContainer_Works()
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestContainerData));
@@ -1567,7 +1598,9 @@ namespace Unity.Entities.Tests
         public unsafe void DynamicSharedComponentTypeHandle_Component_Works()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             var handle = m_Manager.GetDynamicSharedComponentTypeHandle(typeof(EcsTestSharedComp));
             var chunk = m_Manager.GetChunk(entity);
 
@@ -1580,7 +1613,9 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity();
             var component = new EcsTestContainerSharedComp();
             component.Create();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, component);
+            #pragma warning restore 0618
 
             var handle = m_Manager.GetDynamicSharedComponentTypeHandle(typeof(EcsTestContainerSharedComp));
             var chunk = m_Manager.GetChunk(entity);
@@ -1614,7 +1649,9 @@ namespace Unity.Entities.Tests
         public void DynamicSharedComponentTypeHandle_UseAfterStructuralChange_ThrowsCustomErrorMessage()
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity, new EcsTestData(42));
             var ecsTestData = m_Manager.GetDynamicSharedComponentTypeHandle(typeof(EcsTestSharedComp));
 
@@ -1634,7 +1671,9 @@ namespace Unity.Entities.Tests
         public void DynamicSharedComponentTypeHandle_UseFromJobAfterStructuralChange_ThrowsCustomErrorMessage()
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity, new EcsTestData(42));
             var ecsTestData = m_Manager.GetDynamicSharedComponentTypeHandle(typeof(EcsTestSharedComp));
 
@@ -1767,11 +1806,41 @@ namespace Unity.Entities.Tests
         public unsafe void SharedComponentTypeHandle_Component_Works()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             var handle = m_Manager.GetSharedComponentTypeHandle<EcsTestSharedComp>();
             var chunk = m_Manager.GetChunk(entity);
 
             Assert.AreEqual(chunk.GetSharedComponent(handle).value, 17);
+        }
+
+        [Test]
+        public unsafe void SharedComponentTypeHandle_GetSharedComponent_RefOverload_Works()
+        {
+            var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
+            var handle = m_Manager.GetSharedComponentTypeHandle<EcsTestSharedComp>();
+            var chunk = m_Manager.GetChunk(entity);
+
+            Assert.AreEqual(17, chunk.GetSharedComponent(ref handle).value);
+        }
+
+        [Test]
+        public unsafe void SharedComponentTypeHandle_GetSharedComponentIndex_RefOverload_Works()
+        {
+            var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(42));
+            #pragma warning restore 0618
+            var handle = m_Manager.GetSharedComponentTypeHandle<EcsTestSharedComp>();
+            var chunk = m_Manager.GetChunk(entity);
+
+            var indexFromChunk = chunk.GetSharedComponentIndex(ref handle);
+            var indexFromManager = m_Manager.GetSharedComponentIndex<EcsTestSharedComp>(entity);
+            Assert.AreEqual(indexFromManager, indexFromChunk);
         }
 
         [Test]
@@ -1780,7 +1849,9 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity();
             var component = new EcsTestContainerSharedComp();
             component.Create();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, component);
+            #pragma warning restore 0618
 
             var handle = m_Manager.GetSharedComponentTypeHandle<EcsTestContainerSharedComp>();
             var chunk = m_Manager.GetChunk(entity);
@@ -1814,7 +1885,9 @@ namespace Unity.Entities.Tests
         public void SharedComponentTypeHandle_UseAfterStructuralChange_ThrowsCustomErrorMessage()
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity, new EcsTestData(42));
             var ecsTestData = m_Manager.GetSharedComponentTypeHandle<EcsTestSharedComp>();
 
@@ -1834,7 +1907,9 @@ namespace Unity.Entities.Tests
         public void SharedComponentTypeHandle_UseFromJobAfterStructuralChange_ThrowsCustomErrorMessage()
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(17));
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity, new EcsTestData(42));
             var ecsTestData = m_Manager.GetSharedComponentTypeHandle<EcsTestSharedComp>();
 

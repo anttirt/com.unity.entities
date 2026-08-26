@@ -336,7 +336,7 @@ namespace Unity.Entities
     /// in this case, if the intent is for the query mask to only match entities which don't have T at all.
     /// </remarks>
     /// <seealso cref="EntityManager.GetEntityQueryMask"/>
-    public unsafe struct EntityQueryMask
+    public unsafe struct EntityQueryMask : IEquatable<EntityQueryMask>
     {
         internal byte Index;
         internal byte Mask;
@@ -354,6 +354,58 @@ namespace Unity.Entities
         internal bool IsCreated()
         {
             return EntityComponentStore != null;
+        }
+
+        /// <summary>
+        /// Compare two instances for equality.
+        /// </summary>
+        /// <param name="lhs">The left instance to compare.</param>
+        /// <param name="rhs">The right instance to compare.</param>
+        /// <returns>True if both masks refer to the same archetype set within the same world, or false if not.</returns>
+        public static bool operator ==(EntityQueryMask lhs, EntityQueryMask rhs)
+        {
+            return lhs.Index == rhs.Index && lhs.Mask == rhs.Mask && lhs.EntityComponentStore == rhs.EntityComponentStore;
+        }
+
+        /// <summary>
+        /// Compare two instances for inequality.
+        /// </summary>
+        /// <param name="lhs">The left instance to compare.</param>
+        /// <param name="rhs">The right instance to compare.</param>
+        /// <returns>False if both masks refer to the same archetype set within the same world, or true if not.</returns>
+        public static bool operator !=(EntityQueryMask lhs, EntityQueryMask rhs)
+        {
+            return !(lhs == rhs);
+        }
+
+        /// <summary>
+        /// Compare this instance to another <see cref="EntityQueryMask"/> for equality.
+        /// </summary>
+        /// <param name="other">The instance to compare against.</param>
+        /// <returns>True if both masks refer to the same archetype set within the same world, or false otherwise.</returns>
+        public bool Equals(EntityQueryMask other)
+        {
+            return this == other;
+        }
+
+        /// <summary>
+        /// Compare this instance to another object for equality.
+        /// </summary>
+        /// <param name="obj">The object to compare against.</param>
+        /// <returns>True if <paramref name="obj"/> is an <see cref="EntityQueryMask"/> that refers to the same archetype set
+        /// within the same world, or false otherwise.</returns>
+        public override bool Equals(object obj)
+        {
+            return obj is EntityQueryMask other && this == other;
+        }
+
+        /// <summary>
+        /// Computes a hash code for this instance.
+        /// </summary>
+        /// <returns>A hash code derived from the mask's identifying fields.</returns>
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Index, Mask, unchecked((int)(long)EntityComponentStore));
         }
 
         /// <summary>
@@ -555,7 +607,6 @@ namespace Unity.Entities
                         : ComponentType.ReadWrite(type));
                 }
             }
-
             using var typesArray = types.ToArray(Allocator.Temp);
             return typesArray.ToArray();
         }
@@ -1386,9 +1437,11 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
             var data = ChunkDataUtility.GetComponentDataRW(chunk, archetype, entityIndexInChunk,
                 indexInArchetype, _Access->EntityComponentStore->GlobalSystemVersion);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (Hint.Unlikely(_Access->EntityComponentStore->m_RecordToJournal != 0))
                 RecordSingletonJournalRW(chunk, typeIndex, EntitiesJournaling.RecordType.GetComponentDataRW, data, UnsafeUtility.SizeOf<T>());
+#pragma warning restore 0618
 #endif
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -1399,7 +1452,8 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
 
         }
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal void RecordSingletonJournalRW(ChunkIndex chunk, TypeIndex typeIndex, EntitiesJournaling.RecordType type, void* data = null, int size = 0)
         {
@@ -1414,6 +1468,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
                 data: data,
                 dataLength:size);
         }
+#pragma warning restore 0618
 #endif
 
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleComponentData) })]
@@ -1490,9 +1545,11 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
                 _Access->DependencyManager->CompleteReadAndWriteDependencyNoChecks(typeIndex);
 
             GetSingletonChunkAndEntity(typeIndex, out var indexInArchetype, out var chunk, out var entityIndexInChunk);
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (Hint.Unlikely(_Access->EntityComponentStore->m_RecordToJournal != 0) && !isReadOnly)
                 RecordSingletonJournalRW(chunk, typeIndex, EntitiesJournaling.RecordType.GetBufferRW);
+#pragma warning restore 0618
 #endif
             var archetype = _Access->EntityComponentStore->GetArchetype(chunk);
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -2025,14 +2082,16 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
 
         internal static EntityQueryImpl* Allocate()
         {
-            void* ptr = Memory.Unmanaged.Allocate(sizeof(EntityQueryImpl), 8, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Query.EntityQuery", Allocator.Persistent);
+            void* ptr = Memory.Unmanaged.Allocate(sizeof(EntityQueryImpl), 8, memoryLabel);
             UnsafeUtility.MemClear(ptr, sizeof(EntityQueryImpl));
             return (EntityQueryImpl*)ptr;
         }
 
         internal static void Free(EntityQueryImpl* impl)
         {
-            Memory.Unmanaged.Free(impl, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Query.EntityQuery", Allocator.Persistent);
+            Memory.Unmanaged.Free(impl, memoryLabel);
         }
     }
 
@@ -2094,10 +2153,6 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
     /// * To get an [native array] of the <see cref="ArchetypeChunk"/> objects matching the query
     /// * To schedule an <see cref="IJobChunk"/> job
     /// * To control whether a system updates using [ComponentSystemBase.RequireForUpdate(query)]
-    ///
-    /// Note that [Entities.ForEach] defines an entity query implicitly based on the methods you call. You can
-    /// access this implicit EntityQuery object using [Entities.WithStoreEntityQueryInField]. However, you cannot
-    /// create an [Entities.ForEach] construction based on an existing EntityQuery object.
     ///
     /// [Entities.ForEach]: xref:Unity.Entities.SystemBase.Entities
     /// [Entities.WithStoreEntityQueryInField]: xref:Unity.Entities.SystemBase.Entities
@@ -2666,6 +2721,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <remarks>This version of the function blocks on all registered jobs against the relevant query components.
         /// For a non-blocking variant, see <see cref="ToComponentDataListAsync{T}"/></remarks>
         /// <exception cref="InvalidOperationException">Thrown if <typeparamref name="T"/> is not part of the query.</exception>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Returns managed array")]
         public T[] ToComponentDataArray<T>() where T : class, IComponentData, new()
             => _GetImpl()->ToComponentDataArray<T>();
@@ -2763,13 +2819,29 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
             => _GetImpl()->GetSingleton<T>();
 
         /// <summary>
-        /// Gets the value of a singleton component. Note that if querying a singleton component from a system-associated entity,
-        /// the query must include either EntityQueryOptions.IncludeSystems or the SystemInstance component.
+        /// Gets a reference to a singleton component, for read/write access. Note that if querying a singleton component from a
+        /// system-associated entity, the query must include either EntityQueryOptions.IncludeSystems or the SystemInstance component.
         /// </summary>
-        /// <remarks>A singleton component is a component of which only one instance exists that satisfies this query.</remarks>
+        /// <remarks>
+        /// A singleton component is a component of which only one instance exists that satisfies this query.
+        ///
+        /// The reference refers directly to the singleton's component memory. Structural changes to the chunk where the singleton
+        /// resides can invalidate this reference and result in crashes or undefined behaviour if the reference is used after
+        /// structural changes.
+        ///
+        /// If safety checks are enabled, this method throws an exception if a job that reads or writes <typeparamref name="T"/> is
+        /// still running, whereas <see cref="GetSingleton{T}"/> throws only if a job that writes <typeparamref name="T"/> is still
+        /// running. Neither method completes the conflicting job for you. This method also increments the change version of
+        /// <typeparamref name="T"/>, even if you don't write to the returned reference, so queries that filter on changes to
+        /// <typeparamref name="T"/> match the singleton entity.
+        /// </remarks>
         /// <typeparam name="T">The component type.</typeparam>
-        /// <returns>A copy of the singleton component.</returns>
+        /// <returns>A reference to the singleton component.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the number of entities that match this query is not exactly one.</exception>
+        /// <exception cref="InvalidOperationException">Thrown if this query doesn't have read-write access to
+        /// <typeparamref name="T"/>, if <typeparamref name="T"/> is a zero-sized component, or if <typeparamref name="T"/>
+        /// implements <see cref="IEnableableComponent"/>, and if safety checks are enabled.</exception>
+        /// <seealso cref="GetSingleton{T}"/>
         /// <seealso cref="SetSingleton{T}(T)"/>
         /// <seealso cref="GetSingletonEntity"/>
         /// <seealso cref="GetSingletonBuffer{T}"/>
@@ -2811,12 +2883,20 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
             => _GetImpl()->TryGetSingletonRW<T>(out value);
 
         /// <summary>
-        /// Checks whether a singelton component of the specified type exists. Note that if querying a singleton component from a system-associated entity,
+        /// Checks whether a singleton component of the specified type exists. Note that if querying a singleton component from a system-associated entity,
         /// the query must include either EntityQueryOptions.IncludeSystems or the SystemInstance component.
         /// </summary>
+        /// <remarks>
+        /// This method matches only the entities that this query matches, so the query's <see cref="EntityQueryOptions"/> determine
+        /// whether a singleton entity is found. Unless the query uses <see cref="EntityQueryOptions.IncludeDisabledEntities"/>
+        /// or <see cref="EntityQueryOptions.IncludePrefab"/>, entities that have the <see cref="Disabled"/> component or the
+        /// <see cref="Prefab"/> component are excluded, and this method returns false for a singleton on one of those entities.
+        /// </remarks>
         /// <typeparam name="T">The <see cref="IComponentData"/> subtype of the singleton component.
         /// This component type must not implement <see cref="IEnableableComponent"/></typeparam>
         /// <returns>True, if a singleton is found to match exactly once with the specified type<see cref="EntityQuery"/>.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if <typeparamref name="T"/> implements
+        /// <see cref="IEnableableComponent"/> and if safety checks are enabled.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the number of entities that match this query is greater than one.</exception>
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleComponentData) })]
         public bool HasSingleton<T>()
@@ -3008,6 +3088,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <param name="sharedComponent">The shared component value to filter.</param>
         /// <typeparam name="SharedComponent">The type of shared component. This type must also be
         /// one of the types used to create the EntityQuery.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Uses managed objects")]
         public void SetSharedComponentFilterManaged<SharedComponent>(SharedComponent sharedComponent)
             where SharedComponent : struct, ISharedComponentData
@@ -3043,6 +3124,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// one of the types used to create the EntityQuery.</typeparam>
         /// <typeparam name="SharedComponent2">The type of shared component. This type must also be
         /// one of the types used to create the EntityQuery.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Contains managed shared component code path")]
         public void SetSharedComponentFilterManaged<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1,
             SharedComponent2 sharedComponent2)
@@ -3109,6 +3191,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <param name="sharedComponent">The shared component value to filter.</param>
         /// <typeparam name="SharedComponent">The type of shared component. This type must also be
         /// one of the types used to create the EntityQuery.</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         [ExcludeFromBurstCompatTesting("Contains managed shared component code path")]
         public void AddSharedComponentFilterManaged<SharedComponent>(SharedComponent sharedComponent)
             where SharedComponent : struct, ISharedComponentData
@@ -3327,6 +3410,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <seealso cref="SetSingleton{T}(EntityQuery, T)"/>
         /// <seealso cref="GetSingleton{T}(EntityQuery)"/>
         /// <seealso cref="ComponentSystemBase.GetSingleton{T}"/>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetSingleton<T>(this EntityQuery query) where T : class
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
@@ -3361,6 +3445,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <seealso cref="GetSingletonRW{T}(EntityQuery)"/>
         /// <seealso cref="ComponentSystemBase.GetSingleton{T}"/>
         /// <seealso cref="ComponentSystemBase.GetSingletonRW{T}"/>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static bool TryGetSingleton<T>(this EntityQuery query, out T value) where T : class
         {
             var hasSingleton = query.HasSingleton<T>();
@@ -3380,6 +3465,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// <seealso cref="GetSingletonRW{T}(EntityQuery)"/>
         /// <seealso cref="ComponentSystemBase.GetSingleton{T}"/>
         /// <seealso cref="ComponentSystemBase.GetSingletonRW{T}"/>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static T GetSingletonRW<T>(this EntityQuery query) where T : class
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
@@ -3403,7 +3489,8 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
             int managedComponentIndex = *(int*)ChunkDataUtility.GetComponentDataRW(chunk, archetype, entityIndexInChunk,
                 indexInArchetype, access->EntityComponentStore->GlobalSystemVersion);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             var store = access->EntityComponentStore;
             if (Hint.Unlikely(store->m_RecordToJournal != 0))
             {
@@ -3416,6 +3503,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
                     types: &typeIndex,
                     typeCount: 1);
             }
+#pragma warning restore 0618
 #endif
 
             return (T)access->ManagedComponentStore.GetManagedComponent(managedComponentIndex);
@@ -3463,6 +3551,7 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
         /// exists in the world or the component type appears in more than one archetype.</exception>
         /// <seealso cref="GetSingleton{T}"/>
         /// <seealso cref="EntityQuery.GetSingletonEntity"/>
+        [Obsolete("Class-based IComponentData is deprecated and will be removed. Convert <T> to a struct IComponentData (with UnityObjectRef<T> for any UnityEngine.Object references) and call the unmanaged equivalent. First deprecated in 6.6.")]
         public static void SetSingleton<T>(this EntityQuery query, T value) where T : class
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
@@ -3491,9 +3580,11 @@ First chunk: entityCount={matchingChunkCache.ChunkIndices[0].Count}, archetype={
             managedComponentIndex = (int*)ChunkDataUtility.GetComponentDataRW(chunk, archetype, entityIndexInChunk,
                 indexInArchetype, store->GlobalSystemVersion);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (Hint.Unlikely(store->m_RecordToJournal != 0))
                 impl->RecordSingletonJournalRW(chunk, typeIndex, EntitiesJournaling.RecordType.GetComponentObjectRW);
+#pragma warning restore 0618
 #endif
 
             access->ManagedComponentStore.UpdateManagedComponentValue(managedComponentIndex, value, ref *store);

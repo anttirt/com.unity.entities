@@ -16,6 +16,7 @@ namespace Unity.Entities.Editor.Tests
         World m_World;
         VisualElement m_Root;
         Entity m_InspectedEntity;
+        ComponentsTab m_Tab;
 
         [OneTimeSetUp]
         public void OneTimeSetUp()
@@ -37,11 +38,19 @@ namespace Unity.Entities.Editor.Tests
             var inspectorCtx = new EntityInspectorContext();
             m_InspectedEntity = m_World.EntityManager.CreateEntity();
             inspectorCtx.SetContext(EntitySelectionProxy.CreateInstance(m_World, m_InspectedEntity), true);
-            var tab = new ComponentsTab(inspectorCtx);
-            tab.OnTabVisibilityChanged(true);
-            propertyElement.SetTarget(tab);
+            m_Tab = new ComponentsTab(inspectorCtx);
+            m_Tab.OnTabVisibilityChanged(true);
+            propertyElement.SetTarget(m_Tab);
             m_Root.Add(propertyElement);
-            m_Root.ForceUpdateBindings();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (m_World.EntityManager.Exists(m_InspectedEntity))
+            {
+                m_World.EntityManager.DestroyEntity(m_InspectedEntity);
+            }
         }
 
         [Test]
@@ -423,10 +432,148 @@ namespace Unity.Entities.Editor.Tests
             Assume.That(currentVersion, Is.Not.EqualTo(initialVersion), "This test no longer properly detects changes");
         }
 
+        [Test]
+        public void ComponentsTab_Search_NoFilter_ShowsAllComponents()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet(
+                typeof(AComponent),
+                typeof(BComponent),
+                typeof(XComponent)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ClearSearch();
+
+            var visibleComponents = GetVisibleComponents();
+            Assert.That(visibleComponents.Count, Is.EqualTo(3), "All components should be visible with no search");
+        }
+
+        [Test]
+        public void ComponentsTab_Search_FilterByComponentName_ShowsMatchingComponents()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet(
+                typeof(AComponent),
+                typeof(BComponent),
+                typeof(XComponent),
+                typeof(YComponent)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ApplySearch("x component");
+
+            var visibleComponents = GetVisibleComponents();
+            Assert.That(visibleComponents.Count, Is.EqualTo(1), "Only XComponent should be visible");
+            Assert.That(visibleComponents[0].Path, Does.Contain("XComponent"));
+        }
+
+        [Test]
+        public void ComponentsTab_Search_FilterByPartialName_ShowsMatchingComponents()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet(
+                typeof(AComponent),
+                typeof(BComponent),
+                typeof(LocalTransform)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ApplySearch("transform");
+
+            var visibleComponents = GetVisibleComponents();
+            Assert.That(visibleComponents.Count, Is.EqualTo(1), "Only LocalTransform should be visible");
+            Assert.That(visibleComponents[0].Path, Does.Contain("LocalTransform"));
+        }
+
+        [Test]
+        public void ComponentsTab_Search_NoMatches_HidesAllComponents()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet(
+                typeof(AComponent),
+                typeof(BComponent)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ApplySearch("NonExistentComponent");
+
+            var visibleComponents = GetVisibleComponents();
+            Assert.That(visibleComponents.Count, Is.EqualTo(0), "No components should be visible");
+        }
+
+        [Test]
+        public void ComponentsTab_Search_ClearSearch_ShowsAllComponents()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet(
+                typeof(AComponent),
+                typeof(BComponent),
+                typeof(XComponent)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ApplySearch("a component");
+
+            var visibleAfterSearch = GetVisibleComponents();
+            Assert.That(visibleAfterSearch.Count, Is.EqualTo(1), "Only AComponent should be visible");
+
+            m_Tab.ClearSearch();
+
+            var visibleAfterClear = GetVisibleComponents();
+            Assert.That(visibleAfterClear.Count, Is.EqualTo(3), "All components should be visible after clearing search");
+        }
+
+        [Test]
+        public void ComponentsTab_Search_CaseInsensitive()
+        {
+            m_World.EntityManager.AddComponent(m_InspectedEntity, new ComponentTypeSet( typeof(LocalTransform)));
+            m_Root.ForceUpdateBindings();
+
+            m_Tab.ApplySearch("TRANSFORM");
+            Assert.That(GetVisibleComponents().Count, Is.EqualTo(1), "Should match uppercase");
+
+            m_Tab.ApplySearch("transform");
+            Assert.That(GetVisibleComponents().Count, Is.EqualTo(1), "Should match lowercase");
+
+            m_Tab.ApplySearch("Transform");
+            Assert.That(GetVisibleComponents().Count, Is.EqualTo(1), "Should match mixed case");
+        }
+
+        List<ComponentElementBase> GetVisibleComponents()
+        {
+            var allComponents = new List<ComponentElementBase>();
+            m_Root.Query<ComponentElementBase>().ToList(allComponents);
+
+            var visibleComponents = new List<ComponentElementBase>();
+            for (var i = 0; i < allComponents.Count; i++)
+            {
+                var component = allComponents[i];
+                // Skip tags because they're displayed in a separate TagComponentContainer
+                // and have different visibility logic than regular components
+                if (component.Type == ComponentPropertyType.Tag)
+                    continue;
+
+                // Component is visible if: no explicit style (Null) or style is not None
+                if (component.style.display.keyword == StyleKeyword.Null ||
+                    component.style.display.value != DisplayStyle.None)
+                {
+                    visibleComponents.Add(component);
+                }
+            }
+
+            return visibleComponents;
+        }
+
         string[] GetComponentsOrderFromUI()
-            => m_Root.Query<ComponentElementBase>()
-                .Where(el => el.GetType().GetGenericTypeDefinition() != typeof(TagElement<>)).ToList()
-                .Select(el => el.Path).ToArray();
+        {
+            var allComponents = new List<ComponentElementBase>();
+            m_Root.Query<ComponentElementBase>().ToList(allComponents);
+
+            var paths = new List<string>();
+            for (var i = 0; i < allComponents.Count; i++)
+            {
+                var component = allComponents[i];
+                // Skip tags because they're grouped separately in TagComponentContainer
+                // and we only want to test the order of regular components
+                if (component.Type != ComponentPropertyType.Tag)
+                {
+                    paths.Add(component.Path);
+                }
+            }
+
+            return paths.ToArray();
+        }
 
         struct AComponent : IComponentData { public int Field; }
         struct BComponent : IComponentData { public int Field; }

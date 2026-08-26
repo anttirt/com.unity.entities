@@ -9,14 +9,14 @@ namespace Unity.Entities.Editor.Inspectors
     class EntityGuidInspector : PropertyInspector<EntityGuid>
     {
         static readonly string k_OriginatingIdName =
-            ObjectNames.NicifyVariableName(nameof(EntityGuid.OriginatingId));
+            ObjectNames.NicifyVariableName(nameof(EntityGuid.OriginatingEntityId));
 
         static readonly string k_SerialName = ObjectNames.NicifyVariableName(nameof(EntityGuid.Serial));
 
         public override VisualElement Build()
         {
             var root = new VisualElement();
-            var id = new TextField(k_OriginatingIdName) { value = Target.OriginatingId.ToString() };
+            var id = new TextField(k_OriginatingIdName) { value = Target.OriginatingEntityId.ToString() };
             id.RegisterCallback<ChangeEvent<string>, TextField>(NoOp, id);
             InspectorUtility.AddRuntimeBar(id);
             root.Add(id);

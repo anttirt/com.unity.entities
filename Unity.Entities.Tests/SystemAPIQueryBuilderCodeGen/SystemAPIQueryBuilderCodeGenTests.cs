@@ -21,10 +21,6 @@ namespace Unity.Entities.Tests.SystemAPIQueryBuilderCodeGen
         [Test] public void CreateMultipleArchetypeQueries_Test() => _testSystem.CreateMultipleArchetypeQueries();
         [Test] public void ChainedWithEntityQueryMethodAfterBuilding_Test() => _testSystem.ChainedWithEntityQueryMethodAfterBuilding();
 
-        [Test] public void WithAspect() => _testSystem.WithAspect();
-        [Test] public void WithAspect2() => _testSystem.WithAspect2();
-        [Test] public void WithAspectAliased() => _testSystem.WithAspectAliased();
-
         partial class MyTestSystem : SystemBase
         {
             private unsafe T[] ToManagedArray<T>(T* values, int length) where T : unmanaged
@@ -148,76 +144,6 @@ namespace Unity.Entities.Tests.SystemAPIQueryBuilderCodeGen
                 Assert.AreEqual(1,numEntitiesMatchingQuery);
 
                 EntityManager.DestroyEntity(entity);
-            }
-
-            public unsafe void WithAspect()
-            {
-                EntityQuery query;
-                query = SystemAPI.QueryBuilder().WithAspect<MyAspect>().Build();
-                var queryData = query._GetImpl()->_QueryData;
-
-                Assert.AreEqual(1, queryData->ArchetypeQueryCount);
-
-                var archetypeQuery = queryData->ArchetypeQueries[0];
-
-                Assert.AreEqual(1, archetypeQuery.AllCount);
-                Assert.AreEqual(0, archetypeQuery.NoneCount);
-                Assert.AreEqual(0, archetypeQuery.AnyCount);
-                Assert.AreEqual(0, archetypeQuery.DisabledCount);
-                Assert.AreEqual(0, archetypeQuery.AbsentCount);
-                Assert.AreEqual(0, archetypeQuery.PresentCount);
-
-                Assert.AreEqual(ComponentType.ReadWrite<EcsTestData>(), archetypeQuery.GetComponentTypeAllAt(0));
-            }
-
-            public unsafe void WithAspect2()
-            {
-                EntityQuery query;
-                query = SystemAPI.QueryBuilder().WithAspect<MyAspect>().WithAspect<MyAspectMiscTests>().Build();
-                var queryData = query._GetImpl()->_QueryData;
-
-                Assert.AreEqual(1, queryData->ArchetypeQueryCount);
-                var archetypeQuery = queryData->ArchetypeQueries[0];
-
-                using NativeArray<ComponentType> receivedAll = archetypeQuery.SortedComponentTypeAll();
-                using NativeArray<ComponentType> expectedAll = ToSortedNativeArray(
-                    new ComponentType[]
-                    {
-                        ComponentType.ReadWrite<EcsTestData>(),
-                        ComponentType.ReadWrite<EcsTestData2>(),
-                        ComponentType.ReadWrite<EcsTestData3>(),
-                        ComponentType.ReadOnly<EcsTestData4>()
-                    });
-
-                Assert.AreEqual(expectedAll.Length, archetypeQuery.AllCount);
-                for (int i = 0; i != expectedAll.Length; i++)
-                    Assert.AreEqual(expectedAll[i], receivedAll[i]);
-
-                Assert.AreEqual(0, archetypeQuery.NoneCount);
-                Assert.AreEqual(0, archetypeQuery.AnyCount);
-                Assert.AreEqual(0, archetypeQuery.DisabledCount);
-                Assert.AreEqual(0, archetypeQuery.AbsentCount);
-                Assert.AreEqual(0, archetypeQuery.PresentCount);
-            }
-
-            public unsafe void WithAspectAliased()
-            {
-                EntityQuery query;
-                query = SystemAPI.QueryBuilder().WithAll<EcsTestData>().WithAspect<MyAspect>().Build();
-                var queryData = query._GetImpl()->_QueryData;
-
-                Assert.AreEqual(1, queryData->ArchetypeQueryCount);
-
-                var archetypeQuery = queryData->ArchetypeQueries[0];
-
-                Assert.AreEqual(1, archetypeQuery.AllCount);
-                Assert.AreEqual(0, archetypeQuery.NoneCount);
-                Assert.AreEqual(0, archetypeQuery.AnyCount);
-                Assert.AreEqual(0, archetypeQuery.DisabledCount);
-                Assert.AreEqual(0, archetypeQuery.AbsentCount);
-                Assert.AreEqual(0, archetypeQuery.PresentCount);
-
-                Assert.AreEqual(ComponentType.ReadWrite<EcsTestData>(), archetypeQuery.GetComponentTypeAllAt(0));
             }
 
             protected override void OnUpdate()

@@ -21,7 +21,7 @@ In each update, an `EntityCommandBufferSystem`:
 1. Plays back all ECBs created via the system in the same order they were created.
 1. Disposes of the `EntityCommandBuffer` instances.
 
-## Default EntityCommandBufferSystem systems
+## <a id="default-ecb-systems"></a>Default EntityCommandBufferSystem systems
 
 The default [world](concepts-worlds.md) has the following default `EntityCommandBufferSystem` systems:
 
@@ -44,15 +44,15 @@ If you can't use the default systems for your application, then you can create y
 [!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_define_ecbsystem)]
 
 
-## Deferred entities
+## Entities created by command buffers
 
-The `EntityCommandBuffer` methods `CreateEntity` and `Instantiate` record commands that create entities. These methods only record commands and don't create entities. As such, they return `Entity` values with negative indices that represent placeholder entities that don't exist yet. These placeholder `Entity` values are only meaningful in recorded commands of the same ECB:
+The `EntityCommandBuffer` methods `CreateEntity` and `Instantiate` return valid `Entity` references at record time. The entity is allocated immediately but is not assigned a chunk until the `Playback` method runs. Until then, you can't access its components through `EntityManager`:
 
-[!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_deferred_entities)]
+[!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_created_entities)]
 
-Values recorded in an `AddComponent`, `SetComponent`, or `SetBuffer` command might have `Entity` fields. In playback, Unity remaps any placeholder `Entity` values in these components or buffers to the corresponding actual entities:
+Values recorded in an `AddComponent`, `SetComponent`, or `SetBuffer` command can have `Entity` fields that reference entities created earlier in the same buffer. Unity stores these references directly, so it doesn't need to remap them during playback:
 
-[!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_deferred_remapping)]
+[!code-cs[conversion](../DocCodeSamples.Tests/EntityCommandBuffers.cs#ecb_entity_references)]
 
 ## Additional resources
 

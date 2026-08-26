@@ -4,6 +4,8 @@ using System.Collections;
 using System.IO;
 using Unity.Collections;
 using Unity.Entities.Content;
+using Unity.Entities.Tests;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -350,6 +352,34 @@ namespace Unity.Scenes.Editor.Tests
         public void UriValidation(string uri, bool expected)
         {
             Assert.AreEqual(expected, ContentDeliveryGlobalState.IsValidURLRoot(uri), $"Failed with test case uri '{uri}'");
+        }
+
+        [Test]
+        public void ValidateDetermineSourceFolder()
+        {
+            var dir = Directory.CreateDirectory(FileUtil.GetUniqueTempPathInProject()).FullName;
+
+            var entityScenesDir = Path.Combine(dir, "EntityScenes");
+            var contentArchivesDir = Path.Combine(dir, "ContentArchives");
+            var otherDir = Path.Combine(dir, "NotEntityScenesOrContentArchives");
+            Directory.CreateDirectory(contentArchivesDir);
+            Directory.CreateDirectory(entityScenesDir);
+            Directory.CreateDirectory(otherDir);
+            for (int i = 0; i < 10; i++)
+            {
+                File.WriteAllText(Path.Combine(entityScenesDir, $"file{i}.entityheader"), $"file {i} contents");
+                File.WriteAllText(Path.Combine(contentArchivesDir, $"file{i}.archive"), $"file {i} contents");
+                File.WriteAllText(Path.Combine(otherDir, $"file{i}.text"), $"file {i} contents");
+            }
+
+            Assert.AreEqual(dir, RemoteContentCatalogBuildUtility.DetermineSourceFolder(Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories)));
+            Assert.AreEqual(null, RemoteContentCatalogBuildUtility.DetermineSourceFolder(Directory.GetFiles(dir, "*.txt", SearchOption.AllDirectories)));
+            Assert.AreEqual(null, RemoteContentCatalogBuildUtility.DetermineSourceFolder(Directory.GetFiles(otherDir, "*.*", SearchOption.AllDirectories)));
+
+            Assert.AreEqual(dir, RemoteContentCatalogBuildUtility.DetermineSourceFolder(Directory.GetFiles(dir, "*.entityheader", SearchOption.AllDirectories)));
+            Assert.AreEqual(dir, RemoteContentCatalogBuildUtility.DetermineSourceFolder(Directory.GetFiles(dir, "*.archive", SearchOption.AllDirectories)));
+
+            Directory.Delete(dir, true);
         }
     }
 }

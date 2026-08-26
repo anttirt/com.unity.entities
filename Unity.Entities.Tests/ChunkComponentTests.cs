@@ -41,8 +41,10 @@ namespace Unity.Entities.Tests
             var chunk = m_Manager.GetChunk(entity);
 
             Assert.AreEqual(chunk.m_Chunk.MetaChunkEntity, Entity.Null);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => chunk.SetChunkComponentData(ref chunkComponentType, new EcsTestData2(12)));
             Assert.Throws<ArgumentException>(() => chunk.GetChunkComponentData(ref chunkComponentType));
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -54,8 +56,10 @@ namespace Unity.Entities.Tests
             var chunk = m_Manager.GetChunk(entity);
 
             Assert.AreNotEqual(chunk.m_Chunk.MetaChunkEntity, Entity.Null);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => chunk.GetChunkComponentData(ref chunkComponentType));
             Assert.Throws<ArgumentException>(() => chunk.SetChunkComponentData(ref chunkComponentType, new EcsTestData2(12)));
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -63,12 +67,51 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity(ComponentType.ChunkComponent<EcsTestData>());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new EcsTestData {value = 7});
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent(entity, ComponentType.ChunkComponent<EcsTestData>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val0 = m_Manager.GetChunkComponentData<EcsTestData>(entity).value;
+            #pragma warning restore 0618
             Assert.AreEqual(7, val0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val1 = m_Manager.GetChunkComponentData<EcsTestData>(m_Manager.GetChunk(entity)).value;
+            #pragma warning restore 0618
             Assert.AreEqual(7, val1);
+        }
+
+        [Test]
+        public unsafe void GetChunkComponentDataRW_ModifiesValue()
+        {
+            var entity = m_Manager.CreateEntity(ComponentType.ChunkComponent<EcsTestData>());
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new EcsTestData { value = 1 });
+            #pragma warning restore 0618
+
+            var handle = m_Manager.GetComponentTypeHandle<EcsTestData>(isReadOnly: false);
+            var chunk = m_Manager.GetChunk(entity);
+
+            ref var value = ref chunk.GetChunkComponentDataRW(ref handle);
+            value.value = 99;
+
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            Assert.AreEqual(99, m_Manager.GetChunkComponentData<EcsTestData>(entity).value);
+            #pragma warning restore 0618
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires read-only handle validation")]
+        public unsafe void GetChunkComponentDataRW_ReadOnlyHandle_Throws()
+        {
+            var entity = m_Manager.CreateEntity(ComponentType.ChunkComponent<EcsTestData>());
+            var readOnlyHandle = m_Manager.GetComponentTypeHandle<EcsTestData>(isReadOnly: true);
+            var chunk = m_Manager.GetChunk(entity);
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                chunk.GetChunkComponentDataRW(ref readOnlyHandle);
+            });
         }
 
         [Test]
@@ -82,7 +125,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(chunk0, chunk1);
 
             Assert.IsFalse(m_Manager.HasChunkComponent<EcsTestData2>(entity0));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData<EcsTestData2>(entity0);
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasChunkComponent<EcsTestData2>(entity0));
             chunk0 = m_Manager.GetChunk(entity0);
 
@@ -110,14 +155,20 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateSingleton<LargeComponent1>();
             if (existingMetaChunk)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddChunkComponentData<EcsTestData2>(entity); // this creates a meta-chunk for the entity
+                #pragma warning restore 0618
             // Adding a large regular component should fail
             Assert.That(() => m_Manager.AddComponent<LargeComponent2>(entity),
                 Throws.InvalidOperationException.With.Message.Contains("data is too large."));
             // Adding a large chunk component should work
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.DoesNotThrow(() => m_Manager.AddChunkComponentData<LargeComponent2>(entity));
+            #pragma warning restore 0618
             // Adding a second large chunk component should now fail
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.That(() => m_Manager.AddChunkComponentData<LargeComponent1>(entity),
+            #pragma warning restore 0618
                 Throws.InvalidOperationException.With.Message.Contains("data is too large."));
         }
 
@@ -127,7 +178,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
             if (existingMetaChunk)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddChunkComponentData<EcsTestData2>(entity); // this creates a meta-chunk for the entity
+                #pragma warning restore 0618
             // Adding two large regular components at once should fail
             var typeSet1 = new ComponentTypeSet(ComponentType.ReadWrite<LargeComponent1>(),
                 ComponentType.ReadWrite<LargeComponent2>());
@@ -149,7 +202,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
             if (existingMetaChunk)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddChunkComponentData<EcsTestData2>(entity); // this creates a meta-chunk for the entity
+                #pragma warning restore 0618
             using var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
             // Adding two large regular components at once should fail
             var typeSet1 = new ComponentTypeSet(ComponentType.ReadWrite<LargeComponent1>(),
@@ -173,7 +228,9 @@ namespace Unity.Entities.Tests
             var arch1 = m_Manager.CreateArchetype(typeof(EcsTestData2));
 
             var entity0 = m_Manager.CreateEntity(arch0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity0), new EcsTestData { value = 7 });
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity0, new EcsTestData2 { value0 = 1, value1 = 2 });
             var metaEntity0 = m_Manager.Debug.GetMetaChunkEntity(entity0);
 
@@ -198,22 +255,30 @@ namespace Unity.Entities.Tests
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(chunk0, testData);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(7, m_Manager.GetChunkComponentData<EcsTestData>(entity0).value);
+            #pragma warning restore 0618
 
             m_Manager.SetComponentData(entity0, new EcsTestData2 { value0 = 1, value1 = 2 });
 
             var entity1 = m_Manager.CreateEntity(arch0);
             var chunk1 = m_Manager.GetChunk(entity1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(7, m_Manager.GetChunkComponentData<EcsTestData>(entity0).value);
             Assert.AreEqual(7, m_Manager.GetChunkComponentData<EcsTestData>(entity1).value);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(chunk1, testData);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
@@ -221,9 +286,13 @@ namespace Unity.Entities.Tests
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData<EcsTestData>(chunk0, new EcsTestData { value = 10 });
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(10, m_Manager.GetChunkComponentData<EcsTestData>(entity0).value);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
         }
@@ -253,10 +322,14 @@ namespace Unity.Entities.Tests
 
                 var chunkBoundsType = m_Manager.GetComponentTypeHandle<ChunkBoundsComponent>(false);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 boundsChunk.SetChunkComponentData(ref chunkBoundsType, curBounds);
                 Assert.AreEqual(curBounds, boundsChunk.GetChunkComponentData(ref chunkBoundsType));
+                #pragma warning restore 0618
             }
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val = m_Manager.GetChunkComponentData<ChunkBoundsComponent>(entity0);
+            #pragma warning restore 0618
             Assert.AreEqual(new float3(-10, -10, -10), val.boundsMin);
             Assert.AreEqual(new float3(10, 10, 10), val.boundsMax);
         }
@@ -302,7 +375,9 @@ namespace Unity.Entities.Tests
 
             chunkBoundsUpdateSystem.Update();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var val = m_Manager.GetChunkComponentData<ChunkBoundsComponent>(entity0);
+            #pragma warning restore 0618
             Assert.AreEqual(new float3(-10, -10, -10), val.boundsMin);
             Assert.AreEqual(new float3(10, 10, 10), val.boundsMax);
         }
@@ -330,35 +405,6 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        [Ignore("Fails on last Assert.IsFalse(m_Manager.Exists(metaEntity));")]
-        public void CleanupChunkComponentRemainsUntilRemoved()
-        {
-            var entity = m_Manager.CreateEntity(ComponentType.ReadWrite<EcsCleanup1>(), ComponentType.ChunkComponent<CleanupChunkComponent>());
-            var metaEntity = m_Manager.Debug.GetMetaChunkEntity(entity);
-
-            m_Manager.DestroyEntity(entity);
-
-            Assert.IsTrue(m_Manager.HasComponent<EcsCleanup1>(entity));
-            Assert.IsTrue(m_Manager.HasChunkComponent<CleanupChunkComponent>(entity));
-            Assert.IsTrue(m_Manager.Exists(metaEntity));
-            Assert.IsTrue(m_Manager.Exists(entity));
-
-            m_Manager.RemoveComponent(entity, ComponentType.ReadWrite<EcsCleanup1>());
-
-            Assert.IsFalse(m_Manager.HasComponent<EcsCleanup1>(entity));
-            Assert.IsTrue(m_Manager.HasChunkComponent<CleanupChunkComponent>(entity));
-            Assert.IsTrue(m_Manager.Exists(metaEntity));
-            Assert.IsTrue(m_Manager.Exists(entity));
-
-            m_Manager.RemoveComponent(entity, ComponentType.ChunkComponent<CleanupChunkComponent>());
-
-            Assert.IsFalse(m_Manager.HasComponent<EcsCleanup1>(entity));
-            Assert.IsFalse(m_Manager.HasChunkComponent<CleanupChunkComponent>(entity));
-            Assert.IsFalse(m_Manager.Exists(metaEntity));
-            Assert.IsFalse(m_Manager.Exists(entity));
-        }
-
-        [Test]
         public void NewChunkGetsDefaultChunkComponentValue()
         {
             var entity = m_Manager.CreateEntity
@@ -367,18 +413,26 @@ namespace Unity.Entities.Tests
                     ComponentType.ReadWrite<EcsTestSharedComp>()
                 );
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(123));
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new EcsTestData(123));
+            #pragma warning restore 0618
 
             var other = m_Manager.Instantiate(entity);
 
             Assert.AreEqual(m_Manager.GetChunk(entity), m_Manager.GetChunk(other));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(123, m_Manager.GetChunkComponentData<EcsTestData>(other).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(other, new EcsTestSharedComp(456));
+            #pragma warning restore 0618
 
             Assert.AreNotEqual(m_Manager.GetChunk(entity), m_Manager.GetChunk(other));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetChunkComponentData<EcsTestData>(other).value);
+            #pragma warning restore 0618
         }
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
@@ -387,11 +441,17 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity(ComponentType.ChunkComponent<EcsTestManagedComponent>());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new EcsTestManagedComponent { value = "SomeString" });
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent(entity, ComponentType.ChunkComponent<EcsTestManagedComponent>()));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var classVal0 = m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity).value;
+            #pragma warning restore 0618
             Assert.AreEqual("SomeString", classVal0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var classVal1 = m_Manager.GetChunkComponentData<EcsTestManagedComponent>(m_Manager.GetChunk(entity)).value;
+            #pragma warning restore 0618
             Assert.AreEqual("SomeString", classVal1);
         }
 
@@ -407,7 +467,9 @@ namespace Unity.Entities.Tests
 
             Assert.IsFalse(m_Manager.HasChunkComponent<EcsTestManagedComponent>(entity0));
             m_Manager.Debug.CheckInternalConsistency();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData<EcsTestManagedComponent>(entity0);
+            #pragma warning restore 0618
             m_Manager.Debug.CheckInternalConsistency();
             Assert.IsTrue(m_Manager.HasChunkComponent<EcsTestManagedComponent>(entity0));
             chunk0 = m_Manager.GetChunk(entity0);
@@ -427,7 +489,9 @@ namespace Unity.Entities.Tests
             var arch1 = m_Manager.CreateArchetype(typeof(EcsTestData2));
 
             var entity0 = m_Manager.CreateEntity(arch0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity0), new EcsTestManagedComponent { value = "SomeString" });
+            #pragma warning restore 0618
             m_Manager.SetComponentData(entity0, new EcsTestData2 { value0 = 1, value1 = 2 });
             var metaEntity0 = m_Manager.Debug.GetMetaChunkEntity(entity0);
 
@@ -452,22 +516,30 @@ namespace Unity.Entities.Tests
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(chunk0, testData);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeString", m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity0).value);
+            #pragma warning restore 0618
 
             m_Manager.SetComponentData(entity0, new EcsTestData2 { value0 = 1, value1 = 2 });
 
             var entity1 = m_Manager.CreateEntity(arch0);
             var chunk1 = m_Manager.GetChunk(entity1);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeString", m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity0).value);
             Assert.AreEqual("SomeString", m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity1).value);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(chunk1, testData);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
@@ -475,9 +547,13 @@ namespace Unity.Entities.Tests
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData<EcsTestManagedComponent>(chunk0, new EcsTestManagedComponent { value = "SomeOtherString" });
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeOtherString", m_Manager.GetChunkComponentData<EcsTestManagedComponent>(entity0).value);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, group0.CalculateEntityCount());
         }
@@ -491,18 +567,26 @@ namespace Unity.Entities.Tests
                     ComponentType.ReadWrite<EcsTestSharedComp>()
                 );
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(123));
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new EcsTestManagedComponent() { value = "SomeString" });
+            #pragma warning restore 0618
 
             var other = m_Manager.Instantiate(entity);
 
             Assert.AreEqual(m_Manager.GetChunk(entity), m_Manager.GetChunk(other));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeString", m_Manager.GetChunkComponentData<EcsTestManagedComponent>(other).value);
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(other, new EcsTestSharedComp(456));
+            #pragma warning restore 0618
 
             Assert.AreNotEqual(m_Manager.GetChunk(entity), m_Manager.GetChunk(other));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsNull(m_Manager.GetChunkComponentData<EcsTestManagedComponent>(other));
+            #pragma warning restore 0618
         }
 
 #endif

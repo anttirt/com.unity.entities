@@ -1,4 +1,3 @@
-//#define LOG_RESOLVING
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -256,14 +255,18 @@ namespace Unity.Scenes
 
                 if (EntityManager.HasComponent<SubScene>(sceneEntity))
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var subScene = EntityManager.GetComponentObject<SubScene>(sceneEntity);
+                    #pragma warning restore 0618
 
                     // Add SubScene component to section entities
                     using (var sectionEntities = EntityManager.GetBuffer<ResolvedSectionEntity>(sceneEntity)
                         .ToNativeArray(Allocator.Temp))
 					{
                         for (int iSection = 0; iSection < sectionEntities.Length; ++iSection)
+							#pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
 							EntityManager.AddComponentObject(sectionEntities[iSection].SectionEntity, subScene);
+							#pragma warning restore 0618
                     }
 				}
 			}

@@ -1,4 +1,4 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities.Hybrid.Baking;
 using UnityEngine;
@@ -49,19 +49,28 @@ namespace Unity.Entities.Tests
     [WorldSystemFilter(WorldSystemFilterFlags.BakingSystem)]
         partial class BakingOnlyPrimaryChildrenTestBakingSystem : SystemBase
         {
+            [BurstCompile]
+            partial struct AddTestComponentJob : IJobEntity
+            {
+                public EntityCommandBuffer.ParallelWriter ParallelWriter;
+
+                void Execute([EntityIndexInChunk] int indexInChunk,
+                    in DynamicBuffer<BakingOnlyPrimaryChildrenTestAuthoring.ChildrenTestComponent> childrenBuffer)
+                {
+                    foreach (var child in childrenBuffer)
+                    {
+                        ParallelWriter.AddComponent
+                            <BakingOnlyPrimaryChildrenTestAuthoring.PrimaryBakeOnlyChildrenTestComponent>(
+                                indexInChunk, child.entity);
+                    }
+                }
+            }
             protected override void OnUpdate()
             {
                 var ecb = new EntityCommandBuffer(Allocator.TempJob);
                 var ecbP = ecb.AsParallelWriter();
 
-                Entities
-                    .ForEach((int nativeThreadIndex, in DynamicBuffer<BakingOnlyPrimaryChildrenTestAuthoring.ChildrenTestComponent> childrenBuffer) =>
-                    {
-                        foreach (var child in childrenBuffer)
-                        {
-                            ecbP.AddComponent<BakingOnlyPrimaryChildrenTestAuthoring.PrimaryBakeOnlyChildrenTestComponent>(nativeThreadIndex, child.entity);
-                        }
-                    }).ScheduleParallel();
+                new AddTestComponentJob() { ParallelWriter = ecbP }.ScheduleParallel();
 
                 CompleteDependency();
                 ecb.Playback(EntityManager);

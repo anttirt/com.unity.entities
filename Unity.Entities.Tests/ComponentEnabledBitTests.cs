@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -220,9 +219,16 @@ namespace Unity.Entities.Tests
 
         partial class DummySystem : SystemBase
         {
+            partial struct DummyJob : IJobEntity
+            {
+                void Execute(in EcsTestDataEnableable testData)
+                {
+                }
+            }
+
             protected override void OnUpdate()
             {
-                Entities.ForEach((in EcsTestDataEnableable2 testData2) => { }).Run();
+                new DummyJob().Run();
             }
         }
 
@@ -438,7 +444,9 @@ namespace Unity.Entities.Tests
             var enableableType = ComponentType.ReadOnly<EcsTestDataEnableable>();
             SetupChunkWithEnabledBits(ref m_Manager, enableableType, World.UpdateAllocator.ToAllocator, out var entities, out var map, out var archetype, chunkCount);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged<EcsTestSharedComp>(entities[7], new EcsTestSharedComp(0));
+            #pragma warning restore 0618
             CheckChunkDataAndMapConsistency(m_Manager, enableableType, entities, map);
             m_Manager.Debug.CheckInternalConsistency();
         }
@@ -449,7 +457,9 @@ namespace Unity.Entities.Tests
             var enableableType = ComponentType.ReadOnly<EcsTestDataEnableable>();
             SetupChunkWithEnabledBits(ref m_Manager, enableableType, World.UpdateAllocator.ToAllocator, out var entities, out var map, out var archetype, chunkCount, typeof(EcsTestSharedComp));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged<EcsTestSharedComp>(entities[7], new EcsTestSharedComp(10));
+            #pragma warning restore 0618
             CheckChunkDataAndMapConsistency(m_Manager, enableableType, entities, map);
             m_Manager.Debug.CheckInternalConsistency();
         }
@@ -1655,12 +1665,16 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestSharedComp), typeof(EcsTestDataEnableable));
             int entityCount = 2;
             using var entities = m_Manager.CreateEntity(archetype, entityCount, World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entities[0], new EcsTestSharedComp { value = 17 });
+            #pragma warning restore 0618
             Assert.DoesNotThrow(() => m_Manager.Debug.CheckInternalConsistency());
             // Setting the shared component value of the remaining entity leaves its current chunk empty.
             // If the subsequent ReleaseChunk() operation doesn't correctly preserve enabled bits state, this will cause
             // an internal consistency error.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entities[1], new EcsTestSharedComp { value = 17 });
+            #pragma warning restore 0618
             Assert.DoesNotThrow(() => m_Manager.Debug.CheckInternalConsistency());
         }
 
@@ -1673,17 +1687,23 @@ namespace Unity.Entities.Tests
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestDataEnableable));
             for (int i = 0; i < entityCount; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp { value = 17 });
+                #pragma warning restore 0618
                 if ((i % 100) == 0)
                     m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], false);
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(query, new EcsTestSharedComp { value = 23 });
+            #pragma warning restore 0618
 
             for (int i = 0; i < entityCount; ++i)
             {
                 int expectedValue = (i % 100) == 0 ? 17 : 23;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(expectedValue, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value);
+                #pragma warning restore 0618
             }
         }
 
@@ -1818,14 +1838,18 @@ namespace Unity.Entities.Tests
                     m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], false);
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(query, new EcsTestSharedComp { value = 23 });
+            #pragma warning restore 0618
 
             for (int i = 0; i < entityCount; ++i)
             {
                 bool shouldHaveComponent = (i % 100) == 0 ? false : true;
                 Assert.AreEqual(shouldHaveComponent, m_Manager.HasComponent<EcsTestSharedComp>(entities[i]));
                 if (shouldHaveComponent)
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual(23, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value);
+                    #pragma warning restore 0618
             }
         }
 
@@ -1921,94 +1945,6 @@ namespace Unity.Entities.Tests
 
             var expectedMatches = new[] { entities1[0], entities1[1], entities2[0], entities2[1], entities2[2] };
             CollectionAssert.AreEquivalent(expectedMatches, query.ToEntityArray(Allocator.Temp).ToArray());
-        }
-
-        partial class EnabledComponentInEntitiesForEachTest : SystemBase
-        {
-            public NativeList<Entity> ProcessedEntities;
-            protected override void OnCreate()
-            {
-                ProcessedEntities = new NativeList<Entity>(World.UpdateAllocator.ToAllocator);
-            }
-            protected override void OnDestroy()
-            {
-                ProcessedEntities.Dispose();
-            }
-            protected override void OnUpdate()
-            {
-                ProcessedEntities.Clear();
-                Entities.WithAll<EcsTestDataEnableable>().ForEach((Entity e) =>
-                    {
-                        ProcessedEntities.Add(e);
-                    }).WithoutBurst().Run();
-            }
-        }
-
-        [Test]
-        public void EntitiesForEach_WithEnableableComponents_MatchesCorrectEntities()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestDataEnableable));
-            var entities = m_Manager.CreateEntity(archetype, 1000, World.UpdateAllocator.ToAllocator);
-            var expectedProcessedEntities = new NativeList<Entity>(entities.Length, World.UpdateAllocator.ToAllocator);
-            for (int i = 0; i < entities.Length; ++i)
-            {
-                if (i > 0 && (i & (i - 1)) == 0)
-                {
-                    expectedProcessedEntities.Add(entities[i]);
-                }
-                else
-                {
-                    m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], false);
-                }
-            }
-            var sys = World.CreateSystemManaged<EnabledComponentInEntitiesForEachTest>();
-            sys.Update();
-            CollectionAssert.AreEquivalent(expectedProcessedEntities.ToArray(Allocator.Temp).ToArray(),
-                sys.ProcessedEntities.ToArray(Allocator.Temp).ToArray());
-        }
-
-        partial class EnabledComponentInEntitiesForEachWithStructuralChangesTest : SystemBase
-        {
-            public NativeList<Entity> ProcessedEntities;
-            protected override void OnCreate()
-            {
-                ProcessedEntities = new NativeList<Entity>(World.UpdateAllocator.ToAllocator);
-            }
-            protected override void OnDestroy()
-            {
-                ProcessedEntities.Dispose();
-            }
-            protected override void OnUpdate()
-            {
-                ProcessedEntities.Clear();
-                Entities.WithAll<EcsTestDataEnableable>().ForEach((Entity e) =>
-                {
-                    ProcessedEntities.Add(e);
-                }).WithoutBurst().WithStructuralChanges().Run();
-            }
-        }
-
-        [Test]
-        public void EntitiesForEach_WithStructuralChanges_WithEnableableComponents_MatchesCorrectEntities()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestDataEnableable));
-            var entities = m_Manager.CreateEntity(archetype, 1000, World.UpdateAllocator.ToAllocator);
-            var expectedProcessedEntities = new NativeList<Entity>(entities.Length, World.UpdateAllocator.ToAllocator);
-            for (int i = 0; i < entities.Length; ++i)
-            {
-                if (i > 0 && (i & (i - 1)) == 0)
-                {
-                    expectedProcessedEntities.Add(entities[i]);
-                }
-                else
-                {
-                    m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], false);
-                }
-            }
-            var sys = World.CreateSystemManaged<EnabledComponentInEntitiesForEachWithStructuralChangesTest>();
-            sys.Update();
-            CollectionAssert.AreEquivalent(expectedProcessedEntities.ToArray(Allocator.Temp).ToArray(),
-                sys.ProcessedEntities.ToArray(Allocator.Temp).ToArray());
         }
 
         struct DataJob_WriteBits_ComponentLookup : IJobChunk

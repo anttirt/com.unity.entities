@@ -77,128 +77,10 @@ namespace Unity.Entities.Editor
     /// Represents a reusable control for searching and filtering.
     /// </summary>
     [UsedImplicitly]
-#if UNITY_2023_3_OR_NEWER
     [UxmlElement]
-#endif
     sealed partial class SearchElement : VisualElement, INotifyValueChanged<string>
     {
         internal const StringComparison DefaultGlobalStringComparison = StringComparison.OrdinalIgnoreCase;
-
-#if !UNITY_2023_3_OR_NEWER
-        /// <summary>
-        /// Instantiates a SearchElement using the data read from a UXML file.
-        /// </summary>
-        [UsedImplicitly]
-        class SearchElementFactory : UxmlFactory<SearchElement, SearchElementTraits> { }
-
-        /// <summary>
-        /// Defines UxmlTraits for the SearchElement.
-        /// </summary>
-        [UsedImplicitly]
-        class SearchElementTraits : UxmlTraits
-        {
-            readonly UxmlStringAttributeDescription m_SearchData = new UxmlStringAttributeDescription {name = "search-data", defaultValue = string.Empty};
-            readonly UxmlStringAttributeDescription m_SearchFilters = new UxmlStringAttributeDescription {name = "search-filters", defaultValue = string.Empty};
-            readonly UxmlStringAttributeDescription m_SourceData = new UxmlStringAttributeDescription {name = "source-data", defaultValue = string.Empty};
-            readonly UxmlStringAttributeDescription m_FilteredData = new UxmlStringAttributeDescription {name = "filtered-data", defaultValue = string.Empty};
-            readonly UxmlStringAttributeDescription m_GlobalStringComparison = new UxmlStringAttributeDescription {name = "global-string-comparison", defaultValue = DefaultGlobalStringComparison.ToString()};
-            readonly UxmlStringAttributeDescription m_HandlerType = new UxmlStringAttributeDescription {name = "handler-type", defaultValue = "sync"};
-            readonly UxmlIntAttributeDescription m_SearchDelay = new UxmlIntAttributeDescription {name = "search-delay", defaultValue = 200};
-            readonly UxmlIntAttributeDescription m_MaxFrameTime = new UxmlIntAttributeDescription {name = "max-frame-time", defaultValue = 33};
-
-            public override void Init(VisualElement element, IUxmlAttributes attributes, CreationContext context)
-            {
-                base.Init(element, attributes, context);
-
-                var search = (SearchElement)element;
-
-                search.m_SearchEngine.Clear();
-                search.m_FilterPopupElementItems.Clear();
-
-                foreach (var value in m_SearchData.GetValueFromBag(attributes, context).Split(' '))
-                {
-                    if (string.IsNullOrEmpty(value))
-                        continue;
-
-                    search.AddSearchDataProperty(new PropertyPath(value));
-                }
-
-                foreach (var value in m_SearchFilters.GetValueFromBag(attributes, context).Split(' '))
-                {
-                    var filter = value.Split(':');
-
-                    if (filter.Length != 2 || string.IsNullOrEmpty(filter[0]) || string.IsNullOrEmpty(filter[1]))
-                        continue;
-
-                    var token = filter[0];
-                    var path = new PropertyPath(filter[1]);
-
-                    try
-                    {
-                        search.AddSearchFilterProperty(token, path);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogWarning(e.Message);
-                    }
-
-                    search.AddSearchFilterPopupItem(token, path.ToString().SplitPascalCase());
-                }
-
-                var sourceData = m_SourceData.GetValueFromBag(attributes, context);
-                var filteredData = m_FilteredData.GetValueFromBag(attributes, context);
-
-                if (!Enum.TryParse(m_HandlerType.GetValueFromBag(attributes, context), out SearchHandlerType handlerType))
-                {
-                    Debug.LogWarning($"SearchElement has invalid HandlerType=[{m_HandlerType.GetValueFromBag(attributes, context)}]. Expected values are [{string.Join(",", Enum.GetNames(typeof(SearchHandlerType)))}]. Defaulting to {nameof(SearchHandlerType.sync)}");
-                    handlerType = SearchHandlerType.sync;
-                }
-
-                var maxFrameTime = m_MaxFrameTime.GetValueFromBag(attributes, context);
-
-                if (!string.IsNullOrEmpty(sourceData) && !string.IsNullOrEmpty(filteredData))
-                {
-                    if (sourceData != filteredData)
-                    {
-                        search.m_UxmlSearchHandlerBinding = new SearchHandlerBinding
-                        {
-                            SourceDataPath = new PropertyPath(sourceData),
-                            FilteredDataPath = new PropertyPath(filteredData),
-                            HandlerType = handlerType,
-                            MaxFrameTime = maxFrameTime,
-                            SearchHandler = null,
-                        };
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"SearchElement has invalid data bindings. SourceData=[{sourceData}] FilteredData=[{filteredData}]. Can not read and write to the same property.");
-                    }
-                }
-                else if (!string.IsNullOrEmpty(sourceData))
-                {
-                    Debug.LogWarning("SearchElement has invalid data bindings. The 'source-data' attribute requires the 'filtered-data' to also be set.");
-                }
-                else if (!string.IsNullOrEmpty(filteredData))
-                {
-                    Debug.LogWarning("SearchElement has invalid data bindings. The 'filtered-data' attribute requires the 'source-data' to also be set.");
-                }
-
-                search.SearchDelay = m_SearchDelay.GetValueFromBag(attributes, context);
-
-                var stringComparisonValue = m_GlobalStringComparison.GetValueFromBag(attributes, context);
-
-                if (Enum.TryParse(stringComparisonValue, out StringComparison stringComparison))
-                {
-                    search.GlobalStringComparison = stringComparison;
-                }
-                else
-                {
-
-                    Debug.LogWarning($"SearchElement has invalid StringComparison=[{stringComparisonValue}]. Expected values are {string.Join(",", Enum.GetNames(typeof(StringComparison)))}.");
-                }
-            }
-        }
-#endif
 
         /// <summary>
         /// Helper class to store data related to uxml bindings for deferred execution.
@@ -518,9 +400,7 @@ namespace Unity.Entities.Editor
         /// <summary>
         /// Gets or sets the search delay. This is the number of millisecond after input is receive for the search to be executed. The default value is 200.
         /// </summary>
-#if UNITY_2023_3_OR_NEWER
         [UxmlAttribute("search-delay")]
-#endif
         public long SearchDelay { get; set; } = 200;
 
         /// <summary>
@@ -531,9 +411,7 @@ namespace Unity.Entities.Editor
         /// <summary>
         /// Global string comparison options for word matching and filter handling (if not overridden).
         /// </summary>
-#if UNITY_2023_3_OR_NEWER
         [UxmlAttribute("global-string-comparison")]
-#endif
         public StringComparison GlobalStringComparison
         {
             get => m_SearchEngine.GlobalStringComparison;
@@ -608,9 +486,7 @@ namespace Unity.Entities.Editor
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-#if UNITY_2023_3_OR_NEWER
             InitAttributes();
-#endif
             if (null == m_UxmlSearchHandlerBinding)
                 return;
 
@@ -644,7 +520,6 @@ namespace Unity.Entities.Editor
             Search();
         }
 
-#if UNITY_2023_3_OR_NEWER
         [UxmlAttribute("search-data")] private string SearchData { get; set; } = string.Empty;
         [UxmlAttribute("search-filters")] private string SearchFilters { get; set; } = string.Empty;
         [UxmlAttribute("source-data")] private string SourceData { get; set; } = string.Empty;
@@ -734,7 +609,6 @@ namespace Unity.Entities.Editor
                 Debug.LogWarning($"SearchElement has invalid StringComparison=[{UxmlGlobalStringComparison}]. Expected values are {string.Join(",", Enum.GetNames(typeof(StringComparison)))}.");
             }
         }
-#endif
 
         /// <summary>
         /// Returns the search handler registered through UXML bindings.

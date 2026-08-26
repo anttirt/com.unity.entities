@@ -813,19 +813,25 @@ namespace Unity.Entities.Tests
 
         static void SetSharedComponentManaged<T>(EntityManager manager, T data) where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetSharedComponentManaged(s_Entity, data);
+            #pragma warning restore 0618
         }
 
         static void SetSharedComponentManagedWithEntityArray<T>(EntityManager manager, T data) where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             manager.SetSharedComponentManaged(s_Entities, data);
+            #pragma warning restore 0618
         }
 
         static void SetSharedComponentManagedWithQuery<T>(EntityManager manager, T data) where T : struct, ISharedComponentData
         {
             using (var query = manager.CreateEntityQuery(typeof(T)))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.SetSharedComponentManaged(query, data);
+                #pragma warning restore 0618
             }
         }
 
@@ -833,7 +839,9 @@ namespace Unity.Entities.Tests
         {
             using (var ecb = new EntityCommandBuffer(Allocator.Temp))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 ecb.SetSharedComponentManaged(s_Entity, data);
+                #pragma warning restore 0618
                 ecb.Playback(manager);
             }
         }
@@ -842,7 +850,9 @@ namespace Unity.Entities.Tests
         {
             using (var ecb = new EntityCommandBuffer(Allocator.Temp))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 ecb.SetSharedComponentManaged(s_Entities, data);
+                #pragma warning restore 0618
                 ecb.Playback(manager);
             }
         }
@@ -852,7 +862,9 @@ namespace Unity.Entities.Tests
             using (var ecb = new EntityCommandBuffer(Allocator.Temp))
             using (var query = manager.CreateEntityQuery(typeof(T)))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 ecb.SetSharedComponentManaged(query, data, EntityQueryCaptureMode.AtPlayback);
+                #pragma warning restore 0618
                 ecb.Playback(manager);
             }
         }
@@ -2011,7 +2023,9 @@ namespace Unity.Entities.Tests
         public void SetSharedComponentManaged()
         {
             s_Entity = World.EntityManager.CreateEntity(typeof(EcsTestSharedCompManaged));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             VerifyFrameMetaData(StructuralChangeType.SetSharedComponent, () => SetSharedComponentManaged(World.EntityManager, new EcsTestSharedCompManaged { value = "hello" }));
+            #pragma warning restore 0618
         }
 
         [Test]

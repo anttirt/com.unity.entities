@@ -44,7 +44,9 @@ namespace Unity.Entities.Tests
             m_World.EntityManager.SetComponentData(entities[1], LocalTransform.FromPosition(0.0f, 2, 0.0f));
             m_World.EntityManager.SetComponentData(entities[2], LocalTransform.FromPosition(0.0f, 3, 0.0f));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var companionGameObjectUpdateTransformSystem = m_World.GetExistingSystem<CompanionGameObjectUpdateTransformSystem>();
+            #pragma warning restore 0618
 
             // Validate positions not moved
             for (int i = 0; i < 3; i++)
@@ -116,7 +118,9 @@ namespace Unity.Entities.Tests
             // Add a negative scale to the parent
             m_World.EntityManager.SetComponentData(entities[0], new PostTransformMatrix {Value = float4x4.Scale(-1, 1, 1)});
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var companionGameObjectUpdateTransformSystem = m_World.GetExistingSystem<CompanionGameObjectUpdateTransformSystem>();
+            #pragma warning restore 0618
 
             // Validate positions not moved
             for (int i = 0; i < gameObjects.Length; i++)
@@ -157,7 +161,8 @@ namespace Unity.Entities.Tests
             var entities = query.ToEntityArray(Allocator.Temp);
             Assert.AreEqual(1, entities.Length);
 
-            var companionComponent = m_World.EntityManager.GetComponentObject<ConversionTestCompanionComponent>(entities[0]);
+            var companionComponent = CompanionComponentTestFixture
+                .AssertCompanionReadersAgree<ConversionTestCompanionComponent>(m_World.EntityManager, entities[0]);
             Assert.AreEqual(123, companionComponent.SomeValue);
 
             // give the hybrid component system a chance to activate this object, and check it did not in fact do it.

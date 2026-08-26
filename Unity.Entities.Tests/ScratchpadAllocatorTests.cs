@@ -24,11 +24,7 @@ namespace Unity.Entities.Tests
             base.Setup();
             m_world = new World("ScratchpadAllocatorTests");
 
-#if UNITY_2022_2_14F1_OR_NEWER
             int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-            int maxThreadCount = JobsUtility.MaxJobThreadCount + 1;
-#endif
             m_scratchpad = new Scratchpad(maxThreadCount);
         }
 
@@ -231,11 +227,7 @@ namespace Unity.Entities.Tests
         [Test]
         public void AvailalbeBytesCorrect()
         {
-#if UNITY_2022_2_14F1_OR_NEWER
             int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-            int maxThreadCount = JobsUtility.MaxJobThreadCount + 1; // account for main thread
-#endif
             for (int i = 0; i < 3; i++)
             {
                 int size = (i + 1) * 32768;

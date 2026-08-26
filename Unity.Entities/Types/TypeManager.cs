@@ -14,6 +14,8 @@ using Unity.Core;
 using UnityEngine;
 using System.Text;
 using static Unity.Entities.TypeManager;
+using Unity.Scripting.LifecycleManagement;
+using UnityEngine.Assemblies;
 
 namespace Unity.Entities
 {
@@ -115,6 +117,11 @@ namespace Unity.Entities
         public bool IsBuffer { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return   (Value & TypeManager.BufferComponentTypeFlag) != 0; } }
 
         /// <summary>
+        /// The component type is a transform type
+        /// </summary>
+        public bool IsTransform { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return   (Value & TypeManager.TransformComponentTypeFlag) != 0; } }
+
+        /// <summary>
         /// The component type inherits from <seealso cref="ICleanupComponentData"/>
         /// </summary>
         public bool IsCleanupComponent { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & TypeManager.CleanupComponentTypeFlag) != 0; } }
@@ -147,16 +154,19 @@ namespace Unity.Entities
         /// <summary>
         /// The component type <seealso cref="TypeIndex.IsManagedType"/> and inherits from <seealso cref="IComponentData"/>
         /// </summary>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public bool IsManagedComponent { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & (TypeManager.ManagedComponentTypeFlag | TypeManager.ChunkComponentTypeFlag | TypeManager.SharedComponentTypeFlag)) == TypeManager.ManagedComponentTypeFlag; } }
 
         /// <summary>
         /// The component type <seealso cref="TypeIndex.IsManagedType"/> and inherits from <seealso cref="ISharedComponentData"/>
         /// </summary>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public bool IsManagedSharedComponent { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & TypeManager.ManagedSharedComponentTypeFlag) == TypeManager.ManagedSharedComponentTypeFlag; } }
 
         /// <summary>
         /// The component type requires managed storage due to being a class type, and/or contains reference types
         /// </summary>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public bool IsManagedType { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & TypeManager.ManagedComponentTypeFlag) != 0; } }
 
         /// <summary>
@@ -178,6 +188,15 @@ namespace Unity.Entities
         /// The component type inherits from <seealso cref="IRefCounted"/>
         /// </summary>
         public bool IsRefCounted { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & TypeManager.IRefCountedComponentFlag) != 0; } }
+
+        /// <summary>
+        /// The component type has an OnAddedCallback.
+        /// </summary>
+        public bool HasOnAddedCallback { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return  (Value & TypeManager.HasOnAddedCallbackFlag) != 0; } }
+        /// <summary>
+        /// The component type has an OnRemovedCallback.
+        /// </summary>
+        public bool HasOnRemovedCallback { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return (Value & TypeManager.HasOnRemovedCallbackFlag) != 0; } }
 
         /// <summary>
         /// The component type contains an <seealso cref="Entity"/> member. Entity members found in nested member types will also cause this property to return true.
@@ -546,6 +565,10 @@ namespace Unity.Entities
             /// Inherits from UnityEngine.Object (class only)
             /// </summary>
             UnityEngineObject,
+            /// <summary>
+            /// Represents transform data
+            /// </summary>
+            TransformData
         }
 
         /// <summary>
@@ -554,6 +577,21 @@ namespace Unity.Entities
         public const int MaximumTypesCount = 1 << 13;
 
         internal const int MaximumSystemTypesCount = MaximumTypesCount;
+
+		/// <summary>
+        /// Bitflag set for component types that represent a transform/>.
+        /// </summary>
+        public const int TransformComponentTypeFlag = 1 << 16;
+
+        /// <summary>
+        /// Bitflag set for component types which have an OnRemoved callback
+        /// </summary>
+        public const int HasOnRemovedCallbackFlag = 1 << 15;
+
+        /// <summary>
+        /// Bitflag set for component types which have an OnAdded callback
+        /// </summary>
+        public const int HasOnAddedCallbackFlag = 1 << 14;
 
         /// <summary>
         /// Bitflag set for component types that do not contain an <seealso cref="Entity"/> member.
@@ -753,6 +791,45 @@ namespace Unity.Entities
         private static UnsafeList<SharedComponentFnPtrs> s_SharedComponent_FunctionPointers;
 
         /// <summary>
+        /// Delegate type for component lifecycle callbacks (IDebugOnAdded/IDebugOnRemoved).
+        /// Used by ILPP-generated wrapper code.
+        /// </summary>
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate void ComponentLifecycleDelegate(Entity* entity, IntPtr componentPtr);
+
+        public struct OnAddedDelegateHolder
+        {
+            public unsafe delegate* unmanaged[Cdecl]<Entity*, void*, void> FunctionPointer;
+        }
+
+        static readonly SharedStatic<UnsafeList<OnAddedDelegateHolder>> s_OnAdded_FunctionPointers
+            = SharedStatic<UnsafeList<OnAddedDelegateHolder>>.GetOrCreate<OnAddedDelegateHolder>();
+
+        // GC-defeat array to keep delegates alive for non-Burst callbacks
+        static Delegate[] s_OnAdded_GCDefeat;
+
+        public struct OnRemovedDelegateHolder
+        {
+            public unsafe delegate* unmanaged[Cdecl]<Entity*, void*, void> FunctionPointer;
+        }
+
+        static readonly SharedStatic<UnsafeList<OnRemovedDelegateHolder>> s_OnRemoved_FunctionPointers
+            = SharedStatic<UnsafeList<OnRemovedDelegateHolder>>.GetOrCreate<OnRemovedDelegateHolder>();
+
+        // GC-defeat array to keep delegates alive for non-Burst callbacks
+        static Delegate[] s_OnRemoved_GCDefeat;
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+        // True if any component type has registered lifecycle callbacks.
+        // Used to short-circuit callback checks in hot paths.
+        struct AnyDebugCallbacksRegisteredKey {}
+        static readonly SharedStatic<bool> s_AnyDebugCallbacksRegistered
+            = SharedStatic<bool>.GetOrCreate<AnyDebugCallbacksRegisteredKey>();
+
+        internal static bool AnyDebugCallbacksRegistered => s_AnyDebugCallbacksRegistered.Data;
+#endif
+
+        /// <summary>
         /// Enumerable list of all component <see cref="TypeInfo"/> values.
         /// </summary>
         public static IEnumerable<TypeInfo> AllTypes { get { return s_TypeInfos.GetSubArray(0, s_TypeCount); } }
@@ -763,7 +840,6 @@ namespace Unity.Entities
         internal static bool IsInitialized => s_Initialized;
 
 #if !UNITY_DOTSRUNTIME
-        static bool                         s_AppDomainUnloadRegistered;
         static Dictionary<Type, TypeIndex>  s_ManagedTypeToIndex;
         static Dictionary<Type, Exception>  s_FailedTypeBuildException;
 
@@ -1261,6 +1337,13 @@ namespace Unity.Entities
         public static bool IsBuffer(TypeIndex typeIndex) => (typeIndex.Value & BufferComponentTypeFlag) != 0;
 
         /// <summary>
+        /// <seealso cref="TypeIndex.IsTransform"/>
+        /// </summary>
+        /// <param name="typeIndex">TypeIndex for a component</param>
+        /// <returns>Returns if the component is a transform component</returns>
+        public static bool IsTransform(TypeIndex typeIndex) => (typeIndex.Value & TransformComponentTypeFlag) != 0;
+
+        /// <summary>
         /// Obsolete. Use <see cref="TypeIndex.IsCleanupComponent"/> instead.
         /// </summary>
         /// <param name="typeIndex">TypeIndex for a component</param>
@@ -1309,6 +1392,7 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="typeIndex">TypeIndex for a component</param>
         /// <returns>Returns if the component type <seealso cref="TypeIndex.IsManagedType"/> and inherits from <seealso cref="IComponentData"/></returns>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public static bool IsManagedComponent(TypeIndex typeIndex) => typeIndex.IsManagedComponent;
 
         /// <summary>
@@ -1316,6 +1400,7 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="typeIndex">TypeIndex for a component</param>
         /// <returns>Returns if the component type <seealso cref="TypeIndex.IsManagedType"/> and inherits from <seealso cref="ISharedComponentData"/></returns>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public static bool IsManagedSharedComponent(TypeIndex typeIndex) => typeIndex.IsManagedSharedComponent;
 
         /// <summary>
@@ -1323,6 +1408,7 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="typeIndex">TypeIndex for a component</param>
         /// <returns>Returns if the component type requires managed storage due to being a class type, and/or contains reference types</returns>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public static bool IsManagedType(TypeIndex typeIndex) => typeIndex.IsManagedType;
 
         /// <summary>
@@ -1523,6 +1609,13 @@ namespace Unity.Entities
 #endif
         }
 
+[OnCodeUnloading]
+        static void OnCodeUnloading()
+        {
+            if (s_Initialized)
+                Shutdown();
+        }
+
         /// <summary>
         /// Initializes the TypeManager with all ECS type information. May be called multiple times; only the first call
         /// will do any work. Always must be called from the main thread.
@@ -1553,20 +1646,6 @@ namespace Unity.Entities
                     throw new InvalidOperationException("Must be called from the main thread");
 #endif
 
-                if (!s_AppDomainUnloadRegistered)
-                {
-                    // important: this will always be called from a special unload thread (main thread will be blocking on this)
-                    AppDomain.CurrentDomain.DomainUnload += (_, __) =>
-                    {
-                        if (s_Initialized)
-                            Shutdown();
-                    };
-
-                    // There is no domain unload in player builds, so we must be sure to shutdown when the process exits.
-                    AppDomain.CurrentDomain.ProcessExit += (_, __) => { Shutdown(); };
-                    s_AppDomainUnloadRegistered = true;
-                }
-
                 ObjectOffset = UnsafeUtility.SizeOf<ObjectOffsetType>();
                 s_ManagedTypeToIndex = new Dictionary<Type, TypeIndex>(1000);
                 s_FailedTypeBuildException = new Dictionary<Type, Exception>();
@@ -1586,6 +1665,12 @@ namespace Unity.Entities
                 s_TypeFullNameHashes = new UnsafeList<ulong>(MaximumTypesCount, Allocator.Persistent);
                 s_SharedComponent_FunctionPointers = new UnsafeList<SharedComponentFnPtrs>(MaximumTypesCount, Allocator.Persistent);
                 s_SharedComponentFns_gcDefeat = new ManagedSharedComponentFnPtrs[MaximumTypesCount];
+                s_OnAdded_FunctionPointers.Data = new UnsafeList<OnAddedDelegateHolder>(MaximumTypesCount, Allocator.Persistent);
+                s_OnAdded_FunctionPointers.Data.Resize(MaximumTypesCount);
+                s_OnAdded_GCDefeat = new Delegate[MaximumTypesCount];
+                s_OnRemoved_FunctionPointers.Data = new UnsafeList<OnRemovedDelegateHolder>(MaximumTypesCount, Allocator.Persistent);
+                s_OnRemoved_FunctionPointers.Data.Resize(MaximumTypesCount);
+                s_OnRemoved_GCDefeat = new Delegate[MaximumTypesCount];
 
                 FastEquality.Initialize();
                 InitializeSystemsState();
@@ -1604,8 +1689,9 @@ namespace Unity.Entities
                 InitializeSharedStatics();
 
                 EntityNameStorage.Initialize();
-
-                InitializeAspects();
+#if ENABLE_TRANSFORMREF
+                TransformUnionCallbacks.Initialize();
+#endif
             }
             catch
             {
@@ -1724,6 +1810,11 @@ namespace Unity.Entities
         /// Removes all ECS type information and any allocated memory. May only be called once globally, and must be
         /// called from the main thread.
         /// </summary>
+#if UNITY_EDITOR
+        [OnCodeUnloading]
+#else
+        [OnExitingPlayMode]
+#endif
         public static void Shutdown()
         {
             // TODO, with module loaded type info, we cannot shutdown
@@ -1746,14 +1837,15 @@ namespace Unity.Entities
             s_FailedTypeBuildException = null;
             s_ManagedTypeToIndex.Clear();
 #endif
+            CompanionComponentTypeIndices.Clear();
+            s_PendingLifecycleCallbacks = null;
 
             DisposeNative();
 
             ShutdownSharedStatics();
             EntityNameStorage.Shutdown();
-
-#if !UNITY_DOTSRUNTIME
-            ShutdownAspects();
+#if ENABLE_TRANSFORMREF
+            TransformUnionCallbacks.Shutdown();
 #endif
 
             FastEquality.Shutdown();
@@ -1770,6 +1862,11 @@ namespace Unity.Entities
             s_UnityObjectRefOffsetList.Dispose();
             s_WriteGroupList.Dispose();
             s_SharedComponent_FunctionPointers.Dispose();
+            s_OnAdded_FunctionPointers.Data.Dispose();
+            s_OnRemoved_FunctionPointers.Data.Dispose();
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            s_AnyDebugCallbacksRegistered.Data = false;
+#endif
 
             foreach (var info in s_FastEqualityTypeInfoList)
                 info.Dispose();
@@ -1917,7 +2014,9 @@ namespace Unity.Entities
             if (typeIndex.IsSharedComponentType)
             {
 #if !UNITY_DOTSRUNTIME
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (typeIndex.IsManagedType)
+                #pragma warning restore 0618
                 {
                     int result = -1;
                     ManagedEquals(ref left, ref right, typeIndex, out result);
@@ -2082,27 +2181,15 @@ namespace Unity.Entities
                 return left == right;
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (IsManagedType(typeIndex))
+            #pragma warning restore 0618
             {
                 var typeInfo = GetFastEqualityTypeInfoPointer()[typeIndex.Index];
                 return FastEquality.ManagedEquals(left, right, typeInfo);
             }
             else
             {
-                // IL2CPP has a bug where we can fail to detect managed types correctly which will
-                // cause the code #else codepath to throw if it contains managed references, so we provide
-                // an alternative path until that is fixed (UUM-43422)
-#if ENABLE_IL2CPP
-                    var leftptr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(left, out var lhandle) + ObjectOffset;
-                    var rightptr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(right, out var rhandle) + ObjectOffset;
-
-                    var result = Equals(leftptr, rightptr, typeIndex);
-
-                    UnsafeUtility.ReleaseGCObject(lhandle);
-                    UnsafeUtility.ReleaseGCObject(rhandle);
-
-                    return result;
-#else
                     var leftHandle = GCHandle.Alloc(left, GCHandleType.Pinned);
                     var rightHandle = GCHandle.Alloc(right, GCHandleType.Pinned);
                     var leftptr = (byte*)leftHandle.AddrOfPinnedObject();
@@ -2114,7 +2201,6 @@ namespace Unity.Entities
                     rightHandle.Free();
 
                     return result;
-#endif
             }
 #else
                 return GetBoxedEquals(left, right, typeIndex.Index);
@@ -2131,18 +2217,6 @@ namespace Unity.Entities
         public static bool Equals(object left, void* right, TypeIndex typeIndex)
         {
 #if !UNITY_DOTSRUNTIME
-
-    // IL2CPP has a bug where we can fail to detect managed types correctly which will
-    // cause the code #else codepath to throw if it contains managed references, so we provide
-    // an alternative path until that is fixed (UUM-43422)
-#if ENABLE_IL2CPP
-            var leftptr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(left, out var lhandle) + ObjectOffset;
-
-            var result = Equals(leftptr, right, typeIndex);
-
-            UnsafeUtility.ReleaseGCObject(lhandle);
-            return result;
-#else
             var leftHandle = GCHandle.Alloc(left, GCHandleType.Pinned);
             var leftptr = (byte*)leftHandle.AddrOfPinnedObject();
 
@@ -2150,7 +2224,6 @@ namespace Unity.Entities
 
             leftHandle.Free();
             return result;
-#endif
 #else
             return GetBoxedEquals(left, right, typeIndex.Index);
 #endif
@@ -2177,7 +2250,9 @@ namespace Unity.Entities
             var typeIndex = GetTypeIndex<T>();
 
 #if !UNITY_DOTSRUNTIME
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (typeIndex.IsManagedType)
+            #pragma warning restore 0618
             {
                 ManagedGetHashCode(ref val, typeIndex, out int hash, out int did_work);
 
@@ -2222,31 +2297,21 @@ namespace Unity.Entities
         public static int GetHashCode(object val, TypeIndex typeIndex)
         {
 #if !UNITY_DOTSRUNTIME
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (IsManagedType(typeIndex))
+            #pragma warning restore 0618
             {
                 var typeInfo = GetFastEqualityTypeInfoPointer()[typeIndex.Index];
                 return FastEquality.ManagedGetHashCode(val, typeInfo);
             }
             else
             {
-                // IL2CPP has a bug where we can fail to detect managed types correctly which will
-                // cause the code #else codepath to throw if it contains managed references, so we provide
-                // an alternative path until that is fixed (UUM-43422)
-#if ENABLE_IL2CPP
-                var ptr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(val, out var handle) + ObjectOffset;
-
-                var result = GetHashCode(ptr, typeIndex);
-
-                UnsafeUtility.ReleaseGCObject(handle);
-                return result;
-#else
                 var handle = GCHandle.Alloc(val, GCHandleType.Pinned);
                 var ptr = (byte*)handle.AddrOfPinnedObject();
                 var result = GetHashCode(ptr, typeIndex);
 
                 handle.Free();
                 return result;
-#endif
             }
 #else
                 return GetBoxedHashCode(val, typeIndex.Index);
@@ -2400,6 +2465,156 @@ namespace Unity.Entities
             s_SharedComponentFns_gcDefeat[typeindex.Index].ReleaseFn.Invoke(data);
         }
 
+        struct PendingLifecycleCallback
+        {
+            public Type ComponentType;
+            public ComponentLifecycleDelegate OnAddedFn;
+            public ComponentLifecycleDelegate OnRemovedFn;
+            public bool HasOnAdded;
+            public bool HasOnRemoved;
+            public bool OnAddedIsBurst;
+            public bool OnRemovedIsBurst;
+        }
+
+        static List<PendingLifecycleCallback> s_PendingLifecycleCallbacks;
+
+        /// <summary>
+        /// Used by ILPP-generated code to register component lifecycle callbacks.
+        /// Called from generated EarlyInit() methods.
+        /// </summary>
+        /// <param name="componentType">Component Type</param>
+        /// <param name="onAddedFn">OnAdded delegate (or null)</param>
+        /// <param name="onRemovedFn">OnRemoved delegate (or null)</param>
+        /// <param name="hasOnAdded">Whether OnAdded callback exists</param>
+        /// <param name="hasOnRemoved">Whether OnRemoved callback exists</param>
+        /// <param name="onAddedIsBurst">Whether OnAdded is Burst-compiled</param>
+        /// <param name="onRemovedIsBurst">Whether OnRemoved is Burst-compiled</param>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        [ExcludeFromBurstCompatTesting("Uses managed delegates")]
+        public static unsafe void RegisterComponentLifecycleCallback(
+            Type componentType,
+            ComponentLifecycleDelegate onAddedFn,
+            ComponentLifecycleDelegate onRemovedFn,
+            bool hasOnAdded,
+            bool hasOnRemoved,
+            bool onAddedIsBurst,
+            bool onRemovedIsBurst)
+        {
+            if (!s_Initialized)
+            {
+                s_PendingLifecycleCallbacks ??= new List<PendingLifecycleCallback>();
+                s_PendingLifecycleCallbacks.Add(new PendingLifecycleCallback
+                {
+                    ComponentType = componentType,
+                    OnAddedFn = onAddedFn,
+                    OnRemovedFn = onRemovedFn,
+                    HasOnAdded = hasOnAdded,
+                    HasOnRemoved = hasOnRemoved,
+                    OnAddedIsBurst = onAddedIsBurst,
+                    OnRemovedIsBurst = onRemovedIsBurst
+                });
+                return;
+            }
+
+            RegisterComponentLifecycleCallbackInternal(componentType, onAddedFn, onRemovedFn, hasOnAdded, hasOnRemoved, onAddedIsBurst, onRemovedIsBurst);
+        }
+
+        static unsafe void RegisterComponentLifecycleCallbackInternal(
+            Type componentType,
+            ComponentLifecycleDelegate onAddedFn,
+            ComponentLifecycleDelegate onRemovedFn,
+            bool hasOnAdded,
+            bool hasOnRemoved,
+            bool onAddedIsBurst,
+            bool onRemovedIsBurst)
+        {
+            var typeIndex = GetTypeIndex(componentType);
+            var index = typeIndex.Index & ClearFlagsMask;
+
+            if (hasOnAdded && onAddedFn != null)
+            {
+                IntPtr fnPtr;
+                if (onAddedIsBurst)
+                {
+                    fnPtr = BurstCompiler.CompileFunctionPointer(onAddedFn).Value;
+                }
+                else
+                {
+                    fnPtr = Marshal.GetFunctionPointerForDelegate(onAddedFn);
+                    s_OnAdded_GCDefeat[index] = onAddedFn;
+                }
+
+                s_OnAdded_FunctionPointers.Data[index] = new OnAddedDelegateHolder
+                {
+                    FunctionPointer = (delegate* unmanaged[Cdecl]<Entity*, void*, void>)fnPtr
+                };
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+                s_AnyDebugCallbacksRegistered.Data = true;
+#endif
+            }
+
+            if (hasOnRemoved && onRemovedFn != null)
+            {
+                IntPtr fnPtr;
+                if (onRemovedIsBurst)
+                {
+                    fnPtr = BurstCompiler.CompileFunctionPointer(onRemovedFn).Value;
+                }
+                else
+                {
+                    fnPtr = Marshal.GetFunctionPointerForDelegate(onRemovedFn);
+                    s_OnRemoved_GCDefeat[index] = onRemovedFn;
+                }
+
+                s_OnRemoved_FunctionPointers.Data[index] = new OnRemovedDelegateHolder
+                {
+                    FunctionPointer = (delegate* unmanaged[Cdecl]<Entity*, void*, void>)fnPtr
+                };
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+                s_AnyDebugCallbacksRegistered.Data = true;
+#endif
+            }
+        }
+
+        /// <summary>
+        /// Processes any lifecycle callbacks that were registered before TypeManager was initialized.
+        /// Called from EntityManager.Initialize() after TypeManager.Initialize().
+        /// </summary>
+        [ExcludeFromBurstCompatTesting("Uses managed delegates")]
+        public static void InitializePendingLifecycleCallbacks()
+        {
+            if (s_PendingLifecycleCallbacks == null)
+                return;
+
+            foreach (var pending in s_PendingLifecycleCallbacks)
+            {
+                RegisterComponentLifecycleCallbackInternal(
+                    pending.ComponentType,
+                    pending.OnAddedFn,
+                    pending.OnRemovedFn,
+                    pending.HasOnAdded,
+                    pending.HasOnRemoved,
+                    pending.OnAddedIsBurst,
+                    pending.OnRemovedIsBurst);
+            }
+
+            s_PendingLifecycleCallbacks = null;
+        }
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+        [GenerateTestsForBurstCompatibility]
+        internal static unsafe delegate* unmanaged[Cdecl]<Entity*, void*, void> GetOnAddedCallback(TypeIndex typeindex)
+        {
+            return s_OnAdded_FunctionPointers.Data[typeindex.Index & ClearFlagsMask].FunctionPointer;
+        }
+
+        [GenerateTestsForBurstCompatibility]
+        internal static unsafe delegate* unmanaged[Cdecl]<Entity*, void*, void> GetOnRemovedCallback(TypeIndex typeindex)
+        {
+            return s_OnRemoved_FunctionPointers.Data[typeindex.Index & ClearFlagsMask].FunctionPointer;
+        }
+#endif
+
         /// <summary>
         /// Returns the TypeIndex for a given <seealso cref="TypeInfo.StableTypeHash"/>
         /// </summary>
@@ -2446,7 +2661,10 @@ namespace Unity.Entities
             {
                 typeof(IComponentData),
                 typeof(IBufferElementData),
-                typeof(ISharedComponentData)
+                typeof(ISharedComponentData),
+#if ENABLE_TRANSFORMREF
+                typeof(TransformRef)
+#endif
             };
 
             foreach (Type t in interfaces)
@@ -2595,7 +2813,11 @@ namespace Unity.Entities
         {
             return typeof(IComponentData).IsAssignableFrom(type)
                 || typeof(ISharedComponentData).IsAssignableFrom(type)
-                || typeof(IBufferElementData).IsAssignableFrom(type);
+                || typeof(IBufferElementData).IsAssignableFrom(type)
+#if ENABLE_TRANSFORMREF
+                || typeof(TransformRef).IsAssignableFrom(type)
+#endif
+                ;
         }
 
         static bool IsSupportedUnityEngineObjectType(Type type)
@@ -2604,7 +2826,7 @@ namespace Unity.Entities
                 return false;
             if (type.ContainsGenericParameters)
                 return false;
-            if (type.IsAbstract && !typeof(Component).IsAssignableFrom(type))
+            if (type.IsAbstract && !typeof(UnityEngine.Component).IsAssignableFrom(type))
                 return false;
             return true;
         }
@@ -2658,7 +2880,11 @@ namespace Unity.Entities
             {
                 Profiler.BeginSample(nameof(InitializeAllComponentTypes));
                 var combinedComponentTypeSet = new HashSet<Type>();
-                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+                var assemblies = CurrentAssemblies.GetLoadedAssemblies().ToArray();
+
+#if ENABLE_TRANSFORMREF
+                AddComponentTypeToListIfSupported(combinedComponentTypeSet, typeof(TransformRef));
+#endif
 
                 UnityEngineObjectType = typeof(UnityEngine.Object);
 
@@ -2674,7 +2900,8 @@ namespace Unity.Entities
                     if (!isAssemblyRelevant)
                         continue;
 
-
+                    if (assembly.IsDefined(typeof(DisableAutoTypeRegistrationAttribute)))
+                        continue;
 
                     var assemblyTypes = assembly.GetTypes();
 
@@ -2923,6 +3150,7 @@ namespace Unity.Entities
                         throw new InvalidOperationException($"ComponentType.TypeIndex does not match precalculated index for {type}. Expected: {expectedTypeIndex:x8} Actual: {typeIndexNoFlags:x8}");
 
                     AddTypeInfoToTables(type, typeInfo, type.FullName);
+                    CompanionComponentTypeIndices.RegisterIfWrapper(type, typeInfo.TypeIndex);
                     expectedTypeIndex += 1;
                 }
                 catch (Exception e)
@@ -3106,6 +3334,23 @@ namespace Unity.Entities
             if (type.IsPrimitive)
                 return false;
 
+#if ENABLE_TRANSFORMREF
+            if (type == typeof(TransformRef))
+            {
+                // TransformRef is a [NativeContainer] so that an individual one can be passed into a job and its
+                // safety handles will be patched. However, it also needs to work as a TypeIndex for TransformTypeHandle
+                // and TransformLookup, which trigger a nested container error when scheduled. Since TransformRefs
+                // created from TransformAccessor(TransformTypeHandle) and TransformLookup inherit the safety handles
+                // from their respective container, they will be valid, patched handles in a job. So for now, we
+                // manually prevent TransformRef from generating a nested container warning.
+                //
+                // TODO DOTS-10299: Collections, like NativeArray<TransformRef>, will not properly patch the
+                //  TransformRef safety handles if passed to a job, so those need to be avoided until we find a way to
+                //  prevent them.
+                return false;
+            }
+#endif
+
             if (nestedContainerCache.TryGetValue(type, out bool hasContainer))
                 return hasContainer;
 
@@ -3233,12 +3478,12 @@ namespace Unity.Entities
                 if (IsSupportedUnityEngineObjectType(type))
                 {
                     //we do not actually want to shut down shared statics, since
-                    //adding a unityengine object will never cause anything to reallocate. 
+                    //adding a unityengine object will never cause anything to reallocate.
                     ret = GetOrCreateTypeIndexUnsafe(type);
                 }
                 else
                 {
-                    // this will throw, which is what we want in this case. 
+                    // this will throw, which is what we want in this case.
                     return GetTypeIndex(type);
                 }
 
@@ -3315,6 +3560,8 @@ namespace Unity.Entities
                 throw new ArgumentException($"{type} is an interface. It must be a concrete type.");
 #endif
             bool hasNativeContainer = DoesComponentContainNativeContainer(type, type, caches.NestedNativeContainerCache);
+            bool hasOnAddedCallback = false;
+            bool hasOnRemovedCallback = false;
             bool hasEntityReferences = false;
             bool hasBlobReferences = false;
             bool hasWeakAssetReferences = false;
@@ -3333,6 +3580,16 @@ namespace Unity.Entities
                     sizeInChunk = 0;
                 else
                     sizeInChunk = valueTypeSize;
+
+                if (typeof(IDebugOnAdded).IsAssignableFrom(type))
+                {
+                    hasOnAddedCallback = true;
+                }
+
+                if (typeof(IDebugOnRemoved).IsAssignableFrom(type))
+                {
+                    hasOnRemovedCallback = true;
+                }
 
                 EntityRemapUtility.CalculateFieldOffsetsUnmanaged(type, out hasEntityReferences, out hasBlobReferences, out hasWeakAssetReferences, out hasUnityObjectRefs, ref s_EntityOffsetList, ref s_BlobAssetRefOffsetList, ref s_WeakAssetRefOffsetList, ref s_UnityObjectRefOffsetList, caches.CalculateFieldOffsetsUnmanagedCache);
             }
@@ -3369,8 +3626,24 @@ namespace Unity.Entities
                     bufferCapacity = DefaultBufferCapacityNumerator / elementSize; // Rather than 2*cachelinesize, to make it cross platform deterministic
 
                 sizeInChunk = sizeof(BufferHeader) + bufferCapacity * elementSize;
-                EntityRemapUtility.CalculateFieldOffsetsUnmanaged(type, out hasEntityReferences, out hasBlobReferences, out hasWeakAssetReferences, out hasUnityObjectRefs, ref s_EntityOffsetList, ref s_BlobAssetRefOffsetList, ref s_WeakAssetRefOffsetList, ref s_UnityObjectRefOffsetList, caches.CalculateFieldOffsetsUnmanagedCache);
+                EntityRemapUtility.CalculateFieldOffsetsUnmanaged(type, out hasEntityReferences, out hasBlobReferences, out hasWeakAssetReferences,
+                    out hasUnityObjectRefs, ref s_BlobAssetRefOffsetList, ref s_BlobAssetRefOffsetList, ref s_WeakAssetRefOffsetList, ref s_UnityObjectRefOffsetList, caches.CalculateFieldOffsetsUnmanagedCache);
             }
+#if ENABLE_TRANSFORMREF
+            else if (typeof(TransformRef) == type)
+            {
+                // Transform data is stored in the chunk as TransformUnion.
+                // TransformRef is the public interface.
+                category = TypeCategory.TransformData;
+                valueTypeSize = sizeof(TransformUnion);
+                alignmentInBytes = CalculateAlignmentInChunk(valueTypeSize);
+
+                sizeInChunk = valueTypeSize;
+
+                EntityRemapUtility.CalculateFieldOffsetsUnmanaged(type, out hasEntityReferences, out hasBlobReferences, out hasWeakAssetReferences,
+                    out hasUnityObjectRefs, ref s_EntityOffsetList, ref s_BlobAssetRefOffsetList, ref s_WeakAssetRefOffsetList, ref s_UnityObjectRefOffsetList, caches.CalculateFieldOffsetsUnmanagedCache);
+            }
+#endif
             else if (typeof(ISharedComponentData).IsAssignableFrom(type))
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -3460,6 +3733,9 @@ namespace Unity.Entities
                 if (sizeInChunk == 0)
                     typeIndex |= ZeroSizeInChunkTypeFlag;
 
+                if (category == TypeCategory.TransformData)
+                    typeIndex |= TransformComponentTypeFlag;
+
                 if (category == TypeCategory.ISharedComponentData)
                     typeIndex |= SharedComponentTypeFlag;
 
@@ -3498,6 +3774,15 @@ namespace Unity.Entities
 
                 if (!isChunkSerializable)
                     typeIndex |= IsNotChunkSerializableTypeFlag;
+
+                if (hasOnAddedCallback)
+                    typeIndex |= HasOnAddedCallbackFlag;
+
+                if (hasOnRemovedCallback)
+                    typeIndex |= HasOnRemovedCallbackFlag;
+
+                // Note: Lifecycle callbacks are now registered via ILPP-generated code in ComponentLifecycleCallbacksPostprocessor.
+                // The generated EarlyInit() method calls RegisterComponentLifecycleCallback() for each component type.
             }
 
             return new TypeInfo(typeIndex, category, entityOffsetCount, entityOffsetIndex,
@@ -3776,6 +4061,8 @@ namespace Unity.Entities
                             s_ManagedTypeToIndex[type] = pTypeInfo->TypeIndex;
                         }
 
+                        CompanionComponentTypeIndices.RegisterIfWrapper(type, pTypeInfo->TypeIndex);
+
                         AddFastEqualityInfo(type, pTypeInfo->Category == TypeCategory.UnityEngineObject);//, caches.FastEqualityLayoutInfoCache);
 
                         /*
@@ -3789,6 +4076,12 @@ namespace Unity.Entities
                         {
                             typesToReprocess.Add(pTypeInfo->Type);
                             continue;
+                        }
+
+                        // Types with lifecycle callbacks need to be reprocessed to register their function pointers
+                        if (pTypeInfo->TypeIndex.HasOnAddedCallback || pTypeInfo->TypeIndex.HasOnRemovedCallback)
+                        {
+                            typesToReprocess.Add(pTypeInfo->Type);
                         }
                     }
                     // Setup our new TypeIndices into the appropriately types SharedTypeIndex<TComponent> shared static
@@ -3901,7 +4194,7 @@ namespace Unity.Entities
         public unsafe delegate void SetSharedTypeIndicesFn(int* typeInfoArray, int count);
         public delegate Attribute[] GetSystemAttributesFn(Type system);
 
-        internal struct SystemAttributeWithType
+        public struct SystemAttributeWithType
         {
             public SystemAttributeKind Kind;
             public Type TargetSystemType;
@@ -3943,8 +4236,8 @@ namespace Unity.Entities
         public SystemAttributeWithType[] SystemAttributes;
 
         /*
-         * for size, we should generate a function that takes a list of typeinfos and sets typeinfo[i].Size = sizeof(MySystemType), 
-         * one line per system. 
+         * for size, we should generate a function that takes a list of typeinfos and sets typeinfo[i].Size = sizeof(MySystemType),
+         * one line per system.
          */
 
         public Type[] SystemTypes;

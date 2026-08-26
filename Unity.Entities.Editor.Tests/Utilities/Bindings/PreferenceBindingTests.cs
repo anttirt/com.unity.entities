@@ -1,6 +1,6 @@
 using NUnit.Framework;
 using Unity.Properties;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor.Tests

@@ -138,10 +138,6 @@ namespace Unity.Scenes.Editor.Tests
         public enum ObjectKind
         {
             Empty, Sphere
-#if ENABLE_ASPECTS
-            ,
-            Tagged
-#endif
         }
 
         protected GameObject CreateGameObject(ObjectKind objectKind)
@@ -152,10 +148,6 @@ namespace Unity.Scenes.Editor.Tests
                     return m_Objects.CreateGameObject();
                 case ObjectKind.Sphere:
                     return m_Objects.CreatePrimitive(PrimitiveType.Sphere);
-#if ENABLE_ASPECTS
-                case ObjectKind.Tagged:
-                    return m_Objects.CreateGameObject("", typeof(TestMonoBehaviour));
-#endif
             }
             return null;
         }
@@ -173,10 +165,6 @@ namespace Unity.Scenes.Editor.Tests
                     return AssetDatabase.LoadAssetAtPath<GameObject>(AssetPath("Empty.prefab"));
                 case ObjectKind.Sphere:
                     return AssetDatabase.LoadAssetAtPath<GameObject>(AssetPath("Sphere.prefab"));
-#if ENABLE_ASPECTS
-                case ObjectKind.Tagged:
-                    return AssetDatabase.LoadAssetAtPath<GameObject>(AssetPath("Tagged.prefab"));
-#endif
             }
 
             return null;
@@ -391,7 +379,7 @@ namespace Unity.Scenes.Editor.Tests
             yield return m_Test.UpdateEditorAndWorld(w);
             var measure = new MeasureLiveConversionTime(w);
             {
-                var scene = Object.FindFirstObjectByType<SubScene>().EditingScene;
+                var scene = Object.FindAnyObjectByType<SubScene>().EditingScene;
                 for (int i = 0; i < MaxIterations; i++)
                 {
                     var go = CreateGameObject(kind);
@@ -570,9 +558,6 @@ namespace Unity.Scenes.Editor.Tests
         {
             var subScene = m_Test.CreateEmptySubScene("TestSubScene", true);
             var kind = ObjectKind.Empty;
-#if ENABLE_ASPECTS
-            kind = ObjectKind.Tagged;
-#endif
             CreateObjectSoupSubScene(numObjects, kind, subScene);
             var prefab = LoadPrefab(prefabKind);
             var go = Object.Instantiate(prefab);

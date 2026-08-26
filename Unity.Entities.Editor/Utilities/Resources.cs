@@ -31,15 +31,12 @@ namespace Unity.Entities.Editor
 
             public static readonly VisualElementTemplate ComponentView = new(PackageId, "Common/component-view");
             public static readonly VisualElementTemplate QueryView = new(PackageId, "Common/query-view");
-            public static readonly VisualElementTemplate SystemDependencyView = new(PackageId, "Common/system-dependency-view");
             public static readonly VisualElementTemplate SystemListView = new(PackageId, "Common/system-list-view");
             public static readonly VisualElementTemplate SystemQueriesView = new(PackageId, "Common/system-queries-view");
             public static readonly VisualElementTemplate QueryWithEntities = new(PackageId, "Common/query-with-entities");
             public static readonly VisualElementTemplate EntityView = new(PackageId, "Common/entity-view");
             public static readonly VisualElementTemplate FoldoutWithActionButton = new(PackageId, "Common/foldout-with-action-button");
             public static readonly VisualElementTemplate FoldoutWithoutActionButton = new(PackageId, "Common/foldout-without-action-button");
-
-            public static readonly VisualElementTemplate ComponentTypeView = new(PackageId, "Components/component-type-view");
 
             public static class Inspector
             {
@@ -50,26 +47,15 @@ namespace Unity.Entities.Editor
                 public static readonly VisualElementTemplate TagComponentElement = new(PackageId, "Inspector/tag-component-element");
                 public static readonly VisualElementTemplate EntityField = new(PackageId, "Inspector/entity-field");
                 public static readonly VisualElementTemplate ComponentsTab = new(PackageId, "Inspector/entity-inspector-components-tab");
-                public static readonly VisualElementTemplate AspectsTab = new(PackageId, "Inspector/entity-inspector-aspects-tab");
                 public static readonly VisualElementTemplate UnsupportedInspectorStyle = new(PackageId, "Inspector/unsupported-inspector");
-
-                public static class RelationshipsTab
-                {
-                    public static readonly VisualElementTemplate Root = new(PackageId, "Inspector/entity-inspector-relationships-tab");
-                }
             }
 
             public static class ContentProvider
             {
                 public static readonly VisualElementTemplate Header = new(PackageId, "Content/header");
                 public static readonly VisualElementTemplate EntityInfo = new(PackageId, "Content/entity-info");
-                public static readonly VisualElementTemplate EntityQuery = new(PackageId, "Content/entity-query");
-                public static readonly VisualElementTemplate EntityQueryHeader = new(PackageId, "Content/entity-query-header");
                 public static readonly VisualElementTemplate System = new(PackageId, "Content/system");
                 public static readonly VisualElementTemplate Component = new(PackageId, "Content/component");
-
-                public static readonly VisualElementTemplate ComponentsWindow = new(PackageId, "Components/components-window");
-                public static readonly VisualElementTemplate ComponentAttribute = new(PackageId, "Content/component-attribute");
             }
 
             public static class Hierarchy

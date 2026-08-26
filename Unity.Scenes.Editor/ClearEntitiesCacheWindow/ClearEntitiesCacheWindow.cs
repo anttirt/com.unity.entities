@@ -8,10 +8,16 @@ namespace Unity.Scenes.Editor
     /// <summary>
     /// Provides a message window to confirm that the user wants to delete all the cached subscenes.
     /// </summary>
-    public class ClearEntitiesCacheWindow : EditorWindow
+    public partial class ClearEntitiesCacheWindow : EditorWindow
     {
         ClearEntitiesCacheView m_View;
         static bool s_IsWindowVisible;
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            s_IsWindowVisible = false;
+        }
 
         /// <summary>
         /// Method to open the message window

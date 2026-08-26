@@ -1,53 +1,40 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
+using Unity.Collections;
 using Unity.Properties;
 
 namespace Unity.Entities.Editor
 {
-    unsafe struct SystemProxy : IEquatable<SystemProxy>
+    unsafe struct SystemProxy : System.IEquatable<SystemProxy>
     {
         public readonly WorldProxy WorldProxy;
         public readonly int SystemIndex;
-        public readonly bool BelongToCurrentWorld;
 
-        public SystemProxy(WorldProxy worldProxy, int systemIndex, bool belongToCurrentWorld = true)
-        {
-            WorldProxy = worldProxy;
-            SystemIndex = systemIndex;
-            World = null;
-            BelongToCurrentWorld = belongToCurrentWorld;
-        }
-
-        public SystemProxy(WorldProxy worldProxy, int systemIndex, World world, bool belongToCurrentWorld = true)
+        public SystemProxy(WorldProxy worldProxy, int systemIndex, World world)
         {
             WorldProxy = worldProxy;
             SystemIndex = systemIndex;
             World = world;
-            BelongToCurrentWorld = belongToCurrentWorld;
         }
 
-        public SystemProxy(ComponentSystemBase b, WorldProxy worldProxy, bool belongToCurrentWorld = true)
+        public SystemProxy(ComponentSystemBase b, WorldProxy worldProxy)
         {
             WorldProxy = worldProxy;
             SystemIndex = WorldProxy.FindSystemIndexFor(b);
             World = b.World;
-            BelongToCurrentWorld = belongToCurrentWorld;
         }
 
-        public SystemProxy(SystemHandle h, World w, WorldProxy worldProxy, bool belongToCurrentWorld = true)
+        public SystemProxy(SystemHandle h, World w, WorldProxy worldProxy)
         {
             WorldProxy = worldProxy;
             SystemIndex = WorldProxy.FindSystemIndexFor(h);
             World = w;
-            BelongToCurrentWorld = belongToCurrentWorld;
         }
 
         ScheduledSystemData ScheduledSystemData
         {
             get
             {
-                if (SystemIndex >= WorldProxy.AllSystemData.Count || SystemIndex < 0)
+                if (!Valid || SystemIndex >= WorldProxy.AllSystemData.Count || SystemIndex < 0)
                     return default;
 
                 return WorldProxy.AllSystemData[SystemIndex];
@@ -58,7 +45,7 @@ namespace Unity.Entities.Editor
         {
             get
             {
-                if (SystemIndex >= WorldProxy.AllFrameData.Count || SystemIndex < 0)
+                if (!Valid || SystemIndex >= WorldProxy.AllFrameData.Count || SystemIndex < 0)
                     return default;
 
                 return WorldProxy.AllFrameData[SystemIndex];
@@ -69,7 +56,7 @@ namespace Unity.Entities.Editor
         {
             get
             {
-                if (SystemIndex >= WorldProxy.AllSystemData.Count || SystemIndex < 0)
+                if (!Valid || SystemIndex >= WorldProxy.AllSystemData.Count || SystemIndex < 0)
                     return SystemCategory.Unknown;
 
                 return WorldProxy.AllSystemData[SystemIndex].Category;
@@ -105,32 +92,41 @@ namespace Unity.Entities.Editor
 
         public IReadOnlyList<SystemProxy> UpdateAfterSet => WorldProxy.GetUpdateAfterSet(this);
 
-        public IEnumerable<string> GetComponentTypesUsedByQueries()
+        public IReadOnlyList<SystemProxy> UpdateBeforeReverseSet => WorldProxy.GetUpdateBeforeReverseSet(this);
+
+        public IReadOnlyList<SystemProxy> UpdateAfterReverseSet => WorldProxy.GetUpdateAfterReverseSet(this);
+
+        public string[] GetComponentTypesUsedByQueries()
         {
-            if (World == null || !World.IsCreated)
-                return Enumerable.Empty<string>();
-
-            if (!Valid)
-                return Enumerable.Empty<string>();
-
-            using var hashPool = PooledHashSet<string>.Make();
-            var hashset = hashPool.Set;
+            if (World == null || !World.IsCreated || !Valid)
+                return System.Array.Empty<string>();
 
             var ptr = StatePointer;
-            if (ptr != null && ptr->EntityQueries.Length > 0)
+            if (ptr == null || ptr->EntityQueries.Length <= 0)
+                return System.Array.Empty<string>();
+
+            var componentNames = new NativeHashSet<FixedString128Bytes>(1, Allocator.Temp);
+            var queries = ptr->EntityQueries;
+            for (var i = 0; i < queries.Length; i++)
             {
-                var queries = ptr->EntityQueries;
-                for (var i = 0; i < queries.Length; i++)
+                var queryTypes = queries[i].GetQueryTypes();
+                foreach (var queryType in queryTypes)
                 {
-                    using var queryTypeList = queries[i].GetQueryTypes().ToPooledList();
-                    foreach (var name in queryTypeList.List.Select(queryType => TypeUtility.GetTypeDisplayName(queryType.GetManagedType())))
-                    {
-                        hashset.Add(name);
-                    }
+                    var typeName = TypeUtility.GetTypeDisplayName(TypeManager.GetType(queryType.TypeIndex));
+                    componentNames.TryAdd(typeName);
                 }
             }
 
-            return hashset.ToArray();
+            var nameArr = new string[componentNames.Count];
+            var index = 0;
+            foreach (var name in componentNames)
+            {
+                nameArr[index] = name.Value;
+                index++;
+            }
+            componentNames.Dispose();
+
+            return nameArr;
         }
 
         public bool Equals(SystemProxy other)
@@ -138,8 +134,7 @@ namespace Unity.Entities.Editor
             if (!other.Valid)
                 return false;
 
-            return WorldProxy.SequenceNumber.Equals(other.WorldProxy.SequenceNumber) &&
-                   SystemIndex == other.SystemIndex;
+            return WorldProxy.SequenceNumber.Equals(other.WorldProxy.SequenceNumber) && SystemIndex == other.SystemIndex;
         }
 
         public override int GetHashCode()
@@ -231,6 +226,32 @@ namespace Unity.Entities.Editor
                     return world.Unmanaged.ResolveSystemState(ScheduledSystemData.WorldSystemHandle);
 
                 return null;
+            }
+        }
+
+        internal static void BuildSystemDependencyMap(SystemProxy systemProxy, Dictionary<string, string[]> dependencyMap)
+        {
+            var keyString = systemProxy.TypeName;
+
+            // TODO: Find better solution to be able to uniquely identify each system.
+            // At the moment, we are using system name to identify each system, which is not reliable
+            // because there can be multiple systems with the same name in a world. This is only a
+            // temporary solution to avoid the error of adding the same key into the map. We need to
+            // find a proper solution to be able to uniquely identify each system.
+            if (!dependencyMap.ContainsKey(keyString))
+            {
+                var handle = systemProxy;
+
+                var beforeSet = handle.UpdateBeforeSet;
+                var afterSet = handle.UpdateAfterSet;
+                var dependenciesList = new List<string>();
+                foreach (var s in beforeSet)
+                    dependenciesList.Add(s.TypeName);
+                foreach (var s in afterSet)
+                    dependenciesList.Add(s.TypeName);
+                var dependencies = dependenciesList.ToArray();
+
+                dependencyMap.Add(keyString, dependencies);
             }
         }
     }

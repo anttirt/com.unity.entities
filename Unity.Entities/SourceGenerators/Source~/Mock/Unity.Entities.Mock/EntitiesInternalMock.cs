@@ -8,12 +8,6 @@ namespace Unity.Entities.Internal;
 
 public static partial class InternalCompilerInterface
 {
-    public interface IAspectLookup<T> where T : IAspect
-    {
-        public void Update(ref SystemState state);
-        public T this[Entity entity] { get; }
-    }
-
     public static EntityStorageInfoLookup GetEntityStorageInfoLookup(
         ref EntityStorageInfoLookup entityStorageInfoLookup, ref SystemState state)
         => default;
@@ -68,6 +62,11 @@ public static partial class InternalCompilerInterface
     public static T GetComponentAfterCompletingDependency<T>(ref ComponentLookup<T> componentLookup, ref SystemState state,
         SystemHandle systemHandle) where T : unmanaged, IComponentData
         => default;
+
+    public static bool TryGetComponentAfterCompletingDependency<T>(ref ComponentLookup<T> componentLookup, ref SystemState state, Entity entity, out T result)
+        where T : unmanaged, IComponentData
+        => throw new Exception();
+
     public static void SetComponentAfterCompletingDependency<T>(ref ComponentLookup<T> componentLookup, ref SystemState state, T component,
         Entity entity) where T : unmanaged, IComponentData
     {
@@ -120,12 +119,6 @@ public static partial class InternalCompilerInterface
         Entity entity) where T : unmanaged, IBufferElementData
     {
     }
-
-    public static T GetAspectAfterCompletingDependency<TLookup, T>(ref TLookup aspectLookup, ref SystemState state, bool isAspectReadOnly,
-        Entity entity)
-        where TLookup : struct, IAspectLookup<T>
-        where T : struct, IAspect, IAspectCreate<T>
-        => default;
 
     public static ComponentTypeHandle<T> GetComponentTypeHandle<T>(ref ComponentTypeHandle<T> componentTypeHandle,
         ref SystemState state) where T : unmanaged, IComponentData

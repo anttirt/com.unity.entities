@@ -9,13 +9,13 @@ namespace Unity.Entities.Baking
     {
         public struct ChangedComponentsInfo
         {
-            public int       instanceID;
+            public EntityId  instanceID;
             public TypeIndex unityTypeIndex;
         }
 
         public struct GameObjectProperties
         {
-            public int InstanceID;
+            public EntityId InstanceID;
             public int NameHash;
             public int TagHash;
             public int Layer;
@@ -24,7 +24,7 @@ namespace Unity.Entities.Baking
             {
                 IncrementalBakingData.GameObjectProperties properties = new IncrementalBakingData.GameObjectProperties()
                 {
-                    InstanceID = gameObject.GetInstanceID(),
+                    InstanceID = gameObject.GetEntityId(),
                     NameHash = gameObject.name.GetHashCode(),
                     Layer = gameObject.layer,
                     TagHash = gameObject.tag.GetHashCode()
@@ -40,15 +40,15 @@ namespace Unity.Entities.Baking
             RecreateAll
         }
 
-        public NativeList<int> ChangedAssets;
-        public NativeList<int> DeletedAssets;
-        public NativeList<int> RemovedGameObjects;
+        public NativeList<EntityId> ChangedAssets;
+        public NativeList<EntityId> DeletedAssets;
+        public NativeList<EntityId> RemovedGameObjects;
         public List<(GameObject gameObject, ChangedGameObjectMode mode)> ChangedGameObjects;
         public NativeList<ChangedComponentsInfo> ChangedComponents;
 
         public NativeList<GameObjectProperties> ChangedGameObjectProperties;
         public NativeList<IncrementalBakingChanges.ParentChange> ParentChangeInstanceIds;
-        public NativeList<int> ParentWithChildrenOrderChangedInstanceIds;
+        public NativeList<EntityId> ParentWithChildrenOrderChangedInstanceIds;
         public bool LightBakingChanged;
 
         public bool HasStructuralChanges()
@@ -60,14 +60,14 @@ namespace Unity.Entities.Baking
         {
             return new IncrementalBakingData
             {
-                RemovedGameObjects = new NativeList<int>(Allocator.Persistent),
+                RemovedGameObjects = new NativeList<EntityId>(Allocator.Persistent),
                 ChangedGameObjects = new List<(GameObject gameObject, ChangedGameObjectMode mode)>(),
                 ChangedComponents = new NativeList<ChangedComponentsInfo>(Allocator.Persistent),
-                ChangedAssets = new NativeList<int>(Allocator.Persistent),
-                DeletedAssets = new NativeList<int>(Allocator.Persistent),
+                ChangedAssets = new NativeList<EntityId>(Allocator.Persistent),
+                DeletedAssets = new NativeList<EntityId>(Allocator.Persistent),
                 ChangedGameObjectProperties = new NativeList<GameObjectProperties>(Allocator.Persistent),
                 ParentChangeInstanceIds = new NativeList<IncrementalBakingChanges.ParentChange>(Allocator.Persistent),
-                ParentWithChildrenOrderChangedInstanceIds = new NativeList<int>(Allocator.Persistent),
+                ParentWithChildrenOrderChangedInstanceIds = new NativeList<EntityId>(Allocator.Persistent),
                 LightBakingChanged = false
             };
         }
@@ -140,27 +140,27 @@ namespace Unity.Entities.Baking
         public struct ParentChange
         {
             /// <summary>
-            /// The instance id of the game object whose parenting has changed.
+            /// The entityId of the game object whose parenting has changed.
             /// </summary>
-            public int InstanceId;
+            public EntityId EntityId;
             /// <summary>
-            /// The instance if of the game object that was the previous parent.
+            /// The entityId of the game object that was the previous parent.
             /// </summary>
-            public int PreviousParentInstanceId;
+            public EntityId PreviousParentEntityId;
             /// <summary>
-            /// The instance if of the game object that is the new parent.
+            /// The entityId of the game object that is the new parent.
             /// </summary>
-            public int NewParentInstanceId;
+            public EntityId NewParentEntityId;
         }
 
-        public void CollectGameObjectsWithComponentChange<T>(NativeList<int> instanceIDs) where T : Component
+        public void CollectGameObjectsWithComponentChange<T>(NativeList<EntityId> instanceIDs) where T : Component
         {
             var changes = ChangedComponents;
             for (int i = 0; i < changes.Count; i++)
             {
                 if (changes[i] is T)
                 {
-                    instanceIDs.Add(changes[i].gameObject.GetInstanceID());
+                    instanceIDs.Add(changes[i].gameObject.GetEntityId());
                 }
             }
         }

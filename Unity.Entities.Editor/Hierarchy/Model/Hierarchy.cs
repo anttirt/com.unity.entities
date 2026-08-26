@@ -654,7 +654,7 @@ namespace Unity.Entities.Editor
                     if (m_World.EntityManager.HasComponent<EntityGuid>(entity))
                     {
                         var guid = m_World.EntityManager.GetComponentData<EntityGuid>(entity);
-                        var gameObject = EditorUtility.InstanceIDToObject(guid.OriginatingId) as UnityEngine.GameObject;
+                        var gameObject = EditorUtility.EntityIdToObject(guid.OriginatingEntityId) as UnityEngine.GameObject;
 
                         if (gameObject)
                         {
@@ -695,7 +695,7 @@ namespace Unity.Entities.Editor
         /// </summary>
         /// <param name="handle">The handle to get the instance id for.</param>
         /// <returns>The instance id backing this handle.</returns>
-        public int GetInstanceId(in HierarchyNodeHandle handle)
+        public EntityId GetInstanceId(in HierarchyNodeHandle handle)
         {
             switch (handle.Kind)
             {
@@ -704,23 +704,23 @@ namespace Unity.Entities.Editor
                     var entity = handle.ToEntity();
 
                     if (m_World is not {IsCreated: true})
-                        return 0;
+                        return EntityId.None;
 
                     if (!m_World.EntityManager.Exists(entity))
-                        return 0;
+                        return EntityId.None;
 
                     if (!m_World.EntityManager.HasComponent<EntityGuid>(entity))
-                        return 0;
+                        return EntityId.None;
 
-                    return m_World.EntityManager.GetComponentData<EntityGuid>(entity).OriginatingId;
+                    return m_World.EntityManager.GetComponentData<EntityGuid>(entity).OriginatingEntityId;
                 }
                 case NodeKind.GameObject:
                 {
-                    return handle.Index;
+                    return handle.ToEntityId();
                 }
             }
 
-            return 0;
+            return EntityId.None;
         }
 
         /// <summary>
@@ -730,7 +730,7 @@ namespace Unity.Entities.Editor
         /// <returns>The object backing this handle.</returns>
         public UnityEngine.Object GetUnityObject(in HierarchyNodeHandle handle)
         {
-            return EditorUtility.InstanceIDToObject(GetInstanceId(handle));
+            return EditorUtility.EntityIdToObject(GetInstanceId(handle));
         }
 
         Entity GetParentSceneEntity(Entity e)

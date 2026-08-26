@@ -26,7 +26,9 @@ namespace Unity.Entities.Tests
                 component.String = authoring.String;
                 // This test shouldn't require transform components
                 var entity = GetEntity(TransformUsageFlags.None);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 AddComponentObject(entity, component);
+                #pragma warning restore 0618
             }
         }
     }

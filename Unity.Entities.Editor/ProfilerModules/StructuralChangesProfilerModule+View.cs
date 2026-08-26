@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Unity.Editor.Bridge;
-using Unity.Entities.UI;
 using UnityEditor;
 using UnityEditor.UIElements;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 using static Unity.Entities.StructuralChangesProfiler;
-using TreeView = Unity.Editor.Bridge.TreeView;
+using TreeView = UnityEngine.UIElements.TreeView;
 
 namespace Unity.Entities.Editor
 {
@@ -26,18 +25,19 @@ namespace Unity.Entities.Editor
             static readonly string s_SetSharedComponent = L10n.Tr(k_SetSharedComponentCounterName);
 
             static readonly VisualElementTemplate s_WindowTemplate = PackageResources.LoadTemplate("ProfilerModules/structural-changes-profiler-window");
-            static readonly VisualElementTemplate s_TreeViewItemTemplate = PackageResources.LoadTemplate("ProfilerModules/structural-changes-profiler-tree-view-item");
 
-            StructuralChangesProfilerTreeViewItemData[] m_StructuralChangesDataSource;
-            readonly List<StructuralChangesProfilerTreeViewItemData> m_StructuralChangesDataFiltered = new List<StructuralChangesProfilerTreeViewItemData>();
+            static readonly ObjectPool<VisualElement> k_CellLabelPool = new (() => new VisualElement());
+
+            TreeViewItemData<StructuralChangesProfilerTreeViewItemData>[] m_StructuralChangesDataSource;
+            readonly List<TreeViewItemData<StructuralChangesProfilerTreeViewItemData>> m_StructuralChangesDataFiltered = new ();
 
             VisualElement m_Window;
             Label m_Message;
             VisualElement m_Content;
             SearchElement m_SearchElement;
-            TreeView m_TreeView;
+            MultiColumnTreeView m_TreeView;
 
-            public StructuralChangesProfilerTreeViewItemData[] StructuralChangesDataSource
+            public TreeViewItemData<StructuralChangesProfilerTreeViewItemData>[] StructuralChangesDataSource
             {
                 get => m_StructuralChangesDataSource;
                 set => m_StructuralChangesDataSource = value;
@@ -64,15 +64,12 @@ namespace Unity.Entities.Editor
                 m_SearchElement.AddSearchFilterCallbackWithPopupItem<StructuralChangesProfilerTreeViewItemData, double>("cost", data => data.ElapsedNanoseconds * 1e-6, s_Cost);
                 m_SearchElement.FilterPopupWidth = 250;
 
-                var searchHandler = new SearchHandler<StructuralChangesProfilerTreeViewItemData>(m_SearchElement)
+                var searchHandler = new SearchHandler<TreeViewItemData<StructuralChangesProfilerTreeViewItemData>>(m_SearchElement)
                 {
                     Mode = SearchHandlerType.async
                 };
-                searchHandler.SetSearchDataProvider(() =>
-                {
-                    return m_StructuralChangesDataSource;
-                });
-                searchHandler.OnBeginSearch += query =>
+                searchHandler.SetSearchDataProvider(() => m_StructuralChangesDataSource);
+                searchHandler.OnBeginSearch += _ =>
                 {
                     m_StructuralChangesDataFiltered.Clear();
                 };
@@ -94,31 +91,123 @@ namespace Unity.Entities.Editor
                 m_Content = m_Window.Q("content");
                 m_Content.SetVisibility(false);
 
-                var header = m_Content.Q("header");
-                header.Q<Label>("column1").text = s_StructuralChanges;
-                header.Q<Label>("column2").text = s_Cost;
-                header.Q<Label>("column3").text = s_Count;
-
                 var container = m_Content.Q("tree-view-container");
 
-                m_TreeView = new TreeView();
-                container.Add(m_TreeView);
-                m_TreeView.itemHeight = 18;
+                m_TreeView = new MultiColumnTreeView()
+                {
+                    name = "StructuralChangeModuleTreeView",
+                    fixedItemHeight = 18,
+                    autoExpand = true,
+                    viewDataKey = "full-view",
+                    selectionType = SelectionType.Single
+                };
                 m_TreeView.AddToClassList("structural-changes-profiler-window__tree-view");
-                m_TreeView.makeItem = () =>
-                {
-                    return s_TreeViewItemTemplate.Clone();
-                };
-                m_TreeView.bindItem = (element, item) =>
-                {
-                    var itemData = (StructuralChangesProfilerTreeViewItem)item;
-                    element.Q<Label>("column1").text = itemData.displayName;
-                    element.Q<Label>("column2").text = FormattingUtility.NsToMsString(itemData.totalElapsedNanoseconds);
-                    element.Q<Label>("column3").text = FormattingUtility.CountToString(itemData.totalCount);
-                };
-                m_TreeView.selectionType = SelectionType.Single;
+                CreateColumns(m_TreeView);
+                container.Add(m_TreeView);
 
                 return m_Window;
+            }
+
+            void CreateColumns(MultiColumnTreeView treeView)
+            {
+                const string headerStr = "Header";
+
+                var structuralColumn = new Column()
+                {
+                    name = s_StructuralChanges,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_StructuralChanges;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindStructuralItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    minWidth = 100,
+                    width = 300
+                };
+
+                var costColumn = new Column()
+                {
+                    name = s_Cost,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_Cost;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindCostItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    width = 100
+                };
+
+                var countColumn = new Column()
+                {
+                    name = s_Count,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_Count;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindCountItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    width = 100
+                };
+
+                treeView.columns.Add(structuralColumn);
+                treeView.columns.Add(costColumn);
+                treeView.columns.Add(countColumn);
+            }
+
+            static VisualElement MakeHeaderLabel()
+            {
+                var label = new Label
+                {
+                    name = "Header",
+                };
+                label.AddToClassList("structural-changes-profiler-tree-view-header");
+                return label;
+            }
+
+            static VisualElement MakeCellLabel()
+            {
+                var element = k_CellLabelPool.Get();
+                var label = new Label
+                {
+                    name = "Cell"
+                };
+                element.Add(label);
+                return element;
+            }
+
+            static void DestroyCellLabel(VisualElement element)
+            {
+                k_CellLabelPool.Release(element);
+            }
+
+            void BindStructuralItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<StructuralChangesProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = itemData.displayName;
+            }
+
+            void BindCostItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<StructuralChangesProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = FormattingUtility.NsToMsString(itemData.totalElapsedNanoseconds);
+            }
+
+            void BindCountItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<StructuralChangesProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = FormattingUtility.CountToString(itemData.totalCount);
             }
 
             public void Update()
@@ -127,17 +216,17 @@ namespace Unity.Entities.Editor
                     return;
 
                 var itemId = 0;
-                var rootItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_All };
-                var createEntityItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_CreateEntity };
-                var destroyEntityItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_DestroyEntity };
-                var addComponentItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_AddComponent };
-                var removeComponentItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_RemoveComponent };
-                var setSharedComponentItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = s_SetSharedComponent };
+                var rootItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem>(itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_All });
+                var createEntityItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem> (itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_CreateEntity });
+                var destroyEntityItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem> (itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_DestroyEntity });
+                var addComponentItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem> (itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_AddComponent });
+                var removeComponentItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem> (itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_RemoveComponent });
+                var setSharedComponentItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem> (itemId++, new StructuralChangesProfilerTreeViewItem() { displayName = s_SetSharedComponent });
 
-                foreach (var data in m_StructuralChangesDataFiltered)
+                foreach (var item in m_StructuralChangesDataFiltered)
                 {
-                    var eventItem = default(StructuralChangesProfilerTreeViewItem);
-                    switch (data.Type)
+                    TreeViewItemData<StructuralChangesProfilerTreeViewItem> eventItem;
+                    switch (item.data.Type)
                     {
                         case StructuralChangeType.CreateEntity:
                             eventItem = createEntityItem;
@@ -155,55 +244,76 @@ namespace Unity.Entities.Editor
                             eventItem = setSharedComponentItem;
                             break;
                         default:
-                            throw new NotImplementedException(data.Type.ToString());
+                            throw new NotImplementedException(item.data.Type.ToString());
                     }
 
-                    var worldItem = eventItem.children.FirstOrDefault(item => item.displayName == data.WorldName);
-                    if (worldItem == null)
+                    TreeViewItemData<StructuralChangesProfilerTreeViewItem> worldItem = default;
+                    var foundWorld = false;
+                    foreach (var child in eventItem.children)
                     {
-                        worldItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = data.WorldName };
-                        eventItem.AddChild(worldItem);
+                        if (child.data.displayName == item.data.WorldName)
+                        {
+                            worldItem = child;
+                            foundWorld = true;
+                            break;
+                        }
                     }
 
-                    var systemItem = worldItem.children.FirstOrDefault(item => item.displayName == data.SystemName);
-                    if (systemItem == null)
+                    if (!foundWorld)
                     {
-                        systemItem = new StructuralChangesProfilerTreeViewItem { id = itemId++, displayName = data.SystemName };
-                        worldItem.AddChild(systemItem);
+                        worldItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem>(itemId++, new StructuralChangesProfilerTreeViewItem() {displayName = item.data.WorldName});
+                        TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(eventItem, worldItem);
                     }
 
-                    systemItem.totalElapsedNanoseconds += data.ElapsedNanoseconds;
-                    systemItem.totalCount++;
-                    worldItem.totalElapsedNanoseconds += data.ElapsedNanoseconds;
-                    worldItem.totalCount++;
-                    eventItem.totalElapsedNanoseconds += data.ElapsedNanoseconds;
-                    eventItem.totalCount++;
-                    rootItem.totalElapsedNanoseconds += data.ElapsedNanoseconds;
-                    rootItem.totalCount++;
+                    TreeViewItemData<StructuralChangesProfilerTreeViewItem> systemItem = default;
+                    var foundSystem = false;
+                    foreach (var child in eventItem.children)
+                    {
+                        if (child.data.displayName == item.data.SystemName)
+                        {
+                            systemItem = child;
+                            foundSystem = true;
+                            break;
+                        }
+                    }
+
+                    if (!foundSystem)
+                    {
+                        systemItem = new TreeViewItemData<StructuralChangesProfilerTreeViewItem>(itemId++, new StructuralChangesProfilerTreeViewItem() {displayName = item.data.SystemName});
+                        TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(worldItem, systemItem);
+                    }
+
+                    systemItem.data.totalElapsedNanoseconds += item.data.ElapsedNanoseconds;
+                    systemItem.data.totalCount++;
+                    worldItem.data.totalElapsedNanoseconds += item.data.ElapsedNanoseconds;
+                    worldItem.data.totalCount++;
+                    eventItem.data.totalElapsedNanoseconds += item.data.ElapsedNanoseconds;
+                    eventItem.data.totalCount++;
+                    rootItem.data.totalElapsedNanoseconds += item.data.ElapsedNanoseconds;
+                    rootItem.data.totalCount++;
                 }
 
                 if (createEntityItem.hasChildren)
-                    rootItem.AddChild(createEntityItem);
+                    TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(rootItem, createEntityItem);
                 if (destroyEntityItem.hasChildren)
-                    rootItem.AddChild(destroyEntityItem);
+                    TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(rootItem, destroyEntityItem);
                 if (addComponentItem.hasChildren)
-                    rootItem.AddChild(addComponentItem);
+                    TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(rootItem, addComponentItem);
                 if (removeComponentItem.hasChildren)
-                    rootItem.AddChild(removeComponentItem);
+                    TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(rootItem, removeComponentItem);
                 if (setSharedComponentItem.hasChildren)
-                    rootItem.AddChild(setSharedComponentItem);
+                    TreeViewItemDataBridge<StructuralChangesProfilerTreeViewItem>.AddChild(rootItem, setSharedComponentItem);
 
                 AddLeafCountRecursive(rootItem);
 
-                rootItem.SortChildrenRecursive(item => item.totalElapsedNanoseconds, false);
                 if (rootItem.hasChildren)
                 {
-                    m_TreeView.rootItems = new[] { rootItem };
+                    m_TreeView.SetRootItems(new [] { rootItem });
                     m_TreeView.ExpandItem(rootItem.id);
                 }
                 else
                 {
-                    m_TreeView.rootItems = Array.Empty<StructuralChangesProfilerTreeViewItem>();
+                    m_TreeView.Clear();
                 }
 
                 m_Message.SetVisibility(false);
@@ -225,19 +335,19 @@ namespace Unity.Entities.Editor
 
                 m_StructuralChangesDataSource = null;
                 m_StructuralChangesDataFiltered.Clear();
-                m_TreeView.rootItems = Array.Empty<StructuralChangesProfilerTreeViewItem>();
+                m_TreeView.Clear();
                 m_Message.SetVisibility(true);
                 m_Message.text = message;
                 m_Content.SetVisibility(false);
             }
 
-            int AddLeafCountRecursive(StructuralChangesProfilerTreeViewItem item)
+            int AddLeafCountRecursive(TreeViewItemData<StructuralChangesProfilerTreeViewItem> item)
             {
                 var count = item.hasChildren ? 0 : 1;
                 foreach (var child in item.children)
                     count += AddLeafCountRecursive(child);
                 if (item.hasChildren)
-                    item.displayName += $" ({count})";
+                    item.data.displayName += $" ({count})";
                 return count;
             }
         }

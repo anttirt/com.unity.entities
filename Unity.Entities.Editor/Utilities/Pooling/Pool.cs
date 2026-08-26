@@ -2,7 +2,7 @@ namespace Unity.Entities.Editor
 {
     static class Pool<T> where T : class, IPoolable, new()
     {
-        static readonly ObjectPool<T> s_Pool = new ObjectPool<T>(NoOp, OnRelease);
+        static readonly PoolablePool<T> s_Pool = new PoolablePool<T>(NoOp, OnRelease);
 
         static void NoOp(T item) { }
 

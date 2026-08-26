@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.Search;
 using UnityEngine;
 using static Unity.Entities.Editor.MemoryProfilerModule;
+using static Unity.Entities.EntitiesProfiler;
 using static Unity.Entities.MemoryProfiler;
 using Unity.Editor.Bridge;
 
@@ -130,7 +131,7 @@ namespace Unity.Entities.Editor
         /// </summary>
         public const string type = "archetype";
 
-        static ArchetypesWindow.ArchetypesMemoryDataRecorder m_Recorder;
+        static ArchetypesMemoryDataRecorder m_Recorder;
         static NativeList<ulong> m_ArchetypesStableHash;
         static NativeList<ArchetypeMemoryData> m_ArchetypesMemoryData;
         static MemoryProfilerTreeViewItemData[] m_ArchetypesDataSource;
@@ -249,7 +250,7 @@ namespace Unity.Entities.Editor
 
         static void OnEnable()
         {
-            m_Recorder = new ArchetypesWindow.ArchetypesMemoryDataRecorder();
+            m_Recorder = new ArchetypesMemoryDataRecorder();
             m_ArchetypesStableHash = new NativeList<ulong>(64, Allocator.Persistent);
             m_ArchetypesMemoryData = new NativeList<ArchetypeMemoryData>(64, Allocator.Persistent);
         }
@@ -271,21 +272,32 @@ namespace Unity.Entities.Editor
         {
             var worldsData = m_Recorder.WorldsData.Distinct().ToDictionary(x => x.SequenceNumber, x => x);
             var archetypesData = m_Recorder.ArchetypesData.Distinct().ToDictionary(x => x.StableHash, x => x);
+
+            var componentsSet = new HashSet<ArchetypeComponentData>();
+            foreach (var component in m_Recorder.ArchetypeComponentsData)
+                componentsSet.Add(component);
+            var archetypeComponentsData = new NativeArray<ArchetypeComponentData>(componentsSet.Count, Allocator.Temp);
+            var componentIndex = 0;
+            foreach (var component in componentsSet)
+                archetypeComponentsData[componentIndex++] = component;
+
             foreach (var archetypeMemoryData in m_Recorder.ArchetypesMemoryData)
             {
                 if (worldsData.TryGetValue(archetypeMemoryData.WorldSequenceNumber, out var worldData) &&
                     archetypesData.TryGetValue(archetypeMemoryData.StableHash, out var archetypeData))
                 {
-                    yield return new MemoryProfilerTreeViewItemData(worldData.Name, archetypeData, archetypeMemoryData);
+                    yield return new MemoryProfilerTreeViewItemData(worldData.Name, archetypeData, archetypeMemoryData, archetypeComponentsData);
                 }
             }
+
+            archetypeComponentsData.Dispose();
         }
 
         static void TickArchetypeSource()
         {
             m_Recorder.Record();
-            if (!ArchetypesWindow.MemCmp(m_ArchetypesStableHash.AsArray(), m_Recorder.ArchetypesStableHash) ||
-                !ArchetypesWindow.MemCmp(m_ArchetypesMemoryData.AsArray(), m_Recorder.ArchetypesMemoryData))
+            if (!ArchetypesMemoryDataRecorder.MemCmp(m_ArchetypesStableHash.AsArray(), m_Recorder.ArchetypesStableHash) ||
+                !ArchetypesMemoryDataRecorder.MemCmp(m_ArchetypesMemoryData.AsArray(), m_Recorder.ArchetypesMemoryData))
             {
                 m_ArchetypesDataSource = GetTreeViewData().ToArray();
                 m_ArchetypesStableHash.CopyFrom(m_Recorder.ArchetypesStableHash);

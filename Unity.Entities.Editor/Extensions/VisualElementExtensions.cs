@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
@@ -20,20 +21,17 @@ namespace Unity.Entities.Editor
 
         public static void ForceUpdateBindings(this VisualElement element)
         {
-            using (var pooled = PooledList<IBinding>.Make())
+            using var _ = ListPool<IBinding>.Get(out var list);
+            PopulateBindings(element, list);
+
+            foreach (var binding in list)
             {
-                var list = pooled.List;
-                PopulateBindings(element, list);
+                binding.PreUpdate();
+            }
 
-                foreach (var binding in list)
-                {
-                    binding.PreUpdate();
-                }
-
-                foreach (var binding in list)
-                {
-                    binding.Update();
-                }
+            foreach (var binding in list)
+            {
+                binding.Update();
             }
         }
 
@@ -50,7 +48,7 @@ namespace Unity.Entities.Editor
                 PopulateBindings(child, list);
             }
         }
-        
+
         /// <summary>
         /// Retrieves a specific child element by following a path of element indexes down through the visual tree.
         /// Use this method along with <see cref="FindElementInTree"/>.

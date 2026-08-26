@@ -8,6 +8,7 @@ namespace Unity.Entities.Tests
 {
     public class PatchingEndToEndWithSerialization : EntityDifferTestFixture
     {
+        #pragma warning disable EA0017 // intentionally a managed shared component
         public struct ComponentWithObjectRef : ISharedComponentData, IEquatable<ComponentWithObjectRef>
         {
             public Material Material;
@@ -22,6 +23,7 @@ namespace Unity.Entities.Tests
                 return ReferenceEquals(Material, null) ? 0 : Material.GetHashCode();
             }
         }
+        #pragma warning restore EA0017
 
         static LiveConversionChangeSet SerializeAndDeserialize(LiveConversionChangeSet srcChange)
         {
@@ -82,7 +84,9 @@ namespace Unity.Entities.Tests
 
                 var entity = SrcEntityManager.CreateEntity();
                 SrcEntityManager.AddComponentData(entity, entityGuid);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.AddSharedComponentManaged(entity, new ComponentWithObjectRef {Material = material});
+                #pragma warning restore 0618
                 SrcEntityManager.AddComponentData(entity, new EcsTestData(5));
 
                 var options = EntityManagerDifferOptions.IncludeForwardChangeSet |
@@ -165,8 +169,10 @@ namespace Unity.Entities.Tests
                 };
 
                 SrcEntityManager.AddComponentData(entity, entityGuid);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 SrcEntityManager.AddComponentData(entity, srcManagedComponent);
                 SrcEntityManager.AddComponentData(entity, (EcsTestManagedComponent2) null);
+                #pragma warning restore 0618
 
                 var options = EntityManagerDifferOptions.IncludeForwardChangeSet |
                               EntityManagerDifferOptions.FastForwardShadowWorld;

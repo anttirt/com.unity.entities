@@ -357,38 +357,6 @@ public class JobEntityErrorTests
     }
 
     [TestMethod]
-    public async Task SGJE0021_AspectByIn()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-
-            partial struct SomeJob : IJobEntity
-            {
-                void Execute(in EcsTestAspect {|#0:data|}) { }
-            }";
-
-        var expected = VerifyCS.CompilerError(nameof(JobEntityGeneratorErrors.SGJE0021)).WithLocation(0);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expected);
-    }
-
-    [TestMethod]
-    public async Task SGJE0021_AspectByRef()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-
-            partial struct SomeJob : IJobEntity
-            {
-                void Execute(ref EcsTestAspect {|#0:data|}) { }
-            }";
-
-        var expected = VerifyCS.CompilerError(nameof(JobEntityGeneratorErrors.SGJE0021)).WithLocation(0);
-        await VerifyCS.VerifySourceGeneratorAsync(source, expected);
-    }
-
-    [TestMethod]
     public async Task SGJE0022_ManagedDataByIn()
     {
         const string source = @"

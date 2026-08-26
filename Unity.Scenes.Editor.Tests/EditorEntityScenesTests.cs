@@ -52,7 +52,9 @@ namespace Unity.Scenes.Tests
             var dstEntitymanager = dstWorld.EntityManager;
 
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new MaterialRefComponent { Value = m_TestMaterial });
+            #pragma warning restore 0618
             m_Manager.AddComponentData(entity, new EcsTestData() { value = 5});
 
             EditorEntityScenes.Write(m_Manager, binPath, binRefPath);
@@ -60,8 +62,10 @@ namespace Unity.Scenes.Tests
 
             var dstEntity = dstEntitymanager.UniversalQuery.GetSingletonEntity();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(m_TestMaterial, m_Manager.GetComponentData<MaterialRefComponent>(entity).Value);
             Assert.AreEqual(m_TestMaterial, dstEntitymanager.GetComponentData<MaterialRefComponent>(dstEntity).Value);
+            #pragma warning restore 0618
 
             Assert.AreEqual(5, m_Manager.GetComponentData<EcsTestData>(entity).value);
             Assert.AreEqual(5, dstEntitymanager.GetComponentData<EcsTestData>(dstEntity).value);

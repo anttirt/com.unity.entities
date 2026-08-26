@@ -1,5 +1,5 @@
 using Unity.Properties;
-using Unity.Serialization;
+using Unity.Entities.Serialization;
 
 namespace Unity.Entities.Editor
 {
@@ -10,12 +10,14 @@ namespace Unity.Entities.Editor
         public bool Enabled
         {
 #if !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             get => EntitiesJournaling.Preferences.Enabled;
             set
             {
                 EntitiesJournaling.Preferences.Enabled = value;
                 EntitiesJournaling.Enabled = value;
             }
+#pragma warning restore 0618            
 #else
             get => false;
             set { }
@@ -26,8 +28,10 @@ namespace Unity.Entities.Editor
         public int TotalMemoryMB
         {
 #if !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             get => EntitiesJournaling.Preferences.TotalMemoryMB;
             set => EntitiesJournaling.Preferences.TotalMemoryMB = value;
+#pragma warning restore 0618            
 #else
             get => 0;
             set { }
@@ -38,8 +42,10 @@ namespace Unity.Entities.Editor
         public bool PostProcess
         {
 #if !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             get => EntitiesJournaling.Preferences.PostProcess;
             set => EntitiesJournaling.Preferences.PostProcess = value;
+#pragma warning restore 0618
 #else
             get => false;
             set { }

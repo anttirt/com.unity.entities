@@ -121,18 +121,6 @@ namespace Unity.Entities
         // INTERNAL
         // ----------------------------------------------------------------------------------------------------------
 
-#if ENTITY_STORE_V1
-        internal void AllocateConsecutiveEntitiesForLoading(int count)
-        {
-            EntityComponentStore* s = GetCheckedEntityDataAccess()->EntityComponentStore;
-
-#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
-            if (s->CountEntities() != 0)
-                throw new ArgumentException("loading into non-empty entity manager is not supported");
-#endif
-            s->AllocateConsecutiveEntitiesForLoading(count);
-        }
-#endif
 
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         internal void AddSharedComponentManaged<T>(NativeArray<ArchetypeChunk> chunks, T componentData)
@@ -160,7 +148,7 @@ namespace Unity.Entities
             }
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(m_EntityDataAccess->EntityComponentStore->m_RecordToJournal != 0))
             {
                 var typeIndex = componentType.TypeIndex;
@@ -196,7 +184,7 @@ namespace Unity.Entities
             }
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(m_EntityDataAccess->EntityComponentStore->m_RecordToJournal != 0))
             {
                 var typeIndex = componentType.TypeIndex;

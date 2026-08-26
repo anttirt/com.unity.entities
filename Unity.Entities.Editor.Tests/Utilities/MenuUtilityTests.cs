@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using System.Linq;
 using System.Numerics;
-using Unity.Serialization.Json;
+using Unity.Entities.Serialization;
 using UnityEditor;
 using UnityEngine.UIElements;
 
@@ -45,16 +45,16 @@ namespace Unity.Entities.Editor.Tests
         public void CopyMenuItems_WhenExecuted_CopiesToSystemBuffer()
         {
             m_Actions[0].Execute();
-            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(JsonSerialization.ToJson(m_Instance)));
+            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(EntitiesJson.Serialize(m_Instance)));
 
             m_Actions[1].Execute();
-            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(JsonSerialization.ToJson(m_Instance.FloatValue)));
+            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(EntitiesJson.Serialize(m_Instance.FloatValue)));
 
             m_Actions[2].Execute();
-            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(JsonSerialization.ToJson(m_Instance.StringValue)));
+            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(EntitiesJson.Serialize(m_Instance.StringValue)));
 
             m_Actions[3].Execute();
-            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(JsonSerialization.ToJson(m_Instance.Vector3Value)));
+            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(EntitiesJson.Serialize(m_Instance.Vector3Value)));
         }
     }
 }

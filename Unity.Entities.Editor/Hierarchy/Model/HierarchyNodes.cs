@@ -9,6 +9,7 @@ using Unity.Properties;
 using Unity.Scenes;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEngine;
 
 namespace Unity.Entities.Editor
 {
@@ -390,7 +391,7 @@ namespace Unity.Entities.Editor
                 var inSubScene = false;
                 SubSceneInfo currentSubScene = default;
 
-                UnsafeParallelHashMap<int, bool> rootGameObjectsInSubScene = DataMode is DataMode.Mixed ? new UnsafeParallelHashMap<int, bool>(32, AllocatorManager.Temp) : default;
+                UnsafeParallelHashMap<EntityId, bool> rootGameObjectsInSubScene = DataMode is DataMode.Mixed ? new UnsafeParallelHashMap<EntityId, bool>(32, AllocatorManager.Temp) : default;
 
                 // Skip the root.
                 var count = Hierarchy.Count;
@@ -446,7 +447,7 @@ namespace Unity.Entities.Editor
                 if (rootGameObjectsInSubScene.IsCreated) rootGameObjectsInSubScene.Dispose();
             }
 
-            void CreateSubSceneGameObjectCache(int currentReadIndex, SubSceneInfo subSceneInfo, ref UnsafeParallelHashMap<int,bool> rootGameObjectsInSubScene)
+            void CreateSubSceneGameObjectCache(int currentReadIndex, SubSceneInfo subSceneInfo, ref UnsafeParallelHashMap<EntityId,bool> rootGameObjectsInSubScene)
             {
                 rootGameObjectsInSubScene.Clear();
                 for (var readIndex = currentReadIndex+1; readIndex <= subSceneInfo.SubSceneEndIndex; )
@@ -454,7 +455,7 @@ namespace Unity.Entities.Editor
                     var node = Hierarchy[readIndex];
                     if (node.Handle.Kind is NodeKind.GameObject)
                     {
-                        rootGameObjectsInSubScene.TryAdd(node.Handle.Index, false);
+                        rootGameObjectsInSubScene.TryAdd(node.Handle.ToEntityId(), false);
                         readIndex++;
                         continue;
                     }
@@ -470,7 +471,7 @@ namespace Unity.Entities.Editor
                 public int SubSceneNodeDepth;
             }
 
-            bool ShouldIncludeNode(HierarchyImmutableNodeData node, bool inSubScene, SubSceneInfo subSceneInfo, UnsafeParallelHashMap<int, bool> rootGameObjectCache)
+            bool ShouldIncludeNode(HierarchyImmutableNodeData node, bool inSubScene, SubSceneInfo subSceneInfo, UnsafeParallelHashMap<EntityId, bool> rootGameObjectCache)
             {
                 if (IsPrefabStage && (node.Flags & HierarchyNodeFlags.IsPrefabStage) == 0)
                     return false;
@@ -505,7 +506,7 @@ namespace Unity.Entities.Editor
                             return true;
 
                         var entityGuid = *(EntityGuid*)DataAccess->EntityComponentStore->GetComponentDataWithTypeRO(entity, EntityGuid.TypeIndex);
-                        return !rootGameObjectCache.ContainsKey(entityGuid.OriginatingId);
+                        return !rootGameObjectCache.ContainsKey(entityGuid.OriginatingEntityId);
                     }
                 }
 

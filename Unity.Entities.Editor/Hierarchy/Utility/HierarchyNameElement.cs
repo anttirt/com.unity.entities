@@ -1,23 +1,12 @@
 ﻿using System;
-using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
 {
-#if UNITY_2023_3_OR_NEWER
     [UxmlElement]
-#endif
     partial class HierarchyNameElement : VisualElement
     {
-#if !UNITY_2023_3_OR_NEWER
-        [UsedImplicitly]
-        class HierarchyNameElementFactory : UxmlFactory<HierarchyNameElement, HierarchyNameElementTraits> { }
-
-        [UsedImplicitly]
-        class HierarchyNameElementTraits : UxmlTraits { }
-#endif
-
         public string Text
         {
             get => Label.text;

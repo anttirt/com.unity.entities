@@ -1,17 +1,14 @@
 using System;
 using System.Collections.Generic;
 using Unity.Entities;
-using Unity.Entities.Serialization;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
-using File = System.IO.File;
 using Hash128 = Unity.Entities.Hash128;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using System.Linq;
 #endif
 #pragma warning disable 649
 
@@ -118,6 +115,7 @@ namespace Unity.Scenes
     /// </summary>
     /// <remarks>Subscenes are SceneAssets which are loaded on demand by the SubScene component.</remarks>
     // TODO: worth adding more information here
+    [EntitiesHelpURL("conversion-subscenes")]
     [ExecuteAlways]
     [DisallowMultipleComponent]
     public class SubScene : MonoBehaviour
@@ -125,14 +123,13 @@ namespace Unity.Scenes
 #if UNITY_EDITOR
         [FormerlySerializedAs("sceneAsset")]
         [SerializeField] SceneAsset _SceneAsset;
-        [SerializeField] Color _HierarchyColor = Color.gray;
 
-        static List<SubScene> m_AllSubScenes = new List<SubScene>();
+        static List<SubScene> s_AllSubScenes = new List<SubScene>();
 
         /// <summary>
         /// The list of loaded sub scenes.
         /// </summary>
-        public static IReadOnlyCollection<SubScene> AllSubScenes { get { return m_AllSubScenes; } }
+        public static IReadOnlyCollection<SubScene> AllSubScenes { get { return s_AllSubScenes; } }
 #endif
 
         /// <summary>Set when the scene should load.</summary>
@@ -190,11 +187,8 @@ namespace Unity.Scenes
         /// <summary>
         /// Represents the color of the Hierarchy panel.
         /// </summary>
-        public Color HierarchyColor
-        {
-            get { return _HierarchyColor; }
-            set { _HierarchyColor = value; }
-        }
+        [Obsolete("HierarchyColor is no longer supported in the Hierarchy window.", false)]
+        public Color HierarchyColor { get; set; } = Color.gray;
 
         /// <summary>
         /// Represents the path of the SceneAsset.
@@ -229,37 +223,68 @@ namespace Unity.Scenes
             get { return EditingScene.isLoaded; }
         }
 
-        void WarnIfNeeded()
+        /// <summary>
+        /// Returns true if another active SubScene already references the same SceneAsset.
+        /// </summary>
+        /// <param name="logWarning">Log a warning to the console. Use false when calling from frequently-invoked code like inspector drawing.</param>
+        internal bool IsDuplicateSubScene(bool logWarning = false)
         {
             if (!IsInMainStage())
-                return;
+                return false;
 
             if (SceneAsset != null)
             {
-                foreach (var subscene in m_AllSubScenes)
+                foreach (var subscene in s_AllSubScenes)
                 {
+                    if (subscene == null || subscene == this)
+                        continue;
+
                     if (!subscene.IsInMainStage())
                         continue;
 
                     if (subscene.SceneAsset == SceneAsset)
                     {
-                        UnityEngine.Debug.LogWarning($"Sub Scenes can not reference the same scene ('{EditableScenePath}') multiple times.", this);
-                        return;
+                        if (logWarning)
+                            UnityEngine.Debug.LogWarning($"Sub Scenes can not reference the same scene ('{EditableScenePath}') multiple times.", this);
+                        return true;
                     }
                 }
             }
+            return false;
         }
 
         void OnValidate()
         {
-            _SceneGUID = AssetDatabaseCompatibility.PathToGUID(AssetDatabase.GetAssetPath(_SceneAsset));
+            // Making sure we don't have a circular dependency
+            if (gameObject.scene.path != EditingScene.path)
+                _SceneGUID = AssetDatabaseCompatibility.PathToGUID(AssetDatabase.GetAssetPath(_SceneAsset));
+            else
+                _SceneGUID = default;
 
-            if (_IsAddedToListOfAllSubScenes && IsInMainStage())
+            bool isDuplicate = IsDuplicateSubScene(true);
+
+            if (_SceneGUID != default && !isDuplicate)
+                SubSceneManager.Register(gameObject, new SubSceneDescription { SceneGuid = _SceneGUID });
+            else
+                SubSceneManager.Unregister(gameObject);
+
+            if (isDuplicate && _IsAddedToListOfAllSubScenes)
+            {
+                _IsAddedToListOfAllSubScenes = false;
+                s_AllSubScenes.Remove(this);
+                RemoveSceneEntities();
+            }
+            else if (!_IsAddedToListOfAllSubScenes && !isDuplicate && IsInMainStage() && isActiveAndEnabled)
+            {
+                _IsAddedToListOfAllSubScenes = true;
+                s_AllSubScenes.Add(this);
+                if (_SceneGUID != default)
+                    RebuildSceneEntities();
+            }
+            else if (_IsAddedToListOfAllSubScenes && IsInMainStage())
             {
                 if (_SceneGUID != _AddedSceneGUID)
-                {
                     RebuildSceneEntities();
-                }
             }
         }
 
@@ -302,10 +327,16 @@ namespace Unity.Scenes
         void OnEnable()
         {
 #if UNITY_EDITOR
-            WarnIfNeeded();
+            if (IsDuplicateSubScene(true))
+                return;
 
-            _IsAddedToListOfAllSubScenes = true;
-            m_AllSubScenes.Add(this);
+            // OnValidate runs before OnEnable on a domain reload and may have already added us to
+            // the list. Don't add a second time.
+            if (!_IsAddedToListOfAllSubScenes)
+            {
+                _IsAddedToListOfAllSubScenes = true;
+                s_AllSubScenes.Add(this);
+            }
 
             // If this is an import worker, we do not want to initialise an Entity world
             if (AssetDatabaseCompatibility.IsAssetImportWorkerProcess())
@@ -322,6 +353,8 @@ namespace Unity.Scenes
 
             if (!IsInMainStage())
                 return;
+
+            SubSceneManager.Register(gameObject, new SubSceneDescription { SceneGuid = SceneGUID });
 #endif
 
             AddSceneEntities();
@@ -331,7 +364,8 @@ namespace Unity.Scenes
         {
 #if UNITY_EDITOR
             _IsAddedToListOfAllSubScenes = false;
-            m_AllSubScenes.Remove(this);
+            s_AllSubScenes.Remove(this);
+            SubSceneManager.Unregister(gameObject);
 
             // We don't want to do any Entity work if we're in the worker
             if (AssetDatabaseCompatibility.IsAssetImportWorkerProcess())
@@ -343,6 +377,11 @@ namespace Unity.Scenes
 
         unsafe void AddSceneEntities()
         {
+            // We've already loaded this scene, nothing to do. Both OnValidate and OnEnable can reach
+            // here on a domain reload.
+            if (_AddedSceneGUID == _SceneGUID)
+                return;
+            // If a different scene is still loaded we've got a bug — it should have been unloaded first.
             Assert.IsTrue(_AddedSceneGUID == default);
             Assert.IsFalse(_SceneGUID == default);
 
@@ -365,7 +404,9 @@ namespace Unity.Scenes
                     };
 
                     var sceneEntity = SceneSystem.LoadSceneAsync(world.Unmanaged, _SceneGUID, loadParams);
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     stateptr->EntityManager.AddComponentObject(sceneEntity, this);
+                    #pragma warning restore 0618
                     _AddedSceneGUID = _SceneGUID;
                 }
             }
@@ -378,13 +419,24 @@ namespace Unity.Scenes
                 var sceneGUID = _AddedSceneGUID;
                 _AddedSceneGUID = default;
 
-                foreach (var world in World.All)
+                // Iterate backwards to be safe against removals from the list
+                for (int i = World.s_AllWorlds.Count - 1; i >= 0; --i)
                 {
+                    var world = World.s_AllWorlds[i];
+                    if (!world.IsCreated)
+                        continue;
+
                     var sceneSystem = world.GetExistingSystem<SceneSystem>();
 
                     var stateptr = world.Unmanaged.ResolveSystemState(sceneSystem);
                     if (stateptr != null)
+                    {
+                        var streamingSystem = world.GetExistingSystemManaged<SceneSectionStreamingSystem>();
+                        if (streamingSystem != null)
+                            streamingSystem.CancelOperationsForScene(sceneGUID);
+
                         SceneSystem.UnloadScene(world.Unmanaged, sceneGUID, SceneSystem.UnloadParameters.DestroyMetaEntities);
+                    }
                 }
             }
         }

@@ -51,11 +51,21 @@ namespace Unity.Scenes
             /// The priority of the load operation.
             /// </summary>
             public int Priority;
+            /// <summary>
+            /// Optional main-world entity to copy into each section's streaming world before
+            /// <see cref="ProcessAfterLoadGroup"/> runs. See <see cref="RequestSceneLoaded.ImportEntity"/>
+            /// for the full lifetime contract.
+            /// </summary>
+            public Entity ImportEntity;
         }
 
         static internal RequestSceneLoaded CreateRequestSceneLoaded(LoadParameters loadParameters)
         {
-            var requestSceneLoaded = new RequestSceneLoaded { LoadFlags = loadParameters.Flags};
+            var requestSceneLoaded = new RequestSceneLoaded
+            {
+                LoadFlags = loadParameters.Flags,
+                ImportEntity = loadParameters.ImportEntity,
+            };
 
             return requestSceneLoaded;
         }

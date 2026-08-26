@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
 using Unity.Burst;
@@ -115,93 +114,8 @@ namespace Unity.Entities.Tests
 
         #endregion
 
-        [Test]
-         [Ignore("Failing in Packageworks")]
-        [TestRequiresCollectionChecks("Requires Job Safety System")]
-        public void MissedDependencyMakesActionableErrorMessage([Values]bool iSystem)
-        {
-            var arch = World.EntityManager.CreateArchetype(typeof(EcsTestData));
-            World.EntityManager.CreateEntity(arch, 5000);
-            string systemName = "Unity.Entities.Tests.SystemSafetyTests_DependenciesAndJobDebugger+MisbehavingSystem";
-
-            if (iSystem)
-            {
-                systemName = "Unity.Entities.Tests.SystemSafetyTests_DependenciesAndJobDebugger+MisbehavingISystem";
-                var sys1 = World.GetOrCreateSystem<MisbehavingISystem>();
-                var sys2 = World.GetOrCreateSystem<CorrectISystem>();
-
-                sys1.Update(World.Unmanaged);
-                Assert.Throws<InvalidOperationException>(()=> { sys2.Update(World.Unmanaged); });
-            }
-            else
-            {
-                var sys1 = World.GetOrCreateSystem<MisbehavingSystem>();
-                var sys2 = World.GetOrCreateSystem<CorrectSystem>();
-
-                sys1.Update(World.Unmanaged);
-                Assert.Throws<InvalidOperationException>(()=> { sys2.Update(World.Unmanaged); });
-            }
-            LogAssert.Expect(LogType.Error,
-                $"The system {systemName} writes Unity.Entities.Tests.EcsTestData" +
-                " via SystemSafetyTests_DependenciesAndJobDebugger:ReadWriteJob but that type was not assigned to the Dependency property. To ensure correct" +
-                " behavior of other systems, the job or a dependency must be assigned to the Dependency property before " +
-                "returning from the OnUpdate method.");
-        }
-
-        [Test]
-        [Ignore("Failing in Packageworks")]
-        [TestRequiresCollectionChecks("Requires Job Safety System")]
-        public void MissedDependencyFromNestedUpdateMakesActionableErrorMessage([Values]bool iSystem)
-        {
-            var arch = World.EntityManager.CreateArchetype(typeof(EcsTestData));
-            World.EntityManager.CreateEntity(arch, 5000);
-
-            string systemName = "Unity.Entities.Tests.SystemSafetyTests_DependenciesAndJobDebugger+MisbehavingSystem";
-            if (iSystem)
-            {
-                systemName = "Unity.Entities.Tests.SystemSafetyTests_DependenciesAndJobDebugger+MisbehavingISystem";
-                World.GetOrCreateSystem<MisbehavingISystem>();
-                var sys1 = World.GetOrCreateSystem<NestedBrokenISystem>();
-                var sys2 = World.GetOrCreateSystem<CorrectISystem>();
-
-                sys1.Update(World.Unmanaged);
-                Assert.Throws<InvalidOperationException>(()=> { sys2.Update(World.Unmanaged); });
-            }
-            else
-            {
-                var sys1 = World.GetOrCreateSystem<NestedBrokenSystem>();
-                var sys2 = World.GetOrCreateSystem<CorrectSystem>();
-
-                sys1.Update(World.Unmanaged);
-                Assert.Throws<InvalidOperationException>(() => { sys2.Update(World.Unmanaged); });
-            }
-
-            LogAssert.Expect(LogType.Error,
-                $"The system {systemName} writes Unity.Entities.Tests.EcsTestData" +
-                " via SystemSafetyTests_DependenciesAndJobDebugger:ReadWriteJob but that type was not assigned to the Dependency property. To ensure correct" +
-                " behavior of other systems, the job or a dependency must be assigned to the Dependency property before " +
-                "returning from the OnUpdate method.");
-            World.Update();
-        }
-
-        public partial class ForEachReproSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                var lookup = GetComponentLookup<EcsTestData>();
-
-                Entities
-                    .WithName("RotationSpeedSystem_ForEach")
-                    .ForEach((Entity entity, ref EcsTestData rotation, in EcsTestData2 rotationSpeed) =>
-                    {
-                        var value = lookup[entity];
-                    })
-                    .ScheduleParallel();
-            }
-        }
 
         [BurstCompile]
-
         public partial struct IJobEntityReproISystem : ISystem
         {
             public ComponentLookup<EcsTestData> lookup;
@@ -228,27 +142,6 @@ namespace Unity.Entities.Tests
                 var testJob = new TestJob() { lookup = lookup };
                 testJob.ScheduleParallel();
             }
-        }
-
-        [Ignore("DOTS-6905 Needs re-evaluated after we solve the NullReferenceException issues")]
-        [Test]
-        public void NoExtraMessageFromForEachSystemRepro([Values]bool iSystem)
-        {
-            var arch = World.EntityManager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2));
-            World.EntityManager.CreateEntity(arch, 5000);
-            var g = World.GetOrCreateSystemManaged<SimulationSystemGroup>();
-            if (iSystem)
-                g.AddSystemToUpdateList(World.GetOrCreateSystem<IJobEntityReproISystem>());
-            else
-                g.AddSystemToUpdateList(World.GetOrCreateSystem<ForEachReproSystem>());
-
-            World.Update();
-
-            var regex = new System.Text.RegularExpressions.Regex(
-                    "^InvalidOperationException: .*(?:_Job)?\\.JobData\\.lookup is not declared \\[ReadOnly\\] in a IJobParallelFor"+
-                    " job\\. The container does not support parallel writing\\. Please use a more suitable container type\\.$");
-
-            LogAssert.Expect(LogType.Exception, regex);
         }
     }
 }

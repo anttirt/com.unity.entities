@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -9,11 +10,16 @@ public unsafe partial struct NestedSystemAPIInvocation_Example2 : global::Unity.
     [global::Unity.Entities.DOTSCompilerPatchedMethod("OnUpdate_T0_ref_Unity.Entities.SystemState&")]
     void __OnUpdate_6D4E9467(ref SystemState state)
     {
-        #line 10 "/0/Test0.cs"
+        #line 11 "/0/Test0.cs"
+        
+#pragma warning disable CS0618 // managed API obsolete; internal/test caller still needs it.
         var foo = state.EntityManager.GetComponentObject<EcsTestManagedComponent>(__query_1641826531_0.GetSingletonEntity());
         #line hidden
+        
+#pragma warning restore CS0618
     }
 
+    #pragma warning disable 0618
     
     TypeHandle __TypeHandle;
     global::Unity.Entities.EntityQuery __query_1641826531_0;
@@ -43,4 +49,5 @@ public unsafe partial struct NestedSystemAPIInvocation_Example2 : global::Unity.
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

@@ -36,6 +36,8 @@ namespace Unity.Entities.CodeGen
         public static int BakingOnlyTypeFlag;
         public static int TemporaryBakingTypeFlag;
         public static int IRefCountedComponentFlag;
+        public static int HasOnAddedCallbackFlag;
+        public static int HasOnRemovedCallbackFlag;
         public static int IEquatableTypeFlag;
         public static int EnableableComponentFlag;
         public static int CleanupComponentTypeFlag;
@@ -191,6 +193,18 @@ namespace Unity.Entities.CodeGen
         int m_TotalUnityObjectRefOffsetCount;
         int m_TotalWriteGroupCount;
 
+        [Flags]
+        enum HasReferencesBits : byte
+        {
+            None = 0,
+            hasEntityReferences = 1,
+            hasBlobReferences = 2,
+            hasUnityObjReferences = 4,
+            hasWeakAssetReferences = 8,
+        }
+
+        private Dictionary<TypeReference, HasReferencesBits> HasReferencesCache = new Dictionary<TypeReference, HasReferencesBits>(TypeReferenceEqualityComparer.Instance);
+	
         internal FieldReference GenerateConstantData(TypeDefinition constantStorageTypeDef, byte[] data)
         {
             const string kConstantDataFieldNamePrefix = "ConstantData";
@@ -1226,10 +1240,23 @@ namespace Unity.Entities.CodeGen
             hasUnityObjReferences = false;
             hasWeakAssetReferences = false;
 
+            if (HasReferencesCache.ContainsKey(type))
+            {
+                var answer = HasReferencesCache[type];
+                hasEntityReferences |= ((answer & HasReferencesBits.hasEntityReferences) != 0);
+                hasBlobReferences |= ((answer & HasReferencesBits.hasBlobReferences) != 0);
+                hasUnityObjReferences |= ((answer & HasReferencesBits.hasUnityObjReferences) != 0);
+                hasWeakAssetReferences |= ((answer & HasReferencesBits.hasWeakAssetReferences) != 0);
+                return;
+            }
+	    
             //we don't follow pointers for patching anyway, so don't follow them for looking for
             //entity or blob references either
             if (type.IsPointer)
+            {
+                HasReferencesCache[type] = HasReferencesBits.None;		
                 return;
+            }
 
             var typeDef = type.Resolve();
 
@@ -1254,6 +1281,7 @@ namespace Unity.Entities.CodeGen
                 // The max depth is reached on searching for nested Entity References, Blob References or Unity Object References
                 // It will ignore any Entity, Blob or Unity Object References. If you are certain that there is any of these types
                 // somewhere in the nesting structure, please add the [{nameof(TypeManager.ForceReferenceSearchAttribute)}] attribute to the type.
+                HasReferencesCache[type] = MakeHasReferencesBits(hasEntityReferences, hasBlobReferences, hasUnityObjReferences, hasWeakAssetReferences);
                 return;
             }
 
@@ -1319,6 +1347,9 @@ namespace Unity.Entities.CodeGen
                 }
                 else if (fieldType.IsValueType || fieldType.IsSealed)
                 {
+                    // Classes can have cyclical type definitions so to prevent an infinite loop,
+                    // we make all future occurence of fieldType resolve to what we have so far
+                    HasReferencesCache[type] = MakeHasReferencesBits(hasEntityReferences, hasBlobReferences, hasUnityObjReferences, hasWeakAssetReferences);
                     ProcessReferencesRecursiveManaged(
                         fieldRef,
                         out var recursiveHasEntityRefs,
@@ -1332,6 +1363,8 @@ namespace Unity.Entities.CodeGen
                     hasBlobReferences |= recursiveHasBlobRefs;
                     hasUnityObjReferences |= recursiveHasUnityObjRefs;
                     hasWeakAssetReferences |= recursiveHasWeakAssetRefs;
+                    //update it right away before the loop continues
+                    HasReferencesCache[type] = MakeHasReferencesBits(hasEntityReferences, hasBlobReferences, hasUnityObjReferences, hasWeakAssetReferences);
                 }
                 else
                 {
@@ -1340,8 +1373,23 @@ namespace Unity.Entities.CodeGen
                     // somewhere in the nesting structure, please add the [{nameof(TypeManager.ForceReferenceSearchAttribute)}] attribute to the type.
                 }
             }
+       
+            HasReferencesCache[type] = MakeHasReferencesBits(hasEntityReferences, hasBlobReferences, hasUnityObjReferences, hasWeakAssetReferences);
         }
 
+        private static HasReferencesBits MakeHasReferencesBits(bool recursiveHasEntityRefs, bool recursiveHasBlobRefs, bool recursiveHasUnityObjRefs, bool recursiveHasWeakAssetRefs)
+        {
+            var trueAnswer = HasReferencesBits.None;
+            if (recursiveHasEntityRefs)
+                trueAnswer |= HasReferencesBits.hasEntityReferences;
+            if (recursiveHasBlobRefs)
+                trueAnswer |= HasReferencesBits.hasBlobReferences;
+            if (recursiveHasUnityObjRefs)
+                trueAnswer |= HasReferencesBits.hasUnityObjReferences;
+            if (recursiveHasWeakAssetRefs)
+                trueAnswer |= HasReferencesBits.hasWeakAssetReferences;
+            return trueAnswer;
+        }
         /*
          * copied and translated from reflection from TypeManager.cs
          */
@@ -1390,7 +1438,9 @@ namespace Unity.Entities.CodeGen
          */
         internal void CheckIsAllowedAsComponentData(TypeReference type, string baseTypeDesc)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (!TypeUtilsInstance.IsManagedType(type, 0))
+            #pragma warning restore 0618
                 return;
 
             // it can't be used -- so we expect this to find and throw
@@ -1448,6 +1498,8 @@ namespace Unity.Entities.CodeGen
             var bloomFilterMask = ComputeBloomFilterMask(stableTypeHash);
             bool isManaged = !typeDef.IsValueType();
             var isRefCounted = typeDef.TypeImplements(runnerOfMe._IRefCountedDef);
+            var hasOnAddedCallback = typeDef.TypeImplements(runnerOfMe._IDebugOnAddedDef);
+            var hasOnRemovedCallback = typeDef.TypeImplements(runnerOfMe._IDebugOnRemovedDef);
             var maxChunkCapacity = MaximumChunkCapacity;
             var valueTypeSize = 0;
 
@@ -1581,7 +1633,9 @@ namespace Unity.Entities.CodeGen
                     throw new ArgumentException($"{typeRef} is an ISharedComponentData, and thus must be a struct.");
 #endif
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 isManaged = TypeUtilsInstance.IsManagedType(typeRef, 0);
+                #pragma warning restore 0618
 
                 AlignAndSize alignAndSize = default;
 
@@ -1621,7 +1675,9 @@ namespace Unity.Entities.CodeGen
                         hasUnityObjectReferences = true;
                 }
             }
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             else if (TypeUtilsInstance.IsManagedType(typeDef, 0))
+            #pragma warning restore 0618
             {
                 category = TypeCategory.UnityEngineObject;
                 sizeInChunk = sizeof(int);
@@ -1741,6 +1797,12 @@ namespace Unity.Entities.CodeGen
 
             if (isRefCounted)
                 typeIndex |= IRefCountedComponentFlag;
+
+            if (hasOnAddedCallback)
+                typeIndex |= HasOnAddedCallbackFlag;
+
+            if (hasOnRemovedCallback)
+                typeIndex |= HasOnRemovedCallbackFlag;
 
             if (isTemporaryBakingType)
                 typeIndex |= TemporaryBakingTypeFlag;

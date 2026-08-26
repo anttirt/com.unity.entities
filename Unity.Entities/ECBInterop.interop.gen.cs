@@ -41,7 +41,7 @@ namespace Unity.Entities
         {
             public static bool _initialized = false;
 
-            public delegate void _dlg_ProcessChainChunk(IntPtr walker, int processorType, IntPtr chainStates, int currentChain, int nextChain);
+            public delegate void _dlg_ProcessChainChunk(IntPtr walker, int processorType, IntPtr playbackState, int currentChain, int nextChain);
             public static _dlg_ProcessChainChunk _bfp_ProcessChainChunk;
             public delegate void _dlg_RemoveManagedReferences(IntPtr mgr, IntPtr sharedIndex, int count);
             public static object _gcDefeat_RemoveManagedReferences;
@@ -83,28 +83,28 @@ namespace Unity.Entities
 
         }
 
-        internal  static void ProcessChainChunk (void* walker, int processorType, ECBChainPlaybackState* chainStates, int currentChain, int nextChain)
+        internal  static void ProcessChainChunk (void* walker, int processorType, ECBPlaybackState* playbackState, int currentChain, int nextChain)
         {
             if (UseDelegate())
             {
-                _forward_mono_ProcessChainChunk(walker, processorType, chainStates, currentChain, nextChain);
+                _forward_mono_ProcessChainChunk(walker, processorType, playbackState, currentChain, nextChain);
                 return;
             }
 
-            _ProcessChainChunk(walker, processorType, chainStates, currentChain, nextChain);
+            _ProcessChainChunk(walker, processorType, playbackState, currentChain, nextChain);
         }
 
         [BurstCompile]
         [MonoPInvokeCallback(typeof(Managed._dlg_ProcessChainChunk))]
-        private static void _mono_to_burst_ProcessChainChunk(IntPtr walker, int processorType, IntPtr chainStates, int currentChain, int nextChain)
+        private static void _mono_to_burst_ProcessChainChunk(IntPtr walker, int processorType, IntPtr playbackState, int currentChain, int nextChain)
         {
-            _ProcessChainChunk((void*)walker, processorType, (ECBChainPlaybackState*)chainStates, currentChain, nextChain);
+            _ProcessChainChunk((void*)walker, processorType, (ECBPlaybackState*)playbackState, currentChain, nextChain);
         }
 
         [BurstDiscard]
-        private static void _forward_mono_ProcessChainChunk(void* walker, int processorType, ECBChainPlaybackState* chainStates, int currentChain, int nextChain)
+        private static void _forward_mono_ProcessChainChunk(void* walker, int processorType, ECBPlaybackState* playbackState, int currentChain, int nextChain)
         {
-            Managed._bfp_ProcessChainChunk((IntPtr) walker, processorType, (IntPtr) chainStates, currentChain, nextChain);
+            Managed._bfp_ProcessChainChunk((IntPtr) walker, processorType, (IntPtr) playbackState, currentChain, nextChain);
         }
 
 

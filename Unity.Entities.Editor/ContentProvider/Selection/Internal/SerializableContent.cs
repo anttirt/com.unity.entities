@@ -1,5 +1,6 @@
 using System;
-using Unity.Serialization.Json;
+using System.Text.Json;
+using Unity.Entities.Serialization;
 using UnityEngine;
 
 namespace Unity.Entities.UI
@@ -15,32 +16,25 @@ namespace Unity.Entities.UI
 
         public void Load()
         {
-            if (string.IsNullOrEmpty(m_Data))
+            if (string.IsNullOrEmpty(m_Data) || Provider == null)
                 return;
 
-            if (!JsonSerialization.TryFromJsonOverride(m_Data, ref Provider, out var events))
+            try
             {
-                foreach (var exception in events.Exceptions)
-                {
-                    Debug.LogException((Exception) exception.Payload);
-                }
-
-                foreach (var warnings in events.Warnings)
-                {
-                    Debug.LogWarning(warnings.Payload);
-                }
-
-                foreach (var logs in events.Logs)
-                {
-                    Debug.Log(logs.Payload);
-                }
+                var loaded = EntitiesJson.Deserialize(m_Data, Provider.GetType());
+                if (loaded is ContentProvider provider)
+                    Provider = provider;
+            }
+            catch (JsonException exception)
+            {
+                Debug.LogException(exception);
             }
         }
 
         public void Save()
         {
-            m_Data = null != Provider
-                ? JsonSerialization.ToJson(Provider)
+            m_Data = Provider != null
+                ? EntitiesJson.Serialize(Provider, Provider.GetType())
                 : string.Empty;
         }
     }

@@ -18,7 +18,7 @@ namespace Unity.Entities.Tests
     public class TestWithSceneCameraCulling
     {
         [SerializeField] private GameObject[] GameObjects;
-        [SerializeField] private Dictionary<GameObject, bool> GameObjectRenderedMap;
+        private Dictionary<GameObject, bool> GameObjectRenderedMap;
         [SerializeField] private bool SceneCameraRendered;
         [SerializeField] private bool IsSetUp;
 
@@ -33,11 +33,7 @@ namespace Unity.Entities.Tests
             SceneCameraRendered = false;
 
             Camera.onPostRender += onPostRender;
-#if UNITY_2023_2_OR_NEWER
             RenderPipelineManager.endContextRendering += endContextRendering;
-#else
-            RenderPipelineManager.endFrameRendering += endFrameRendering;
-#endif
         }
 
         public void TearDown()
@@ -45,11 +41,7 @@ namespace Unity.Entities.Tests
             if (IsSetUp)
             {
                 Camera.onPostRender -= onPostRender;
-#if UNITY_2023_2_OR_NEWER
                 RenderPipelineManager.endContextRendering -= endContextRendering;
-#else
-                RenderPipelineManager.endFrameRendering -= endFrameRendering;
-#endif
                 IsSetUp = false;
             }
         }
@@ -65,7 +57,6 @@ namespace Unity.Entities.Tests
                 yield return null;
         }
 
-#if UNITY_2023_2_OR_NEWER
         private void endContextRendering(ScriptableRenderContext arg1, List<Camera> cameras)
         {
             foreach (Camera camera in cameras)
@@ -73,15 +64,6 @@ namespace Unity.Entities.Tests
                 onPostRender(camera);
             }
         }
-#else
-        private void endFrameRendering(ScriptableRenderContext context, Camera[] cameras)
-        {
-            foreach (Camera camera in cameras)
-            {
-                onPostRender(camera);
-            }
-        }
-#endif
 
         private void onPostRender(Camera cam)
         {
@@ -224,7 +206,7 @@ namespace Unity.Entities.Tests
             }
         }
     #endif
-        
+
     }
 }
 #endif

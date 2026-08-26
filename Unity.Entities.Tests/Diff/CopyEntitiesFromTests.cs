@@ -9,13 +9,17 @@ namespace Unity.Entities.Tests
         void CreateTestData(out Entity entity, int value)
         {
             entity = SrcEntityManager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SrcEntityManager.AddComponentData(entity, new EcsTestData(value));
+            #pragma warning restore 0618
             SrcEntityManager.AddSharedComponent(entity, new EcsTestSharedComp(6));
         }
 
         void TestValues(Entity entity, int componentDataValue, int componentChunkValue)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(componentDataValue, DstEntityManager.GetComponentData<EcsTestData>(entity).value);
+            #pragma warning restore 0618
             Assert.AreEqual(6, DstEntityManager.GetSharedComponent<EcsTestSharedComp>(entity).value);
             Assert.AreEqual(componentChunkValue, DstEntityManager.GetChunkComponentData<EcsTestData2>(entity).value0);
         }
@@ -27,9 +31,11 @@ namespace Unity.Entities.Tests
             CreateTestData(out var entity0, 5);
             CreateTestData(out var entity1, 6);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             SrcEntityManager.AddComponentData(entity0, new EcsTestManagedDataEntity("0", entity1));
             SrcEntityManager.AddComponentData(entity1, new Disabled());
             SrcEntityManager.AddComponentData(entity1, new Prefab());
+            #pragma warning restore 0618
 
             SrcEntityManager.AddChunkComponentData(SrcEntityManager.UniversalQuery, new EcsTestData2(7));
             
@@ -42,8 +48,10 @@ namespace Unity.Entities.Tests
                 DstEntityManager.CopyEntitiesFrom(SrcEntityManager, srcEntities, dstEntities);
 
                 TestValues(dstEntities[0], 5, 0);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(dstEntities[1], DstEntityManager.GetComponentData<EcsTestManagedDataEntity>(dstEntities[0]).value1);
                 Assert.AreEqual("0", DstEntityManager.GetComponentData<EcsTestManagedDataEntity>(dstEntities[0]).value0);
+                #pragma warning restore 0618
                 Assert.IsFalse(DstEntityManager.HasComponent<EcsTestManagedDataEntity>(dstEntities[1]));
 
                 // Prefab & Disabled tag is kept in the clone - this is a copy not instantiate semantic

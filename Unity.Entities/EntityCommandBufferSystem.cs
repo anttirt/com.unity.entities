@@ -46,17 +46,23 @@ namespace Unity.Entities
     /// A system that provides <seealso cref="EntityCommandBuffer"/> objects for other systems.
     /// </summary>
     /// <remarks>
-    /// Each system that uses the EntityCommandBuffer provided by a command buffer system must call
-    /// <see cref="CreateCommandBuffer"/> to create its own command buffer instance. This buffer system executes each of
-    /// these separate command buffers in the order that you created them. The commands are executed during this system's
-    /// <see cref="OnUpdate"/> function.
+    /// Each system that uses the EntityCommandBuffer provided by a command buffer system must create its own command
+    /// buffer instance. This buffer system executes each of these separate command buffers in the order that you created
+    /// them. The commands are executed during this system's <see cref="OnUpdate"/> function.
     ///
-    /// When you write to a command buffer from a Job, you must add the <see cref="JobHandle"/> of that Job to the buffer
-    /// system's dependency list with <see cref="AddJobHandleForProducer"/>.
+    /// To create a command buffer, get the buffer system's `Singleton` component with
+    /// <see cref="SystemAPI.GetSingleton{T}"/>, and then call `CreateCommandBuffer(WorldUnmanaged)` on that singleton.
+    /// If you write to a command buffer created this way from a Job, you don't need to register that Job with the buffer
+    /// system: the buffer system completes all Jobs scheduled against its singleton component before it plays the command
+    /// buffer back.
+    ///
+    /// If you instead call <see cref="CreateCommandBuffer"/> on the buffer system instance, and you write to that command
+    /// buffer from a Job, you must add the <see cref="JobHandle"/> of that Job to the buffer system's dependency list with
+    /// <see cref="AddJobHandleForProducer"/>.
     ///
     /// If you write to a command buffer from a Job that runs in
     /// parallel (and this includes both <see cref="IJobEntity"/> and <see cref="IJobChunk"/>), you must use the
-    /// concurrent version of the command buffer (<seealso cref="EntityCommandBuffer.AsParallelWriter"/>).
+    /// concurrent version of the command buffer (<seealso cref="EntityCommandBuffer.ParallelWriter"/>).
     ///
     /// Executing the commands in an EntityCommandBuffer invokes the corresponding functions of the
     /// <see cref="EntityManager"/>. Any structural change, such as adding or removing entities, adding or removing
@@ -101,9 +107,15 @@ namespace Unity.Entities
         /// This buffer system executes its list of command buffers during its <see cref="OnUpdate"/> function in the
         /// order you created the command buffers.
         ///
-        /// If you write to a command buffer in a Job, you must add the
-        /// Job as a dependency of this system by calling <see cref="AddJobHandleForProducer"/>. The dependency ensures
-        /// that the buffer system waits for the Job to complete before executing the command buffer.
+        /// This method requires a managed reference to the buffer system. To create a command buffer from unmanaged systems
+        /// code, get the buffer system's `Singleton` component with <see cref="SystemAPI.GetSingleton{T}"/> and call
+        /// `CreateCommandBuffer(WorldUnmanaged)` on that singleton instead.
+        ///
+        /// If you write to a command buffer created by this method in a job, you must add the
+        /// job as a dependency of this system by calling <see cref="AddJobHandleForProducer"/>. The dependency ensures
+        /// that the buffer system waits for the job to complete before executing the command buffer. This step isn't
+        /// necessary for command buffers created through the buffer system's `Singleton` component, because the buffer
+        /// system completes all jobs scheduled against that singleton component before it plays the command buffer back.
         ///
         /// If you write to a command buffer from a parallel Job, such as <see cref="IJobEntity"/> or
         /// <see cref="IJobChunk"/>, you must use the concurrent version of the command buffer, provided by
@@ -119,9 +131,14 @@ namespace Unity.Entities
         /// Adds the specified JobHandle to this system's list of dependencies.
         /// </summary>
         /// <remarks>
-        /// When you write to an <see cref="EntityCommandBuffer"/> from a Job, you must add the <see cref="JobHandle"/> of that Job to this
-        /// <see cref="EntityCommandBufferSystem"/>'s input dependencies by calling this function. Otherwise, this system
-        /// could attempt to execute the command buffer contents while the writing Job is still running, causing a race condition.
+        /// When you write to an <see cref="EntityCommandBuffer"/> that you created with <see cref="CreateCommandBuffer"/> from a
+        /// job, you must add the <see cref="JobHandle"/> of that job to this <see cref="EntityCommandBufferSystem"/> input
+        /// dependencies by calling this function. Otherwise, this system could attempt to execute the command buffer contents
+        /// while the writing job is still running, causing a race condition.
+        ///
+        /// Don't call this function for command buffers that you created through the buffer system's `Singleton` component.
+        /// Those command buffers are tracked through the singleton component itself, and this system completes all jobs
+        /// scheduled against that component before it plays the command buffers back.
         /// </remarks>
         /// <param name="producerJob">The JobHandle of a Job which this buffer system should wait for before playing back its
         /// pending command buffers.</param>
@@ -296,7 +313,7 @@ namespace Unity.Entities
             AllocatorManager.AllocatorHandle allocator,
             WorldUnmanaged world)
         {
-            var cmds = new EntityCommandBuffer(allocator, PlaybackPolicy.SinglePlayback);
+            var cmds = new EntityCommandBuffer(allocator);
             var state = world.ResolveSystemState(world.ExecutingSystem);
             cmds.SystemID = state != null ? state->m_SystemID : 0;
             cmds.OriginSystemHandle = state != null ? state->m_Handle : default;

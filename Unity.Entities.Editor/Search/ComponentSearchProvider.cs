@@ -12,9 +12,22 @@ namespace Unity.Entities.Editor
 {
     internal readonly struct ComponentTypeDescriptor
     {
+        [Flags]
+        internal enum DebugTypeCategory
+        {
+            None = 0,
+            Data = 1 << 1,
+            Buffer = 1 << 2,
+            Shared = 1 << 3,
+            Entity = 1 << 4,
+            Tag = 1 << 5,
+            Managed = 1 << 6,
+            Companion = 1 << 7
+        }        
+        
         public readonly TypeManager.TypeInfo info;
         public readonly string name;
-        public readonly ComponentsWindow.DebugTypeCategory category;
+        public readonly DebugTypeCategory category;
         public readonly Texture2D icon;
         public readonly string displayName;
 
@@ -23,30 +36,30 @@ namespace Unity.Entities.Editor
             info = typeInfo;
             name = TypeUtility.GetTypeDisplayName(info.Type);
             displayName = ComponentsUtility.GetComponentDisplayName(TypeUtility.GetTypeDisplayName(info.Type));
-            category = ComponentsWindow.DebugTypeCategory.None;
+            category = DebugTypeCategory.None;
             switch (typeInfo.Category)
             {
                 case TypeManager.TypeCategory.ComponentData:
                     if (TypeManager.IsZeroSized(typeInfo.TypeIndex))
                     {
-                        category |= ComponentsWindow.DebugTypeCategory.Tag;
+                        category |= DebugTypeCategory.Tag;
                     }
                     else
                     {
-                        category |= ComponentsWindow.DebugTypeCategory.Data;
+                        category |= DebugTypeCategory.Data;
                     }
                     break;
                 case TypeManager.TypeCategory.BufferData:
-                    category |= ComponentsWindow.DebugTypeCategory.Buffer;
+                    category |= DebugTypeCategory.Buffer;
                     break;
                 case TypeManager.TypeCategory.ISharedComponentData:
-                    category |= ComponentsWindow.DebugTypeCategory.Shared;
+                    category |= DebugTypeCategory.Shared;
                     break;
                 case TypeManager.TypeCategory.EntityData:
-                    category |= ComponentsWindow.DebugTypeCategory.Entity;
+                    category |= DebugTypeCategory.Entity;
                     break;
                 case TypeManager.TypeCategory.UnityEngineObject:
-                    category |= ComponentsWindow.DebugTypeCategory.Companion;
+                    category |= DebugTypeCategory.Companion;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -54,9 +67,11 @@ namespace Unity.Entities.Editor
 
             icon = SearchUtils.GetComponentIcon(typeInfo.TypeIndex);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedComponent(typeInfo.TypeIndex))
+            #pragma warning restore 0618
             {
-                category |= ComponentsWindow.DebugTypeCategory.Managed;
+                category |= DebugTypeCategory.Managed;
             }
         }
     }

@@ -78,7 +78,9 @@ namespace Unity.Entities.Tests
         public void GetAllEntities_WithSharedComponentData()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(5));
+            #pragma warning restore 0618
 
             var debugEntities = DebugEntity.GetAllEntitiesWithSystems(m_Manager);
 
@@ -126,7 +128,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
             var component = new TestClassComponent { Value = 5 };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentObject(entity, component);
+            #pragma warning restore 0618
 
             var debugEntities = DebugEntity.GetAllEntitiesWithSystems(m_Manager);
 

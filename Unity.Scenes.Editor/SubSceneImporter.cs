@@ -15,7 +15,7 @@ using Hash128 = Unity.Entities.Hash128;
 
 namespace Unity.Scenes.Editor
 {
-    [ScriptedImporter(122, "extDontMatter", AllowCaching = true)]
+    [ScriptedImporter(123, "extDontMatter", AllowCaching = true)]
     [InitializeOnLoad]
     class SubSceneImporter : ScriptedImporter
     {
@@ -73,13 +73,18 @@ namespace Unity.Scenes.Editor
                 if (objRefs == null)
                     continue;
 
-                var path = ctx.GetOutputArtifactFilePath($"{sectionIndex}.{EntityScenesPaths.GetExtension(EntityScenesPaths.PathType.EntitiesAssetDependencyGUIDs)}");
+                var artifactExtension = $"{sectionIndex}.{EntityScenesPaths.GetExtension(EntityScenesPaths.PathType.EntitiesAssetDependencyGUIDs)}";
                 var assetDependencyGUIDs = ReferencedUnityObjectsToGUIDs(objRefs, ctx);
 
-                using (var writer = new StreamBinaryWriter(path))
+                using (var writer = new MemoryBinaryWriter())
                 {
+#if UNITY_DOTS_IMHEX
+                    writer.ImHexPattern.WriteTypeWithPosition<int>($"assetDependencyGUIDs_Length", writer.Position);
+#endif
                     writer.Write(assetDependencyGUIDs.Length);
                     writer.WriteArray(assetDependencyGUIDs.AsArray());
+
+                    ctx.SetOutputArtifactData(artifactExtension, writer.GetContentAsNativeArray());
                 }
 
                 assetDependencyGUIDs.Dispose();
@@ -88,18 +93,23 @@ namespace Unity.Scenes.Editor
 
         static unsafe void WriteGlobalUsageArtifact(BuildUsageTagGlobal globalUsage, AssetImportContext ctx)
         {
-            var path = ctx.GetOutputArtifactFilePath(EntityScenesPaths.GetExtension(EntityScenesPaths.PathType.EntitiesGlobalUsage));
-            using (var writer = new StreamBinaryWriter(path))
-            {
-                writer.WriteBytes(&globalUsage, sizeof(BuildUsageTagGlobal));
-            }
+            var artifactExtension = EntityScenesPaths.GetExtension(EntityScenesPaths.PathType.EntitiesGlobalUsage);
+            using var writer = new MemoryBinaryWriter();
+#if UNITY_DOTS_IMHEX
+                writer.ImHexPattern.WriteTypeWithPosition<BuildUsageTagGlobal>("globalUsage", writer.Position);
+#endif
+            writer.WriteBytes(&globalUsage, sizeof(BuildUsageTagGlobal));
+            ctx.SetOutputArtifactData(artifactExtension, writer.GetContentAsNativeArray());
         }
 
         void ImportBaking(AssetImportContext ctx, Scene scene, SceneWithBuildConfigurationGUIDs sceneWithBuildConfiguration, IEntitiesPlayerSettings settingsAsset, GameObject prefab)
         {
             // Grab the used lighting and fog values from the scenes lighting & render settings.
             // If autobake is enabled, this function will iterate through objects to predict the outcome.
+            #pragma warning disable 0618
             var globalUsage = ContentBuildInterface.GetGlobalUsageFromActiveScene(ctx.selectedBuildTarget);
+            #pragma warning restore 0618
+
 
             var flags = BakingUtility.BakingFlags.AddEntityGUID |
                         BakingUtility.BakingFlags.AssignName;
@@ -200,7 +210,10 @@ namespace Unity.Scenes.Editor
                 }
                 finally
                 {
-                    EditorSceneManager.CloseScene(scene, true);
+                    if (isScene)
+                        EditorSceneManager.CloseScene(scene, true);
+                    else
+                        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 }
             }
             // Currently it's not acceptable to let the asset database catch the exception since it will create a default asset without any dependencies

@@ -10,7 +10,7 @@ The following operations are considered structural changes:
 
 * Creating or destroying an [entity](concepts-entities.md).
 * Adding or removing [components](concepts-components.md).
-* Setting a shared component value.
+* Setting a [shared component](components-shared-introducing.md) value.
 
 There are different ways to manage structural changes in your project. For more information, refer to [Manage structural changes](systems-manage-structural-changes.md)
 

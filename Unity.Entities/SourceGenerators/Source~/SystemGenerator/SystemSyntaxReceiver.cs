@@ -1,6 +1,4 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -13,7 +11,6 @@ using Unity.Entities.SourceGen.SystemGenerator.SystemAPI.QueryBuilder;
 using Unity.Entities.SourceGen.SystemGenerator.SystemAPI;
 using Unity.Entities.SourceGen.SystemGenerator.Common;
 using Unity.Entities.SourceGen.SystemGenerator.EntityQueryBulkOperations;
-using Unity.Entities.SourceGen.SystemGenerator.LambdaJobs;
 using JobEntityModule = Unity.Entities.SourceGen.JobEntityGenerator.JobEntityModule;
 
 namespace Unity.Entities.SourceGen.SystemGenerator;
@@ -39,7 +36,6 @@ public class SystemSyntaxReceiver : ISyntaxReceiver
         _cancellationToken = cancellationToken;
         SystemModules = new ISystemModule[]
         {
-            new LambdaJobsModule(),
             new JobEntityModule(),
             new EntityQueryModule(),
             new IfeModule(),

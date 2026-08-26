@@ -18,21 +18,7 @@ public class ForEachNoErrorTests
             using Unity.Entities.Tests;
             public partial class SomeSystem : SystemBase {
                 protected override void OnUpdate() {
-                    foreach (var aspect in SystemAPI.Query<EcsTestAspect>()) {}
-                }
-            }";
-        await VerifyCS.VerifySourceGeneratorAsync(source);
-    }
-
-    [TestMethod]
-    public async Task DifferentAssemblies_Aspect()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            public partial struct SomeSystem : ISystem {
-                public void OnUpdate(ref SystemState state) {
-                    foreach (var aspect in SystemAPI.Query<EcsTestAspect>()){}
+                    foreach (var data in SystemAPI.Query<RefRW<EcsTestData>>()) {}
                 }
             }";
         await VerifyCS.VerifySourceGeneratorAsync(source);
@@ -47,20 +33,6 @@ public class ForEachNoErrorTests
             public partial struct SomeSystem : ISystem {
                 public void OnUpdate(ref SystemState state) {
                     foreach (var data in SystemAPI.Query<RefRW<EcsTestData>>()){}
-                }
-            }";
-        await VerifyCS.VerifySourceGeneratorAsync(source);
-    }
-
-    [TestMethod]
-    public async Task DifferentAssemblies_Combined()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            public partial struct SomeSystem : ISystem {
-                public void OnUpdate(ref SystemState state) {
-                    foreach (var (aspect, data) in SystemAPI.Query<EcsTestAspect, RefRW<EcsTestData>>()){}
                 }
             }";
         await VerifyCS.VerifySourceGeneratorAsync(source);

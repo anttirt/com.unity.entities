@@ -18,23 +18,13 @@ To override a system that uses write groups, mark your own component types as pa
 
 ## Write groups example
 
-In this example, you use an external package to color all characters in your game depending on their state of health. For this, there are two components in the package: `HealthComponent` and `ColorComponent`;
+In this example, you use an external package to color all characters in your game depending on their state of health. For this, there are two components in the package: `HealthComponent` and `ColorComponent`:
 
-```csharp
-public struct HealthComponent : IComponentData
-{
-   public int Value;
-}
-
-public struct ColorComponent : IComponentData
-{
-   public float4 Value;
-}
-```
+[!code-cs[HealthComponent and ColorComponent](../DocCodeSamples.Tests/WriteGroupsExample.cs#health-color-components)]
 
 There are also two systems in the package:
- 1. The `ComputeColorFromHealthSystem`, which reads from `HealthComponent` and writes to `ColorComponent`
- 1. The `RenderWithColorComponent`, which reads from `ColorComponent`
+ 1. The `ComputeColorFromHealthSystem`, which reads from `HealthComponent` and writes to `ColorComponent`.
+ 1. The `RenderWithColorComponent`, which reads from `ColorComponent`.
 
 To represent when a player uses a power-up and their character becomes invincible, you attach an `InvincibleTagComponent` to the character's entity. In this case, the character's color should change to a separate, different color, which the above example doesn't accommodate. 
 
@@ -44,108 +34,57 @@ This system is from another package which isn't aware of the `InvincibleTagCompo
 
 1. Mark the `InvincibleTagComponent` as part of the write group of `ColorComponent`:
 
-   ```c#
-   [WriteGroup(typeof(ColorComponent))]
-   struct InvincibleTagComponent : IComponentData {}
-   ```
+    [!code-cs[InvincibleTagComponent](../DocCodeSamples.Tests/WriteGroupsExample.cs#invincible-tag)]
 
-   The write group of `ColorComponent` consists of all component types that have the `WriteGroup` attribute with `typeof(ColorComponent)` as the argument.
-1. The `ComputeColorFromHealthSystem` must explicitly support write groups. To achieve this, the system needs to specify the `EntityQueryOptions.FilterWriteGroup` option for all its queries, like this:
+    The write group of `ColorComponent` consists of all component types that have the `WriteGroup` attribute with `typeof(ColorComponent)` as the argument.
 
-   ```csharp
-   ...
-   protected override void OnUpdate() {
-      Entities
-         .WithName("ComputeColor")
-         .WithEntityQueryOptions(EntityQueryOptions.FilterWriteGroup) // support write groups
-         .ForEach((ref ColorComponent color, in HealthComponent health) => {
-            // compute color here
-         }).ScheduleParallel();
-   }
-   ...
-   ```
+1. The `ComputeColorFromHealthSystem` must explicitly support write groups. To achieve this, the system needs to build a query with the `EntityQueryOptions.FilterWriteGroup` option:
+
+    [!code-cs[ComputeColorFromHealthSystem](../DocCodeSamples.Tests/WriteGroupsExample.cs#compute-color-system)]
+
+    The key part is the query built in `OnCreate` with `.WithOptions(EntityQueryOptions.FilterWriteGroup)`. This example uses an `IJobEntity` to process entities matching that query:
+
+    [!code-cs[ComputeColorFromHealthJob](../DocCodeSamples.Tests/WriteGroupsExample.cs#compute-color-job)]
 
 When this executes, the following happens:
-   1. The system detects that you write to `ColorComponent` because it's a by-reference parameter
-   1. It looks up the write group of `ColorComponent` and finds the `InvincibleTagComponent` in it
-   1. It excludes all entities that have an `InvincibleTagComponent`
+   1. The system detects that you write to `ColorComponent` because the query uses `WithAllRW<ColorComponent>()`.
+   1. It looks up the write group of `ColorComponent` and finds the `InvincibleTagComponent` in it.
+   1. It excludes all entities that have an `InvincibleTagComponent`.
 
 The benefit is that this allows the system to exclude entities based on a type that's unknown to the system and might live in a different package.
 
 > [!NOTE]
-> For more examples, see the `Unity.Transforms` code, which uses write groups for every component it updates, including `LocalToWorld`.
+> For more examples, see the `Unity.Transforms` code, which uses write groups for every component it updates, including `LocalTransform`.
 
 ## Create write groups
+
 To create write groups, add the `WriteGroup` attribute to the declarations of each component type in the write group. The `WriteGroup` attribute takes one parameter, which is the type of component that the components in the group uses to update. A single component can be a member of more than one write group.
 
 For example, if you have a system that writes to component `W` whenever there are components `A` or `B` on an entity, then you can define a write group for `W` as follows:
 
-```csharp
-public struct W : IComponentData
-{
-   public int Value;
-}
-
-[WriteGroup(typeof(W))]
-public struct A : IComponentData
-{
-   public int Value;
-}
-
-[WriteGroup(typeof(W))]
-public struct B : IComponentData
-{
-   public int Value;
-}
-```
+[!code-cs[Write group W with A and B](../DocCodeSamples.Tests/WriteGroupsExample.cs#write-group-abc)]
 
 You don't add the target of the write group (component `W` in the example above) to its own write group.
 
 ## Enabling write group filtering
 
-To enable write group filtering, set the `FilterWriteGroups` flag on your job:
+To enable write group filtering, build your query with the `FilterWriteGroup` option. Here's an example using `IJobEntity`:
 
-```csharp
-public class AddingSystem : SystemBase
-{
-   protected override void OnUpdate() {
-      Entities
-          // support write groups by setting EntityQueryOptions
-         .WithEntityQueryOptions(EntityQueryOptions.FilterWriteGroup) 
-         .ForEach((ref W w, in B b) => {
-            // perform computation here
-         }).ScheduleParallel();}
-}
-```
+[!code-cs[AddingJob](../DocCodeSamples.Tests/WriteGroupsExample.cs#adding-job)]
 
-For query description objects, set the flag when you create the query:
+The system creates a query with `FilterWriteGroup` enabled and schedules the job:
 
-```csharp
-public class AddingSystem : SystemBase
-{
-   private EntityQuery m_Query;
+[!code-cs[AddingSystem](../DocCodeSamples.Tests/WriteGroupsExample.cs#adding-system)]
 
-   protected override void OnCreate()
-   {
-       var queryDescription = new EntityQueryDesc
-       {
-           All = new ComponentType[] {
-              ComponentType.ReadWrite<W>(),
-              ComponentType.ReadOnly<B>()
-           },
-           Options = EntityQueryOptions.FilterWriteGroup
-       };
-       m_Query = GetEntityQuery(queryDescription);
-   }
-   // Define IJobChunk struct and schedule...
-}
-```
+Alternatively, you can use `SystemAPI.Query` with the `WithOptions` method:
+
+[!code-cs[AddingSystemWithQuery](../DocCodeSamples.Tests/WriteGroupsExample.cs#adding-system-query)]
 
 When you enable write group filtering in a query, the query adds all components in a write group of a writable component to the `None` list of the query unless you explicitly add them to the `All` or `Any` lists. As a result, the query only selects an entity if it explicitly requires every component on that entity from a particular write group. If an entity has one or more additional components from that write group, the query rejects it.
 
 In the example code above, the query:
- * Excludes any entity that has component `A`, because `W` is writable and `A` is part of the write group of `W`.
- * Doesn't exclude any entity that has component `B`. Even though `B` is part of the write group of `W`, it's also explicitly specified in the `All` list.
+    * Excludes any entity that has component `A`, because `W` is writable and `A` is part of the write group of `W`.
+    * Doesn't exclude any entity that has component `B`. Even though `B` is part of the write group of `W`, it's also explicitly specified in the query.
 
 ## Overriding another system that uses write groups
 
@@ -153,73 +92,33 @@ If a system uses write group filtering in its queries, you can use your own syst
 
 Because write group filtering excludes any components in the write group that the query doesn't explicitly require, the other system ignores any entities that have your components.
 
-For example, if you want to set the orientation of your entities by specifying the angle and axis of rotation, you can create a component and a system to convert the angle and axis values into a quaternion and write that to the `Unity.Transforms.Rotation` component. 
+For example, if you want to set the orientation of your entities by specifying the angle and axis of rotation, you can create a component and a system to convert the angle and axis values into a quaternion and write that to the `LocalTransform` component. 
 
-To prevent the `Unity.Transforms` systems from updating `Rotation`, no matter what other components besides yours are present, you can put your component in the write group of `Rotation`:
+To prevent the `Unity.Transforms` systems from updating `LocalTransform`, no matter what other components besides yours are present, you can put your component in the write group of `LocalTransform`:
 
-```csharp
-using System;
-using Unity.Collections;
-using Unity.Entities;
-using Unity.Transforms;
-using Unity.Mathematics;
-
-[Serializable]
-[WriteGroup(typeof(Rotation))]
-public struct RotationAngleAxis : IComponentData
-{
-   public float Angle;
-   public float3 Axis;
-}
-```
+[!code-cs[RotationAngleAxis component](../DocCodeSamples.Tests/WriteGroupsExample.cs#rotation-angle-axis-component)]
 
 You can then update any entities with the `RotationAngleAxis` component without contention:
 
-```csharp
-using Unity.Burst;
-using Unity.Entities;
-using Unity.Jobs;
-using Unity.Collections;
-using Unity.Mathematics;
-using Unity.Transforms;
+[!code-cs[RotationAngleAxisJob](../DocCodeSamples.Tests/WriteGroupsExample.cs#rotation-angle-axis-job)]
 
-public class RotationAngleAxisSystem : SystemBase
-{
-   protected override void OnUpdate()
-   {
-      Entities.ForEach((ref Rotation destination, in RotationAngleAxis source) =>
-      {
-         destination.Value 
-             = quaternion.AxisAngle(math.normalize(source.Axis), source.Angle);
-      }).ScheduleParallel();
-   }
-}
-```
+Then create a system to schedule it:
+
+[!code-cs[RotationAngleAxisSystem](../DocCodeSamples.Tests/WriteGroupsExample.cs#rotation-angle-axis-system)]
 
 ## Extending another system that uses write groups
 
-If you want to extend another system rather than override it, or if you want to allow future systems to override or extend your system, then you can enable write group filtering on your own system. However, when you do this, neither system handles no combinations of components by default. You must explicitly query for and process each combination.
+If you want to extend another system rather than override it, or if you want to allow future systems to override or extend your system, then you can enable write group filtering on your own system. When you enable write group filtering, the query automatically excludes all entities that have any write group component that isn't explicitly included in the query. To process those entities, you must create queries that explicitly specify the write group components you want to handle.
 
-In the previous example, it defined a write group that contains components `A` and `B` that targets component `W`. If you add a new component, called `C`, to the write group, then the new system that knows about `C` can query for entities that contain `C` and it doesn't matter if those entities also have components `A` or `B`. 
+The previous example defined a write group that contains components `A` and `B` and targets component `W`. If you add a new component, called `C`, to the write group, then the new system that knows about `C` can query for entities that contain `C` and it doesn't matter if those entities also have components `A` or `B`. 
+
+[!code-cs[Component C in write group](../DocCodeSamples.Tests/WriteGroupsExample.cs#write-group-c)]
 
 However, if the new system also enables write group filtering, that's no longer true. If you only require component `C`, then write group filtering excludes any entities with either `A` or `B`. Instead, you must explicitly query for each combination of components that make sense. 
 
 > [!TIP]
-> You can use the `Any` clause of the query when appropriate.
+> You can use the `WithAny` clause of the query when appropriate.
 
-```csharp
-var query = new EntityQueryDesc
-{
-    All = new ComponentType[] {
-       ComponentType.ReadOnly<C>(), 
-       ComponentType.ReadWrite<W>()
-    },
-    Any = new ComponentType[] {
-       ComponentType.ReadOnly<A>(), 
-       ComponentType.ReadOnly<B>()
-    },
-    Options = EntityQueryOptions.FilterWriteGroup
-};
-```
+[!code-cs[Extended write group system](../DocCodeSamples.Tests/WriteGroupsExample.cs#extended-system)]
 
 If there are any entities that contain combinations of components in the write group that aren't explicitly mentioned, then the system that writes to the target of the write group, and its filters, doesn't handle them. However, if there are any of these type of entities, it's most likely a logical error in the program, and they shouldn't exist.

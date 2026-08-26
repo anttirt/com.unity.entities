@@ -24,7 +24,8 @@ namespace Unity.Entities.SourceGen.Common
             // Output as source
             var sourceTextForNewClass = SourceText.From(generatedSyntax, Encoding.UTF8)
                 .WithInitialLineDirectiveToGeneratedSource(generatedSourceFilePath)
-                    .WithIgnoreUnassignedVariableWarning();
+                    .WithIgnoreUnassignedVariableWarning()
+                    .WithIgnoreObsoleteWarning();
 
             // Add line directives for lines with `GeneratedLineTriviaToGeneratedSource` or #line
             var textChanges = new List<TextChange>();
@@ -82,7 +83,8 @@ namespace Unity.Entities.SourceGen.Common
             // Output as source
             var sourceTextForNewClass = SourceText.From(syntaxTreeSourceBuilder.ToString(), Encoding.UTF8)
                 .WithInitialLineDirectiveToGeneratedSource(generatedSourceFilePath)
-                    .WithIgnoreUnassignedVariableWarning();
+                    .WithIgnoreUnassignedVariableWarning()
+                    .WithIgnoreObsoleteWarning();
 
             // Add line directives for lines with `GeneratedLineTriviaToGeneratedSource` or #line
             var textChanges = new List<TextChange>();

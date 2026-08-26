@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.Editor.Bridge;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 using HierarchyModel = Unity.Entities.Editor.Hierarchy;
 
@@ -61,7 +62,7 @@ namespace Unity.Entities.Editor
 
     class HierarchyNameColumn : Column
     {
-        readonly BasicPool<HierarchyListViewItem> m_Pool;
+        readonly ObjectPool<HierarchyListViewItem> m_Pool;
         readonly HierarchyModel m_Model;
 
         /// <summary>
@@ -82,7 +83,7 @@ namespace Unity.Entities.Editor
         public HierarchyNameColumn(Hierarchy model, HierarchyContextMenu contextMenu)
         {
             m_Model = model;
-            m_Pool = new BasicPool<HierarchyListViewItem>(() =>
+            m_Pool = new ObjectPool<HierarchyListViewItem>(() =>
             {
                 var element = new HierarchyListViewItem(m_Model);
                 contextMenu.RegisterCallbacksOnTarget(element);
@@ -169,7 +170,7 @@ namespace Unity.Entities.Editor
 
         VisualElement MakeCell()
         {
-            var item = m_Pool.Acquire();
+            var item = m_Pool.Get();
             m_Items.Add(item);
             item.RegisterEventListeners();
             OnMakeCell?.Invoke(item);

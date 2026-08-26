@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.Profiling;
 using UnityEditorInternal;
 using UnityEngine.UIElements;
 using Unity.Editor.Bridge;
+using Unity.Collections;
 using static Unity.Entities.EntitiesProfiler;
 using static Unity.Entities.MemoryProfiler;
 
@@ -14,6 +14,7 @@ using Unity.Profiling.Editor;
 namespace Unity.Entities.Editor
 {
     [ProfilerModuleMetadata("Entities Memory", IconPath = "Profiler.Memory")]
+    [Serializable]
     partial class MemoryProfilerModule : ProfilerModule
     {
         class MemoryProfilerViewController : ProfilerModuleViewController
@@ -52,7 +53,13 @@ namespace Unity.Entities.Editor
                 if (IsRecording)
                     return;
 
-                m_View.ArchetypesDataSource = GetFrames(index).SelectMany(GetTreeViewData).ToArray();
+                var archetypes = new List<MemoryProfilerTreeViewItemData>();
+                foreach (var frame in GetFrames(index))
+                {
+                    foreach (var data in GetTreeViewData(frame))
+                        archetypes.Add(data);
+                }
+                m_View.ArchetypesDataSource = archetypes.ToArray();
                 m_View.Search();
             }
 
@@ -84,18 +91,28 @@ namespace Unity.Entities.Editor
         static readonly string s_NoFrameDataAvailable = L10n.Tr("No frame data available. Select a frame from the charts above to see its details here.");
         static readonly string s_DisplayingFrameDataDisabled = L10n.Tr("Displaying of frame data disabled while recording. To see the data, pause recording.");
 
-        static IEnumerable<MemoryProfilerTreeViewItemData> GetTreeViewData(RawFrameDataView frame)
+        internal static IEnumerable<MemoryProfilerTreeViewItemData> GetTreeViewData(RawFrameDataView frame)
         {
-            var worldsData = GetSessionMetaData<WorldData>(frame, EntitiesProfiler.Guid, (int)DataTag.WorldData).Distinct().ToDictionary(x => x.SequenceNumber, x => x);
-            var archetypesData = GetSessionMetaData<ArchetypeData>(frame, EntitiesProfiler.Guid, (int)DataTag.ArchetypeData).Distinct().ToDictionary(x => x.StableHash, x => x);
+            var worldsData = GetDistinctSessionMetaDataAsDictionary<WorldData, ulong>(frame, EntitiesProfiler.Guid, (int)DataTag.WorldData, x => x.SequenceNumber);
+            var archetypesData = GetDistinctSessionMetaDataAsDictionary<ArchetypeData, ulong>(frame, EntitiesProfiler.Guid, (int)DataTag.ArchetypeData, x => x.StableHash);
+
+            var componentsSet = new HashSet<ArchetypeComponentData>();
+            GetDistinctSessionMetaData(frame, EntitiesProfiler.Guid, (int)DataTag.ArchetypeComponentData, componentsSet);
+            var archetypeComponentsData = new NativeArray<ArchetypeComponentData>(componentsSet.Count, Allocator.Temp);
+            var componentIndex = 0;
+            foreach (var component in componentsSet)
+                archetypeComponentsData[componentIndex++] = component;
+
             foreach (var archetypeMemoryData in GetFrameMetaData<ArchetypeMemoryData>(frame, MemoryProfiler.Guid, 0))
             {
                 if (worldsData.TryGetValue(archetypeMemoryData.WorldSequenceNumber, out var worldData) &&
                     archetypesData.TryGetValue(archetypeMemoryData.StableHash, out var archetypeData))
                 {
-                    yield return new MemoryProfilerTreeViewItemData(worldData.Name, archetypeData, archetypeMemoryData);
+                    yield return new MemoryProfilerTreeViewItemData(worldData.Name, archetypeData, archetypeMemoryData, archetypeComponentsData);
                 }
             }
+
+            archetypeComponentsData.Dispose();
         }
 
         static IEnumerable<T> GetSessionMetaData<T>(RawFrameDataView frame, Guid guid, int tag) where T : unmanaged
@@ -118,6 +135,25 @@ namespace Unity.Entities.Editor
                 for (var i = 0; i < metaDataArray.Length; ++i)
                     yield return metaDataArray[i];
             }
+        }
+
+        static Dictionary<TKey, T> GetDistinctSessionMetaDataAsDictionary<T, TKey>(RawFrameDataView frame, Guid guid, int tag, Func<T, TKey> keySelector) where T : unmanaged
+        {
+            var result = new Dictionary<TKey, T>();
+            foreach (var item in GetSessionMetaData<T>(frame, guid, tag))
+            {
+                var key = keySelector(item);
+                if (!result.ContainsKey(key))
+                    result[key] = item;
+            }
+            return result;
+        }
+
+        static void GetDistinctSessionMetaData<T>(RawFrameDataView frame, Guid guid, int tag, HashSet<T> result) where T : unmanaged
+        {
+            result.Clear();
+            foreach (var item in GetSessionMetaData<T>(frame, guid, tag))
+                result.Add(item);
         }
 
         static IEnumerable<RawFrameDataView> GetFrames(long index)

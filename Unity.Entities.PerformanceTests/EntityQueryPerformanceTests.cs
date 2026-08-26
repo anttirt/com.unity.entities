@@ -7,7 +7,6 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.PerformanceTesting;
 using Unity.Entities.Tests;
-using Unity.Entities.UniversalDelegates;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Random = Unity.Mathematics.Random;
@@ -879,7 +878,9 @@ namespace Unity.Entities.PerformanceTests
             if (!resultEmpty)
             {
                 ent = m_Manager.CreateEntity(lastArchetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(ent, new EcsTestSharedComp { value = 42 });
+                #pragma warning restore 0618
             }
 
             if (enabledBitsMode != EnabledBitsMode.NoEnableableComponents)
@@ -909,7 +910,9 @@ namespace Unity.Entities.PerformanceTests
                 .SampleGroup(new SampleGroup("IsEmpty WithoutFilter 100x", SampleUnit.Microsecond))
                 .Run();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.AddSharedComponentFilterManaged(new EcsTestSharedComp { value = 42 });
+            #pragma warning restore 0618
             Measure.Method(
                     () =>
                     {
@@ -935,7 +938,9 @@ namespace Unity.Entities.PerformanceTests
             if (!resultEmpty)
             {
                 ent = m_Manager.CreateEntity(lastArchetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(ent, new EcsTestSharedComp { value = 42 });
+                #pragma warning restore 0618
             }
 
             if (enabledBitsMode != EnabledBitsMode.NoEnableableComponents)
@@ -963,7 +968,9 @@ namespace Unity.Entities.PerformanceTests
                 .SampleGroup(new SampleGroup("IsEmpty WithoutFilter 100x", SampleUnit.Microsecond))
                 .Run();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.AddSharedComponentFilterManaged(new EcsTestSharedComp { value = 42 });
+            #pragma warning restore 0618
             Measure.Method(
                     () =>
                     {
@@ -1340,6 +1347,13 @@ namespace Unity.Entities.PerformanceTests
         public unsafe void EntityQuery_CreateEntityQuery_EntityQueryBuilder_Burst_UniqueArchetypes(
             [Values(1, 100, 1000)] int queryCount, [Values(1,2,16)] int componentsPerQuery)
         {
+#if !(UNITY_EDITOR_WINDOWS || UNITY_STANDALONE_WINDOWS || UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX)
+            if (!BurstCompiler.IsEnabled)
+            {
+                Assert.Ignore("[UUM-132169] This test fails on non-desktop platforms when Burst is enabled.");
+            }
+#endif
+
             var archetypes = CreateUniqueTagCombinations(queryCount, componentsPerQuery);
 
             SystemState* state = null;
@@ -1450,6 +1464,13 @@ namespace Unity.Entities.PerformanceTests
         public unsafe void EntityQuery_GetEntityQuery_EntityQueryBuilder_Burst_UniqueArchetypes(
                 [Values(1, 10, 100)] int queryCount, [Values(1,2,16)] int componentsPerQuery)
         {
+#if !(UNITY_EDITOR_WINDOWS || UNITY_STANDALONE_WINDOWS || UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX)
+            if (!BurstCompiler.IsEnabled)
+            {
+                Assert.Ignore("[UUM-132169] This test fails on non-desktop platforms when Burst is enabled.");
+            }
+#endif
+
             var archetypes = CreateUniqueTagCombinations(queryCount, componentsPerQuery);
 
             SystemState* state = null;
@@ -1506,7 +1527,9 @@ namespace Unity.Entities.PerformanceTests
                     }
                 }
                 // One enabled entity in each archetype should match the shared component filter
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[1], new EcsTestSharedComp(archetypeCount));
+                #pragma warning restore 0618
             }
 
             // Create extra empty archetypes to make sure we're not wasting time searching them.
@@ -1543,7 +1566,9 @@ namespace Unity.Entities.PerformanceTests
                 .Run();
 
             // Add a shared component filter for a second test
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = archetypeCount});
+            #pragma warning restore 0618
 
             Measure.Method(
                 () =>
@@ -1577,7 +1602,9 @@ namespace Unity.Entities.PerformanceTests
                     }
                 }
                 // One enabled entity in each archetype should match the shared component filter
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[1], new EcsTestSharedComp(archetypeCount));
+                #pragma warning restore 0618
             }
             int expectedChunkCount = archetypes.Length * (chunkCount+1);
             int expectedFilteredChunkCount = archetypes.Length * 1;
@@ -1656,7 +1683,9 @@ namespace Unity.Entities.PerformanceTests
                 using var entities = new NativeArray<Entity>( chunkCapacity * chunksPerArchetype, Allocator.Temp);
                 m_Manager.CreateEntity(archetypes[i], entities);
                 // One enabled entity in each archetype should match the shared component filter
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[1], sharedCompValue);
+                #pragma warning restore 0618
             }
 
             // Create extra empty archetypes to make sure we're not wasting time searching them.
@@ -1668,7 +1697,9 @@ namespace Unity.Entities.PerformanceTests
                 : m_Manager.CreateEntityQuery(typeof(EcsTestData2), typeof(EcsTestSharedComp),
                     typeof(EcsTestDataEnableable));
             if (enableChunkFilter)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 query.SetSharedComponentFilterManaged(sharedCompValue);
+                #pragma warning restore 0618
             using var expectedList = query.ToArchetypeChunkListAsync(Allocator.Persistent, out var gatherJobHandle);
             gatherJobHandle.Complete();
             var expectedChunks = expectedList.AsArray().ToArray();
@@ -1706,7 +1737,9 @@ namespace Unity.Entities.PerformanceTests
                 using var entities = new NativeArray<Entity>( chunkCapacity * chunksPerArchetype, Allocator.Temp);
                 m_Manager.CreateEntity(archetypes[i], entities);
                 // One enabled entity in each archetype should match the shared component filter
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[1], sharedCompValue);
+                #pragma warning restore 0618
             }
 
             // Create extra archetypes to make sure we're not wasting time searching them.
@@ -1718,7 +1751,9 @@ namespace Unity.Entities.PerformanceTests
                 : m_Manager.CreateEntityQuery(typeof(EcsTestData2), typeof(EcsTestSharedComp),
                     typeof(EcsTestDataEnableable));
             if (enableChunkFilter)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 query.SetSharedComponentFilterManaged(sharedCompValue);
+                #pragma warning restore 0618
             var expectedChunks = query.ToArchetypeChunkArray(Allocator.Temp).ToArray();
 
             var result =  default(NativeList<ArchetypeChunk>);

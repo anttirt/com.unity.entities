@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using Unity.Entities.Content;
 using System.Runtime.InteropServices;
 using Unity.Assertions;
@@ -13,7 +11,6 @@ using Unity.IO.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Profiling;
 using UnityEngine;
-using System.Linq;
 
 namespace Unity.Scenes
 {
@@ -30,8 +27,15 @@ namespace Unity.Scenes
         public Entity SceneSectionEntity;
         public UntypedWeakReferenceId UnityObjectRefId;
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+        #pragma warning disable 0618 // Legacy PostLoadCommandBuffer path retained for the deprecation cycle; the new path uses ImportSourceEntities.
         public PostLoadCommandBuffer PostLoadCommandBuffer;
+        #pragma warning restore 0618
 #endif
+        // Per-load list of main-world entities to copy into the streaming world before
+        // ProcessAfterLoadGroup runs. Populated by SceneSectionStreamingSystem from the
+        // RequestSceneLoaded.ImportEntity values on the section and parent scene meta entities.
+        public NativeList<Entity> ImportSourceEntities;
+        public EntityManager MainWorldEntityManager;
         internal int ExternalEntitiesRefRange;
         internal int SceneSectionIndex;
     }
@@ -97,8 +101,12 @@ namespace Unity.Scenes
                 RuntimeContentManager.ReleaseObjectAsync(_UnityObjectRefId);
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618
             _Data.PostLoadCommandBuffer?.Dispose();
+            #pragma warning restore 0618
 #endif
+            if (_Data.ImportSourceEntities.IsCreated)
+                _Data.ImportSourceEntities.Dispose();
             _Data.BlobHeaderOwner.Release();
             _DeserializationResultArray.Dispose(_EntityManager.ExclusiveEntityTransactionDependency);
         }
@@ -111,7 +119,7 @@ namespace Unity.Scenes
 
             public GCHandle                     LoadingOperationHandle;
             [DeallocateOnJobCompletion]
-            public NativeArray<int> UnityObjectRefs;
+            public NativeArray<EntityId> UnityObjectRefs;
 
             public ExclusiveEntityTransaction   Transaction;
             public NativeArray<SerializeUtility.WorldDeserializationResult> DeserializationResult;
@@ -120,6 +128,8 @@ namespace Unity.Scenes
             [NativeDisableUnsafePtrRestriction]
             public SerializeUtility.WorldDeserializationStatus DeserializationStatus;
             public BlobAssetReference<DotsSerialization.BlobHeader> BlobHeader;
+            [NativeDisableUnsafePtrRestriction]
+            public BlobAssetOwner BlobHeaderOwner;
             public Entity SceneSectionEntity;
             public int SceneSectionIndex;
             public int ExternalEntitiesRefRange;
@@ -149,13 +159,20 @@ namespace Unity.Scenes
                         SerializeUtility.EndDeserializeWorld(Transaction, dotsReader, ref DeserializationStatus, out deserializationResult, ExternalEntitiesRefRange, SceneSectionIndex, UnityObjectRefs);
                         k_ProfileDeserializeWorld.End();
                     }
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Transaction.EntityManager.AddSharedComponentManaged(Transaction.EntityManager.UniversalQueryWithSystems, new SceneTag { SceneEntity = SceneSectionEntity });
+                    #pragma warning restore 0618
                     DeserializationResult[0] = deserializationResult;
                 }
                 catch (Exception exc)
                 {
                     loadingOperation._LoadingFailure = exc.Message;
                     loadingOperation._LoadingException = exc;
+                }
+                finally
+                {
+                    if (BlobHeaderOwner.IsCreated)
+                        BlobHeaderOwner.Release();
                 }
             }
         }
@@ -233,15 +250,9 @@ namespace Unity.Scenes
                 Assert.IsFalse(string.IsNullOrEmpty(_ScenePath));
                 _StartTime = Time.realtimeSinceStartup;
 
-                if (_Data.BlobHeader.IsCreated)
-                {
-                    var dotsReader = DotsSerialization.CreateReader(ref _Data.BlobHeader.Value);
-                    _ReadHandle = SerializeUtility.BeginDeserializeWorld(_ScenePath, dotsReader, out _DeserializationStatus, out _ReadCommands);
-                }
-                else
-                {
-                    throw new InvalidOperationException("BlobHeader must be valid");
-                }
+                _Data.BlobHeader.m_data.ValidateNotNull();
+                var dotsReader = DotsSerialization.CreateReader(ref _Data.BlobHeader.Value);
+                _ReadHandle = SerializeUtility.BeginDeserializeWorld(_ScenePath, dotsReader, out _DeserializationStatus, out _ReadCommands);
 
                 if (_UnityObjectRefId.IsValid)
                 {
@@ -302,15 +313,9 @@ namespace Unity.Scenes
                     // Asynchronous deserialization from file, the BeginDeserializeWorld call will schedule the reads, the End call will perform the deserialization itself
                     else
                     {
-                        if (_Data.BlobHeader.IsCreated)
-                        {
-                            var dotsReader = DotsSerialization.CreateReader(ref _Data.BlobHeader.Value);
-                            _ReadHandle = SerializeUtility.BeginDeserializeWorld(_ScenePath, dotsReader, out _DeserializationStatus, out _ReadCommands);
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException("BlobHeader must be valid");
-                        }
+                        _Data.BlobHeader.m_data.ValidateNotNull();
+                        var dotsReader = DotsSerialization.CreateReader(ref _Data.BlobHeader.Value);
+                        _ReadHandle = SerializeUtility.BeginDeserializeWorld(_ScenePath, dotsReader, out _DeserializationStatus, out _ReadCommands);
                     }
 
                     if (_UnityObjectRefId.IsValid)
@@ -407,46 +412,73 @@ namespace Unity.Scenes
             if(_UnityObjectRefId.IsValid)
                 SerializeUtilityHybrid.DeserializeObjectReferences(RuntimeContentManager.GetObjectValue<ReferencedUnityObjects>(_UnityObjectRefId), out objectReferences);
 #endif
-            NativeArray<int> unityObjectRefs = default;
+            NativeArray<EntityId> unityObjectRefs = default;
             if (objectReferences != null && objectReferences.Length > 0)
             {
-                unityObjectRefs = new NativeArray<int>(objectReferences.Length, Allocator.Persistent);
+                unityObjectRefs = new NativeArray<EntityId>(objectReferences.Length, Allocator.Persistent);
+                int missingCount = 0;
                 for (int i = 0; i < unityObjectRefs.Length; i++)
                 {
-                    unityObjectRefs[i] = objectReferences[i].GetInstanceID();
+                    var obj = objectReferences[i];
+                    if (obj != null)
+                    {
+                        unityObjectRefs[i] = obj.GetEntityId();
+                    }
+                    else
+                    {
+                        unityObjectRefs[i] = EntityId.None;
+                        missingCount++;
+                    }
+                }
+                if (missingCount > 0)
+                {
+                    Debug.LogWarning($"{missingCount} missing object reference(s) while loading subscene '{_ScenePath}'. " +
+                        "The reference(s) will be null. This may indicate deleted or missing asset(s).");
                 }
             }
             else
             {
-                unityObjectRefs = new NativeArray<int>(0, Allocator.Persistent);
+                unityObjectRefs = new NativeArray<EntityId>(0, Allocator.Persistent);
             }
+            s_UnityObjectsRefs.AddRange(unityObjectRefs);
 
-            var loadJob = new AsyncLoadSceneJob
+            _Data.BlobHeaderOwner.Retain();
+
+            try
             {
-                Transaction = transaction,
-                LoadingOperationHandle = GCHandle.Alloc(this),
-                UnityObjectRefs = unityObjectRefs,
-                DeserializationStatus = _DeserializationStatus,
-                BlobHeader = _Data.BlobHeader,
-                FileContent = _FileContent,
-                FileLength = _SceneSize,
-                DeserializationResult = _DeserializationResultArray,
-                SceneSectionEntity = _Data.SceneSectionEntity,
-                SceneSectionIndex = _Data.SceneSectionIndex,
-                ExternalEntitiesRefRange = _Data.ExternalEntitiesRefRange,
-            };
+                var loadJob = new AsyncLoadSceneJob
+                {
+                    Transaction = transaction,
+                    LoadingOperationHandle = GCHandle.Alloc(this),
+                    UnityObjectRefs = unityObjectRefs,
+                    DeserializationStatus = _DeserializationStatus,
+                    BlobHeader = _Data.BlobHeader,
+                    BlobHeaderOwner = _Data.BlobHeaderOwner,
+                    FileContent = _FileContent,
+                    FileLength = _SceneSize,
+                    DeserializationResult = _DeserializationResultArray,
+                    SceneSectionEntity = _Data.SceneSectionEntity,
+                    SceneSectionIndex = _Data.SceneSectionIndex,
+                    ExternalEntitiesRefRange = _Data.ExternalEntitiesRefRange,
+                };
 
-            var loadJobHandle = loadJob.Schedule(JobHandle.CombineDependencies(
-                _EntityManager.ExclusiveEntityTransactionDependency,
-                _ReadHandle.JobHandle));
-            _EntityManager.ExclusiveEntityTransactionDependency = loadJobHandle;
-            _DeserializationStatus = default; // _DeserializationStatus is disposed by AsyncLoadSceneJob
-            var freeJob = new FreeJob { Ptr = _FileContent, ReadCommands = _ReadCommands, ReadHandle = _ReadHandle };
-            freeJob.Schedule(loadJobHandle);
+                var loadJobHandle = loadJob.Schedule(JobHandle.CombineDependencies(
+                    _EntityManager.ExclusiveEntityTransactionDependency,
+                    _ReadHandle.JobHandle));
+                _EntityManager.ExclusiveEntityTransactionDependency = loadJobHandle;
+                _DeserializationStatus = default; // _DeserializationStatus is disposed by AsyncLoadSceneJob
+                var freeJob = new FreeJob { Ptr = _FileContent, ReadCommands = _ReadCommands, ReadHandle = _ReadHandle };
+                freeJob.Schedule(loadJobHandle);
 
-            _FileContent = null;
-            _ReadCommands = default;
-            _ReadHandle = default;
+                _FileContent = null;
+                _ReadCommands = default;
+                _ReadHandle = default;
+            }
+            catch
+            {
+                _Data.BlobHeaderOwner.Release();
+                throw;
+            }
         }
 
         static readonly ProfilerMarker s_PostProcessScene = new ProfilerMarker(nameof(PostProcessScene));
@@ -455,21 +487,67 @@ namespace Unity.Scenes
             using var marker = s_PostProcessScene.Auto();
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618
             if (_Data.PostLoadCommandBuffer != null)
             {
                 _Data.PostLoadCommandBuffer.CommandBuffer.Playback(_EntityManager);
                 _Data.PostLoadCommandBuffer.Dispose();
                 _Data.PostLoadCommandBuffer = null;
             }
+            #pragma warning restore 0618
 #endif
+
+            // Copy any RequestSceneLoaded.ImportEntity carriers from the main world into this
+            // section's streaming world, before ProcessAfterLoadGroup systems run. Imported
+            // entities follow the same lifetime rules as any other streaming-world entity:
+            // ProcessAfterLoad systems may consume and destroy them, and any imported entity
+            // still alive after the group runs receives a SceneTag below and is moved into the
+            // main world by MoveEntitiesFrom downstream.
+            if (_Data.ImportSourceEntities.IsCreated && _Data.ImportSourceEntities.Length > 0)
+            {
+                // Async loads can span many frames, so a carrier entity collected by
+                // SceneSectionStreamingSystem.CreateAsyncLoadSceneOperation may have been destroyed
+                // by user code in the meantime. CopyEntitiesFrom would throw on an invalid entity
+                // and break the whole load — log an error and drop it instead. The contract
+                // matches the collection-time filter: keep carrier entities alive until the scene
+                // load completes.
+                for (int i = _Data.ImportSourceEntities.Length - 1; i >= 0; i--)
+                {
+                    var src = _Data.ImportSourceEntities[i];
+                    if (!_Data.MainWorldEntityManager.Exists(src))
+                    {
+                        UnityEngine.Debug.LogError($"RequestSceneLoaded.ImportEntity source entity {src} was destroyed during async scene load before its target scene completed loading. The directive is being skipped; keep carrier entities alive until the scene load completes.");
+                        _Data.ImportSourceEntities.RemoveAtSwapBack(i);
+                    }
+                }
+                if (_Data.ImportSourceEntities.Length > 0)
+                    _EntityManager.CopyEntitiesFrom(_Data.MainWorldEntityManager, _Data.ImportSourceEntities.AsArray());
+            }
+
             SceneSectionStreamingSystem.AddStreamingWorldSystems(_EntityManager.World);
             var group = _EntityManager.World.GetOrCreateSystemManaged<ProcessAfterLoadGroup>();
             group.Update();
             _EntityManager.CompleteAllTrackedJobs();
             _EntityManager.World.DestroyAllSystemsAndLogException(out bool errorsWhileDestroyingSystems);
+
             using var missingSceneTag = _EntityManager.CreateEntityQuery(ComponentType.Exclude<SceneTag>());
             if (!missingSceneTag.IsEmptyIgnoreFilter)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 _EntityManager.AddSharedComponentManaged(missingSceneTag, new SceneTag { SceneEntity = _Data.SceneSectionEntity });
+                #pragma warning restore 0618
         }
+
+#if !UNITY_EDITOR
+        [RuntimeInitializeOnLoadMethod]
+#else
+        [UnityEditor.InitializeOnLoadMethod]
+#endif
+        public static void EditorInitializeOnLoadMethod()
+        {
+            UnityObjectRefUtility.RegisterAdditionalRootsHandlerForEntitiesAssetGC(
+                state => UnityObjectRefUtility.MarkInstanceIDsAsRoot(s_UnityObjectsRefs.AsArray(), state));
+            s_UnityObjectsRefs = new NativeList<EntityId>(Allocator.Domain);
+        }
+        static NativeList<EntityId> s_UnityObjectsRefs;
     }
 }

@@ -18,15 +18,21 @@ namespace Unity.Entities.Tests
             {
                 {
                     var entity = m_Manager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.AddComponentObject(entity, go1.transform);
+                    #pragma warning restore 0618
                 }
                 {
                     var entity = m_Manager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.AddComponentObject(entity, go2.transform);
+                    #pragma warning restore 0618
                 }
 
                 var query = EmptySystem.GetEntityQuery(typeof(Transform));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var arr = query.ToComponentArray<Transform>();
+                #pragma warning restore 0618
                 Assert.AreEqual(2, arr.Length);
                 Assert.That(arr.Any(t => ReferenceEquals(t, go1.transform)), "Output doesn't contain transform 1");
                 Assert.That(arr.Any(t => ReferenceEquals(t, go2.transform)), "Output doesn't contain transform 2");
@@ -43,23 +49,31 @@ namespace Unity.Entities.Tests
         public void ToComponentArrayManagedComponent()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new EcsTestManagedComponent
             {
                 value = "entity 1"
             });
+            #pragma warning restore 0618
             var entity2 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity2, new EcsTestManagedComponent
             {
                 value = "entity 2"
             });
+            #pragma warning restore 0618
             var entity3 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentObject(entity3, new EcsTestManagedComponent2
+            #pragma warning restore 0618
             {
                 value = "entity 3"
             });
 
             var query = EmptySystem.GetEntityQuery(typeof(EcsTestManagedComponent));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var arr = query.ToComponentArray<EcsTestManagedComponent>();
+            #pragma warning restore 0618
             Assert.AreEqual(2, arr.Length);
             Assert.AreEqual("entity 1",arr[0].value);
             Assert.AreEqual("entity 2",arr[1].value);

@@ -198,11 +198,7 @@ namespace Unity.Entities.Editor
                     ExcludeUnnamedNodes = ExcludeUnnamedNodes,
 #if !DOTS_DISABLE_DEBUG_NAMES
                     EntityNameStorageMask = m_EntityNameStorageMask,
-#if ENTITY_STORE_V1
-                    NameByEntity = m_World != null ? m_HierarchyNameStore.NameByEntity : null,
-#else
                     NameStoreAccess = m_World != null ? m_HierarchyNameStore.NameStoreAccess : default,
-#endif
 #endif
                     NameByHandleLowerInvariant = m_HierarchyNameStore.NameByHandleLowerInvariant,
                     NodeMatchesMask = mask,
@@ -273,7 +269,7 @@ namespace Unity.Entities.Editor
 
                     if (handle.Kind == NodeKind.Entity)
                     {
-                        if (handle.Index != Index)
+                        if (handle.ToEntity().Index != Index)
                             NodeMatchesMask.Set(index, false);
                     }
                     else if (handle.Kind != NodeKind.SubScene)
@@ -391,11 +387,7 @@ namespace Unity.Entities.Editor
 
 #if !DOTS_DISABLE_DEBUG_NAMES
             [ReadOnly] public NativeBitArray EntityNameStorageMask;
-#if ENTITY_STORE_V1
-            [NativeDisableUnsafePtrRestriction] public EntityName* NameByEntity;
-#else
             [ReadOnly] public EntityNameStoreAccess NameStoreAccess;
-#endif
 
 #endif
 
@@ -415,22 +407,13 @@ namespace Unity.Entities.Editor
                     if (handle.Kind == NodeKind.Entity)
                     {
 #if !DOTS_DISABLE_DEBUG_NAMES
-#if ENTITY_STORE_V1
-                        if (NameByEntity[handle.Index].Index > 0)
-                        {
-                            // Fast path. This name already exists in the database.
-                            NodeMatchesMask.Set(index, EntityNameStorageMask.IsSet(NameByEntity[handle.Index].Index));
-                            continue;
-                        }
-#else
-                        var entityName = NameStoreAccess.GetEntityNameByEntityIndex(handle.Index);
+                        var entityName = EntityNameStorage.GetEntityName(handle.ToEntity());
                         if (entityName.Index > 0)
                         {
                             // Fast path. This name already exists in the database.
                             NodeMatchesMask.Set(index, EntityNameStorageMask.IsSet(entityName.Index));
                             continue;
                         }
-#endif
 
 #endif
 

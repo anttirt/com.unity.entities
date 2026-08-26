@@ -138,7 +138,9 @@ namespace Unity.Entities
                                 var pointer = (byte*)entityManager.GetBufferRawRW(entity, component.TypeIndex);
                                 UnsafeUtility.MemCpy(pointer + targetOffset, &targetBlobAssetReferenceData, sizeof(BlobAssetReferenceData));
                             }
+#pragma warning disable 0618 // managed component helper obsolete; internal patcher still needs it.
                             else if (component.IsManagedComponent || component.IsSharedComponent)
+#pragma warning restore 0618
                             {
                                 managedObjectBlobAssetReferencePatches.Add(
                                     new EntityComponentPair { Entity = entity, Component = component },
@@ -169,18 +171,27 @@ namespace Unity.Entities
                     var pair = keys[i];
                     var patches = managedObjectBlobAssetReferencePatches.GetValuesForKey(pair);
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     if (pair.Component.IsManagedComponent)
+                    #pragma warning restore 0618
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var obj = entityManager.GetComponentObject<object>(pair.Entity, pair.Component);
+                        #pragma warning restore 0618
                         managedObjectPatcher.ApplyPatches(ref obj, patches);
                     }
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     else if (pair.Component.TypeIndex.IsManagedSharedComponent)
+                    #pragma warning restore 0618
                     {
                         var obj = entityManager.GetSharedComponentData(pair.Entity, pair.Component.TypeIndex);
                         managedObjectPatcher.ApplyPatches(ref obj, patches);
                         entityManager.SetSharedComponentDataBoxedDefaultMustBeNull(pair.Entity, pair.Component.TypeIndex, obj);
                     }
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     else if (pair.Component.IsSharedComponent && !pair.Component.TypeIndex.IsManagedSharedComponent)
+                    #pragma warning restore 0618
+#pragma warning restore 0618
                     {
                         var access = entityManager.GetCheckedEntityDataAccess();
                         var changes = access->BeginStructuralChanges();
@@ -220,16 +231,19 @@ namespace Unity.Entities
         {
             EntityPatcherBlobAssetSystem m_EntityPatcherBlobAssetSystem;
             NativeParallelMultiHashMap<EntityComponentPair, ManagedObjectBlobAssetReferencePatch>.Enumerator Patches;
+            readonly UniqueReferenceExcludeAdapter m_UniqueRefExclude = new UniqueReferenceExcludeAdapter();
 
             public ManagedObjectBlobAssetReferencePatcher(EntityPatcherBlobAssetSystem entityPatcherBlobAssetSystem)
             {
                 m_EntityPatcherBlobAssetSystem = entityPatcherBlobAssetSystem;
+                AddAdapter(m_UniqueRefExclude);
                 AddAdapter(this);
             }
 
             public void ApplyPatches(ref object obj, NativeParallelMultiHashMap<EntityComponentPair, ManagedObjectBlobAssetReferencePatch>.Enumerator patches)
             {
                 Patches = patches;
+                m_UniqueRefExclude.PrepareForNewRootVisit();
                 PropertyContainer.Accept(this, ref obj);
             }
 

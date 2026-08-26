@@ -66,7 +66,7 @@ namespace Unity.Entities.Editor
             categories.CopyTo(s_CachedCategories);
         }
 
-        static WorldFlags GetMainFlag(World world)
+        internal static WorldFlags GetMainFlag(World world)
         {
             if ((world.Flags & WorldFlags.Shadow) != 0) return WorldFlags.Shadow;
             if ((world.Flags & WorldFlags.Conversion) != 0) return WorldFlags.Conversion;

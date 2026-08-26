@@ -1,11 +1,12 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Unity.Properties;
 using Unity.Entities.UI;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine.UIElements;
+using UnityEngine.Pool;
 
 namespace Unity.Entities.Editor
 {
@@ -13,6 +14,7 @@ namespace Unity.Entities.Editor
     {
         readonly EntityInspectorContext m_Context;
         bool m_IsVisible;
+        ComponentsTabInspector m_Inspector;
 
         public string TabName { get; } = L10n.Tr("Components");
         public void OnTabVisibilityChanged(bool isVisible)
@@ -26,34 +28,37 @@ namespace Unity.Entities.Editor
         {
             m_Context = entityInspectorContext;
         }
+        
+        internal void ClearSearch() => m_Inspector?.ClearSearch();
+        internal void ApplySearch(string searchText) => m_Inspector?.ApplySearch(searchText);
 
         [UsedImplicitly]
-        class ComponentsTabInspector : PropertyInspector<ComponentsTab>
+        internal class ComponentsTabInspector : PropertyInspector<ComponentsTab>
         {
-            readonly List<ComponentElementBase> m_FilteredElements = new List<ComponentElementBase>();
-
             EntityInspectorComponentStructure m_CurrentComponentStructure;
             EntityInspectorComponentStructure m_LastComponentStructure;
             EntityInspectorBuilderVisitor m_InspectorBuilderVisitor;
             VisualElement m_Root;
             TagComponentContainer m_TagsRoot;
             VisualElement m_ComponentsRoot;
-            SearchElement m_SearchElement;
+            ToolbarSearchField m_SearchField;
 
             public override VisualElement Build()
             {
+                Target.m_Inspector = this;
+
                 m_Root = Resources.Templates.Inspector.ComponentsTab.Clone();
 
-                m_SearchElement = m_Root.Q<SearchElement>(className: UssClasses.Inspector.ComponentsTab.SearchField);
-                m_SearchElement.RegisterSearchQueryHandler<ComponentElementBase>(query =>
-                {
-                    using var pooled = PooledList<ComponentElementBase>.Make();
-                    var list = pooled.List;
-                    m_Root.Query<ComponentElementBase>().ToList(list);
-                    m_FilteredElements.Clear();
-                    m_FilteredElements.AddRange(query.Apply(list));
-                    SearchChanged(list);
-                });
+                Resources.AddCommonVariables(m_Root);
+                UnityEditor.Search.SearchElement.AppendStyleSheets(m_Root);
+
+                m_SearchField = InspectorUtility.CreateSearchField(
+                    UssClasses.Inspector.ComponentsTab.SearchField,
+                    ApplySearch,
+                    ClearSearch);
+
+                var searchContainer = m_Root.Q(className: "search-field-container");
+                searchContainer.Add(m_SearchField);
 
                 m_TagsRoot = new TagComponentContainer(Target.m_Context);
                 m_ComponentsRoot = new VisualElement();
@@ -70,6 +75,30 @@ namespace Unity.Entities.Editor
                 BuildOrUpdateUI();
 
                 return m_Root;
+            }
+
+            public void ClearSearch()
+            {
+                m_SearchField.SetValueWithoutNotify(string.Empty);
+
+                using var _ = ListPool<ComponentElementBase>.Get(out var list);
+                m_Root.Query<ComponentElementBase>().ToList(list);
+
+                foreach (var comp in list)
+                    comp.Show();
+            }
+
+            public void ApplySearch(string searchText)
+            {
+                using var _ = ListPool<ComponentElementBase>.Get(out var list);
+                m_Root.Query<ComponentElementBase>().ToList(list);
+
+                foreach (var element in list)
+                {
+                    var isMatch = element.DisplayName != null &&
+                                  element.DisplayName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                    element.SetVisibility(isMatch);
+                }
             }
 
             public override void Update()
@@ -159,19 +188,6 @@ namespace Unity.Entities.Editor
                 }
             }
 
-            void SearchChanged(List<ComponentElementBase> list)
-            {
-                if (m_FilteredElements.Count == 0)
-                {
-                    foreach (var componentElementBase in list)
-                        componentElementBase.Show();
-                }
-                else
-                {
-                    foreach (var componentElementBase in list)
-                        componentElementBase.SetVisibility(m_FilteredElements.Contains(componentElementBase));
-                }
-            }
         }
     }
 }

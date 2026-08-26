@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
@@ -242,14 +242,7 @@ namespace Unity.Entities.Editor
     /// </summary>
     unsafe struct UnsafeEntityMapDense<T> : IDisposable where T : unmanaged
     {
-#if ENTITY_STORE_V1
-        /// <summary>
-        /// Sparse indexing in to the dense data set.
-        /// </summary>
-        UnsafeEntityMapSparse<int> m_IndexByEntity;
-#else
         UnsafeHashMap<Entity, int> m_IndexByEntity;
-#endif
 
         /// <summary>
         /// A set of free indices in the dense data set.
@@ -342,11 +335,7 @@ namespace Unity.Entities.Editor
             foreach (var entityValuePair in m_IndexByEntity)
             {
                 if (entityValuePair.Value == 0)
-#if ENTITY_STORE_V1
-                    entities[index++] = entityValuePair.Entity;
-#else
                     entities[index++] = entityValuePair.Key;
-#endif
             }
         }
 
@@ -366,9 +355,6 @@ namespace Unity.Entities.Editor
         /// <param name="capacity">The capacity to set.</param>
         public void Resize(int capacity)
         {
-#if ENTITY_STORE_V1
-            m_IndexByEntity.Resize(capacity);
-#endif
         }
 
         /// <summary>
@@ -378,11 +364,7 @@ namespace Unity.Entities.Editor
         /// <returns></returns>
         public bool Exists(Entity entity)
         {
-#if ENTITY_STORE_V1
-            return m_IndexByEntity.Exists(entity);
-#else
             return m_IndexByEntity.ContainsKey(entity);
-#endif
         }
 
         /// <summary>
@@ -391,10 +373,6 @@ namespace Unity.Entities.Editor
         /// <param name="entity">The entity to remove data for.</param>
         public void Remove(Entity entity)
         {
-#if ENTITY_STORE_V1
-            if (m_IndexByEntity.Capacity <= entity.Index)
-                return;
-#endif
 
             if (m_IndexByEntity[entity] != 0)
                 m_FreeIndex.Add(m_IndexByEntity[entity]);
@@ -523,15 +501,6 @@ namespace Unity.Entities.Editor
         {
             UnsafeList<T> m_Data;
 
-#if ENTITY_STORE_V1
-            UnsafeEntityMapSparse<int>.Enumerator m_Enumerator;
-
-            public Enumerator(UnsafeEntityMapSparse<int>.Enumerator enumerator, UnsafeList<T> data)
-            {
-                m_Enumerator = enumerator;
-                m_Data = data;
-            }
-#else
             UnsafeHashMap<Entity, int>.Enumerator m_Enumerator;
 
             public Enumerator(UnsafeHashMap<Entity, int>.Enumerator enumerator, UnsafeList<T> data)
@@ -539,7 +508,6 @@ namespace Unity.Entities.Editor
                 m_Enumerator = enumerator;
                 m_Data = data;
             }
-#endif
 
             public void Dispose()
             {
@@ -563,11 +531,7 @@ namespace Unity.Entities.Editor
 
                     return new EntityWithValue<T>
                     {
-#if ENTITY_STORE_V1
-                        Entity = entityWithIndex.Entity,
-#else
                         Entity = entityWithIndex.Key,
-#endif
                         Value = m_Data[entityWithIndex.Value]
                     };
                 }
@@ -583,15 +547,6 @@ namespace Unity.Entities.Editor
         {
             UnsafeList<T> m_DataByIndex;
 
-#if ENTITY_STORE_V1
-            UnsafeEntityMapSparse<int>.Enumerator m_Enumerator;
-
-            public NonDefaultEntityEnumerator(UnsafeEntityMapSparse<int>.Enumerator enumerator, UnsafeList<T> dataByIndex)
-            {
-                m_Enumerator = enumerator;
-                m_DataByIndex = dataByIndex;
-            }
-#else
             UnsafeHashMap<Entity, int>.Enumerator m_Enumerator;
 
             public NonDefaultEntityEnumerator(UnsafeHashMap<Entity, int>.Enumerator enumerator, UnsafeList<T> dataByIndex)
@@ -599,7 +554,6 @@ namespace Unity.Entities.Editor
                 m_Enumerator = enumerator;
                 m_DataByIndex = dataByIndex;
             }
-#endif
 
             public void Dispose()
             {
@@ -632,11 +586,7 @@ namespace Unity.Entities.Editor
 
                     return new EntityWithValue<T>
                     {
-#if ENTITY_STORE_V1
-                        Entity = entityWithIndex.Entity,
-#else
                         Entity = entityWithIndex.Key,
-#endif
                         Value = m_DataByIndex[entityWithIndex.Value]
                     };
                 }

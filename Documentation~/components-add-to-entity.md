@@ -2,7 +2,8 @@
 
 To add components to an entity, use the [`EntityManager`](xref:Unity.Entities.EntityManager) for the [world](concepts-worlds.md) that the entity is in. You can add components to an individual entity, or to several entities at the same time.
 
-Adding a component to an entity is a [structural change](concepts-structural-changes.md) which means that the entity moves to a different chunk. This means that you can't directly add components to an entity from a job. Instead, you must use an [`EntityCommandBuffer`](xref:Unity.Entities.EntityCommandBuffer) to record your intention to add components later.
+> [!NOTE]
+> Adding a component to an entity is a [structural change](concepts-structural-changes.md) which means that the entity moves to a different archetype chunk. Fore more information, refer to [Use entity command buffer for structural changes](ecs-workflow-example-ecb.md).
 
 ### Add a component to a single entity
 

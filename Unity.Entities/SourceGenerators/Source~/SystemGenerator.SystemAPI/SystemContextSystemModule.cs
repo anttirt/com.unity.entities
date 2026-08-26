@@ -12,9 +12,12 @@ public class SystemContextSystemModule : ISystemModule
 
     public IEnumerable<(SyntaxNode SyntaxNode, TypeDeclarationSyntax SystemType)> Candidates
     {
-        get {
-            foreach (var type in m_Candidates) {
-                foreach (var candidate in type.Value) {
+        get
+        {
+            foreach (var type in m_Candidates)
+            {
+                foreach (var candidate in type.Value)
+                {
                     yield return (candidate.Node, type.Key);
                 }
             }
@@ -68,111 +71,115 @@ public class SystemContextSystemModule : ISystemModule
             }
         }
 
-        void InvocationWithNameOrMember(InvocationExpressionSyntax invocation, SimpleNameSyntax nodeContainedByInvocation) {
-            switch (nodeContainedByInvocation.Identifier.ValueText) {
+        void InvocationWithNameOrMember(InvocationExpressionSyntax invocation, SimpleNameSyntax nodeContainedByInvocation)
+        {
+            int argsCount = invocation.ArgumentList.Arguments.Count;
+
+            switch (nodeContainedByInvocation.Identifier.ValueText)
+            {
                 // Component
-                case "GetComponentLookup":
+                case "GetComponentLookup" when argsCount is 0 or 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetComponentLookup);
                     break;
-                case "GetComponent":
+                case "GetComponent" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetComponent);
                     break;
-                case "GetComponentRO":
+                case "GetComponentRO" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetComponentRO);
                     break;
-                case "GetComponentRW":
+                case "GetComponentRW" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetComponentRW);
                     break;
-                case "SetComponent":
+                case "TryGetComponent" when argsCount is 2:
+                    AddCandidate(CandidateFlags.None, CandidateType.TryGetComponent);
+                    break;
+                case "SetComponent" when argsCount is 2:
                     AddCandidate(CandidateFlags.None, CandidateType.SetComponent);
                     break;
-                case "HasComponent":
+                case "HasComponent" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.HasComponent);
                     break;
-                case "IsComponentEnabled":
+                case "IsComponentEnabled" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.IsComponentEnabled);
                     break;
-                case "SetComponentEnabled":
+                case "SetComponentEnabled" when argsCount is 2:
                     AddCandidate(CandidateFlags.None, CandidateType.SetComponentEnabled);
                     break;
 
                 // Buffer
-                case "GetBufferLookup":
+                case "GetBufferLookup" when argsCount is 0 or 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetBufferLookup);
                     break;
-                case "GetBuffer":
+                case "GetBuffer" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.GetBuffer);
                     break;
-                case "HasBuffer":
+                case "HasBuffer" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.HasBuffer);
                     break;
-                case "IsBufferEnabled":
+                case "IsBufferEnabled" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.IsBufferEnabled);
                     break;
-                case "SetBufferEnabled":
+                case "SetBufferEnabled" when argsCount is 2:
                     AddCandidate(CandidateFlags.None, CandidateType.SetBufferEnabled);
                     break;
 
                 // StorageInfo/Exists
-                case "GetEntityStorageInfoLookup":
+                case "GetEntityStorageInfoLookup" when argsCount is 0:
                     AddCandidate(CandidateFlags.None, CandidateType.GetEntityStorageInfoLookup);
                     break;
-                case "Exists":
+                case "Exists" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.Exists);
                     break;
 
                 // Singleton
-                case "GetSingleton":
+                case "GetSingleton" when argsCount is 0:
                     AddCandidate(CandidateFlags.ReadOnly, CandidateType.SingletonWithoutArgument);
                     break;
-                case "GetSingletonEntity":
-                    AddCandidate(CandidateFlags.ReadOnly | CandidateFlags.NoGenericGeneration, CandidateType.SingletonWithoutArgument);
+                case "GetSingletonEntity" when argsCount is 0:
+                    AddCandidate(CandidateFlags.ReadOnly | CandidateFlags.NoGenericGeneration,
+                        CandidateType.SingletonWithoutArgument);
                     break;
-                case "SetSingleton":
+                case "SetSingleton" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.SingletonWithArgument);
                     break;
-                case "GetSingletonRW":
+                case "GetSingletonRW" when argsCount is 0:
                     AddCandidate(CandidateFlags.None, CandidateType.SingletonWithoutArgument);
                     break;
-                case "TryGetSingletonRW":
+                case "TryGetSingletonRW" when argsCount is 1:
                     AddCandidate(CandidateFlags.None, CandidateType.SingletonWithArgument);
                     break;
-                case "TryGetSingletonBuffer":
+                case "TryGetSingletonBuffer" when argsCount is 1 or 2:
                     AddCandidate(CandidateFlags.None, CandidateType.SingletonWithArgument);
                     break;
-                case "TryGetSingletonEntity":
+                case "TryGetSingletonEntity" when argsCount is 1:
                     AddCandidate(CandidateFlags.ReadOnly, CandidateType.SingletonWithArgument);
                     break;
-                case "GetSingletonBuffer":
+                case "GetSingletonBuffer" when argsCount is 0 or 1:
                     AddCandidate(CandidateFlags.None, CandidateType.SingletonWithArgument);
                     break;
-                case "TryGetSingleton":
+                case "TryGetSingleton" when argsCount is 1:
                     AddCandidate(CandidateFlags.ReadOnly, CandidateType.SingletonWithArgument);
                     break;
-                case "HasSingleton":
+                case "HasSingleton" when argsCount is 0:
                     AddCandidate(CandidateFlags.ReadOnly, CandidateType.SingletonWithoutArgument);
-                    break;
-
-                // Aspect
-                case "GetAspect":
-                    AddCandidate(CandidateFlags.None, CandidateType.Aspect);
                     break;
 
                 // TypeHandle
-                case "GetEntityTypeHandle":
+                case "GetEntityTypeHandle" when argsCount is 0:
                     AddCandidate(CandidateFlags.None, CandidateType.EntityTypeHandle);
                     break;
-                case "GetComponentTypeHandle":
+                case "GetComponentTypeHandle" when argsCount is 0 or 1:
                     AddCandidate(CandidateFlags.None, CandidateType.ComponentTypeHandle);
                     break;
-                case "GetBufferTypeHandle":
+                case "GetBufferTypeHandle" when argsCount is 0 or 1:
                     AddCandidate(CandidateFlags.None, CandidateType.BufferTypeHandle);
                     break;
-                case "GetSharedComponentTypeHandle":
+                case "GetSharedComponentTypeHandle" when argsCount is 0:
                     AddCandidate(CandidateFlags.None, CandidateType.SharedComponentTypeHandle);
                     break;
 
-                    void AddCandidate(CandidateFlags flags, CandidateType type) {
+                    void AddCandidate(CandidateFlags flags, CandidateType type)
+                    {
                         var candidateSyntax = new CandidateSyntax(type, flags, invocation);
                         candidateOwnership[invocation] = candidateSyntax;
 

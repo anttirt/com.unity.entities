@@ -1,7 +1,7 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Jobs;
@@ -17,9 +17,14 @@ namespace Unity.Entities.Tests
     {
         public partial class ReadSystem1 : SystemBase
         {
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                public void Execute(in EcsTestData c0) { }
+            }
             protected override void OnUpdate()
             {
-                Entities.ForEach((in EcsTestData c0) => {}).Schedule();
+                new Job().Schedule();
             }
 
             protected override void OnCreate()
@@ -33,13 +38,19 @@ namespace Unity.Entities.Tests
             public bool returnWrongJob = false;
             public bool ignoreInputDeps = false;
 
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                public void Execute(in EcsTestData c0) { }
+            }
+
             protected override void OnUpdate()
             {
                 JobHandle h;
                 if (ignoreInputDeps)
-                    h = Entities.ForEach((in EcsTestData c0) => {}).Schedule(default);
+                    h = new Job().Schedule(new JobHandle());
                 else
-                    h = Entities.ForEach((in EcsTestData c0) => {}).Schedule(Dependency);
+                    h = new Job().Schedule(Dependency);
 
                 Dependency = returnWrongJob ? Dependency : h;
             }
@@ -65,11 +76,16 @@ namespace Unity.Entities.Tests
         {
             public bool SkipJob = false;
 
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData c0) { }
+            }
             protected override void OnUpdate()
             {
                 if (!SkipJob)
                 {
-                    Entities.ForEach((ref EcsTestData c0) => {}).Schedule();
+                    new Job().Schedule();
                 }
             }
 
@@ -109,8 +125,7 @@ namespace Unity.Entities.Tests
             ReadSystem2 rs2 = World.GetOrCreateSystemManaged<ReadSystem2>();
 
             LogAssert.Expect(LogType.Error,
-                new Regex(@"The system Unity\.Entities\.Tests\.SystemBaseDependencyTests\+ReadSystem2 reads Unity\.Entities\.Tests\.EcsTestData via ReadSystem2:ReadSystem2_.*_LambdaJob_1_Job but that type was not assigned to the Dependency property\. To ensure correct behavior of other systems, the job or a dependency must be assigned to the Dependency property before returning from the OnUpdate method\."));
-
+                new Regex(@"The system Unity\.Entities\.Tests\.SystemBaseDependencyTests\+ReadSystem2 reads Unity\.Entities\.Tests\.EcsTestData via ReadSystem2:Job but that type was not assigned to the Dependency property\. To ensure correct behavior of other systems, the job or a dependency must be assigned to the Dependency property before returning from the OnUpdate method\."));
             rs2.returnWrongJob = true;
 
             ws.Update();
@@ -238,17 +253,26 @@ namespace Unity.Entities.Tests
             systemB.Update();
         }
 
-        partial class SystemBaseEntitiesForEachDependencies : SystemBase
+        partial class SystemBaseJobEntityDependencies : SystemBase
         {
-            public bool DoRunToCompleteDependencies = false;
+            public bool CompleteDependencies = false;
+
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                public void Execute(ref EcsTestData _) { }
+            }
 
             protected override void OnUpdate()
             {
-                Entities.ForEach((ref EcsTestData thing) => {}).Schedule();
-                Entities.ForEach((ref EcsTestData thing) => {}).ScheduleParallel();
+                new Job().Schedule();
+                new Job().ScheduleParallel();
 
-                if (DoRunToCompleteDependencies)
-                    Entities.ForEach((ref EcsTestData thing) => {}).Run();
+                if (CompleteDependencies)
+                {
+                    // IJobEntity.Run, unlike Entities.ForEach.Run _does not_ auto complete dependencies!
+                    CompleteDependency();
+                }
 
                 if (!Dependency.Equals(new JobHandle())) //after completing all jobs an Dependency should be empty jobhandle
                     throw new Exception("Previous dependencies were not forced to completion.");
@@ -261,10 +285,10 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void SystemBaseEntitiesForEachDependencies_WithNoRun_HasUncompletedDependencies()
+        public void SystemBaseJobEntityDependencies_WithNoRun_HasUncompletedDependencies()
         {
-            var system = World.CreateSystemManaged<SystemBaseEntitiesForEachDependencies>();
-            system.DoRunToCompleteDependencies = false;
+            var system = World.CreateSystemManaged<SystemBaseJobEntityDependencies>();
+            system.CompleteDependencies = false;
 
             Assert.Throws<Exception>(() =>
             {
@@ -273,10 +297,10 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void SystemBaseEntitiesForEachDependencies_WithRun_HasNoUncompletedDependencies()
+        public void SystemBaseJobEntityDependencies_WithRun_HasNoUncompletedDependencies()
         {
-            var system = World.CreateSystemManaged<SystemBaseEntitiesForEachDependencies>();
-            system.DoRunToCompleteDependencies = true;
+            var system = World.CreateSystemManaged<SystemBaseJobEntityDependencies>();
+            system.CompleteDependencies = true;
 
             Assert.DoesNotThrow(() =>
             {
@@ -288,24 +312,24 @@ namespace Unity.Entities.Tests
         {
             public bool RunScheduleParallel = false;
 
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                public ComponentLookup<EcsTestData> DataFromEntity;
+                void Execute(in EcsTestDataEntity data)
+                {
+                    DataFromEntity[data.value1] = new EcsTestData() { value = data.value0 };
+                }
+            }
+
             protected override void OnUpdate()
             {
                 var dataFromEntity = GetComponentLookup<EcsTestData>(false);
 
                 if (RunScheduleParallel)
-                {
-                    Entities.ForEach((in EcsTestDataEntity data) =>
-                    {
-                        dataFromEntity[data.value1] = new EcsTestData() { value = data.value0 };
-                    }).ScheduleParallel();
-                }
+                    new Job{ DataFromEntity = dataFromEntity }.ScheduleParallel();
                 else
-                {
-                    Entities.ForEach((in EcsTestDataEntity data) =>
-                    {
-                        dataFromEntity[data.value1] = new EcsTestData() { value = data.value0 };
-                    }).Schedule();
-                }
+                    new Job{ DataFromEntity = dataFromEntity }.Schedule();
             }
         }
 
@@ -335,9 +359,15 @@ namespace Unity.Entities.Tests
 
         partial class SystemWithSyncPointAfterSchedule : SystemBase
         {
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData _) { }
+            }
+
             protected override void OnUpdate()
             {
-                Entities.ForEach((ref EcsTestData _) => { }).Schedule();
+                new Job().Schedule();
 
                 // this forces a sync-point and must finish the job we just scheduled
                 EntityManager.CreateEntity();
@@ -392,36 +422,35 @@ namespace Unity.Entities.Tests
                 _lookup = GetComponentLookup<EcsTestTagEnableable>(false);
             }
 
-            protected override void OnUpdate()
+            [BurstCompile]
+            partial struct Job : IJobEntity
             {
-                _lookup.Update(this);
-                var lookupCopy = _lookup;
-                Entities
-                    .WithNativeDisableParallelForRestriction(lookupCopy)
-                    .ForEach((Entity entity) =>
-                    {
-                        lookupCopy.SetComponentEnabled(entity, false);
-                    }).ScheduleParallel();
-            }
-        }
-        partial class ReadsZeroSizeComponent : SystemBase
-        {
-            EntityQuery _query;
-            public int EntityCount;
-            protected override void OnCreate()
-            {
-                _query = GetEntityQuery(typeof(EcsTestTagEnableable));
+                [NativeDisableParallelForRestriction]
+                public ComponentLookup<EcsTestTagEnableable> Lookup;
+                void Execute(Entity entity)
+                {
+                    Lookup.SetComponentEnabled(entity, false);
+                }
             }
 
             protected override void OnUpdate()
             {
+                _lookup.Update(this);
+
+                new Job { Lookup = _lookup }.ScheduleParallel();
+            }
+        }
+        partial class ReadsZeroSizeComponent : SystemBase
+        {
+            public int EntityCount;
+
+            protected override void OnUpdate()
+            {
                 int count = 0;
-                Entities
-                    .WithAll<EcsTestTagEnableable>()
-                    .ForEach((Entity entity) =>
-                    {
-                        count += 1;
-                    }).Run();
+                foreach (var (tag, entity) in SystemAPI.Query<RefRO<EcsTestTagEnableable>>().WithEntityAccess())
+                {
+                    count += 1;
+                }
                 EntityCount = count;
             }
         }
@@ -450,10 +479,20 @@ namespace Unity.Entities.Tests
 
         partial class EntityManagerGetBufferWriteSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Buffer.Add(new EcsIntElement {Value = 123});
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = EntityManager.GetBuffer<EcsIntElement>(SystemAPI.GetSingletonEntity<EcsTestTag>());
-                Job.WithCode(() => { buffer.Add(new EcsIntElement {Value = 123}); }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
@@ -468,49 +507,77 @@ namespace Unity.Entities.Tests
 
         partial class EntityManagerGetBufferWriteViaRunSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Buffer.Add(new EcsIntElement {Value = 123});
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = EntityManager.GetBuffer<EcsIntElement>(SystemAPI.GetSingletonEntity<EcsTestTag>());
-                Job.WithCode(() => { buffer.Add(new EcsIntElement {Value = 123}); }).Run();
+                new Job { Buffer = buffer }.Run();
             }
         }
 
         partial class GetBufferWriteJobSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Buffer.Add(new EcsIntElement {Value = 123});
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = SystemAPI.GetBuffer<EcsIntElement>(SystemAPI.GetSingletonEntity<EcsTestTag>());
-                Job.WithCode(() => { buffer.Add(new EcsIntElement {Value = 123}); }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
         partial class GetBufferWriteInt2JobSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement2> Buffer;
+
+                public void Execute()
+                {
+                    Buffer.Add(new EcsIntElement2 {Value0 = 0, Value1 = 1});
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = SystemAPI.GetBuffer<EcsIntElement2>(SystemAPI.GetSingletonEntity<EcsTestTag>());
-                Job.WithCode(() => { buffer.Add(new EcsIntElement2 {Value0 = 0, Value1 = 1}); }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
         partial class GetBufferLookupWriteJobSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Buffer.Add(new EcsIntElement {Value = 123});
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = GetBufferLookup<EcsIntElement>()[SystemAPI.GetSingletonEntity<EcsTestTag>()];
-                Job.WithCode(() => { buffer.Add(new EcsIntElement {Value = 123}); }).Schedule();
-            }
-        }
-
-        partial class GetBufferLookupInEntitiesForEachWriteSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities.WithAll<EcsTestTag>().ForEach((Entity entity) =>
-                {
-                    var buffer = GetBufferLookup<EcsIntElement>()[entity];
-                    buffer.Add(new EcsIntElement {Value = 123});
-                }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
@@ -534,63 +601,40 @@ namespace Unity.Entities.Tests
 
         partial class GetBufferReadJobSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Assert.AreEqual(123, Buffer[0].Value);
+                }
+            }
             protected override void OnUpdate()
             {
                 var buffer = SystemAPI.GetBuffer<EcsIntElement>(SystemAPI.GetSingletonEntity<EcsTestTag>());
-                Job.WithCode(() =>
-                {
-                    Assert.AreEqual(123, buffer[0].Value);
-                }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
         partial class GetBufferReadOnlyJobSystem : SystemBase
         {
+            [BurstCompile]
+            struct Job : IJob
+            {
+                public DynamicBuffer<EcsIntElement> Buffer;
+
+                public void Execute()
+                {
+                    Assert.AreEqual(123, Buffer[0].Value);
+                }
+            }
             protected override void OnUpdate()
             {
                 EntityManager.CompleteDependencyBeforeRO<EcsIntElement>();
                 var buffer = SystemAPI.GetBufferLookup<EcsIntElement>(true)[SystemAPI.GetSingletonEntity<EcsTestTag>()];
-                Job.WithCode(() =>
-                {
-                    Assert.AreEqual(123, buffer[0].Value);
-                }).Schedule();
-            }
-        }
-
-        partial class GetBufferInsideForEachWithEntityIteratorSystem : SystemBase
-        {
-            protected override void OnCreate()
-            {
-                EntityManager.CreateEntity(typeof(EcsTestData));
-            }
-
-            protected override void OnUpdate()
-            {
-                Entities.WithAll<EcsTestTag>().ForEach((in Entity tagEntity) =>
-                {
-                    // Codegen should replace this with GetBufferLookup created in OnUpdate
-                    var buffer = SystemAPI.GetBuffer<EcsIntElement>(tagEntity);
-                    Assert.AreEqual(123, buffer[0].Value);
-                }).Schedule();
-            }
-        }
-
-        partial class GetBufferInsideForEachWithSingletonSystem : SystemBase
-        {
-            protected override void OnCreate()
-            {
-                EntityManager.CreateEntity(typeof(EcsTestData));
-            }
-
-            protected override void OnUpdate()
-            {
-                var tagEntity = SystemAPI.GetSingletonEntity<EcsTestTag>();
-                Entities.ForEach((in EcsTestData testData) =>
-                {
-                    // Codegen should replace this with GetBufferLookup created in OnUpdate
-                    var buffer = SystemAPI.GetBuffer<EcsIntElement>(tagEntity);
-                    Assert.AreEqual(123, buffer[0].Value);
-                }).Schedule();
+                Dependency = new Job { Buffer = buffer }.Schedule(Dependency);
             }
         }
 
@@ -601,14 +645,21 @@ namespace Unity.Entities.Tests
                 EntityManager.CreateEntity(typeof(EcsTestData));
             }
 
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                public NativeArray<EcsIntElement> array;
+                void Execute(in EcsTestData testData)
+                {
+                    Assert.AreEqual(123, array[0].Value);
+                }
+            }
+
             protected override void OnUpdate()
             {
                 var buffer = SystemAPI.GetBuffer<EcsIntElement>(SystemAPI.GetSingletonEntity<EcsTestTag>());
                 var array = buffer.AsNativeArray();
-                Entities.ForEach((in EcsTestData testData) =>
-                {
-                    Assert.AreEqual(123, array[0].Value);
-                }).Schedule();
+                new Job { array = array }.Schedule();
             }
         }
 
@@ -726,67 +777,6 @@ namespace Unity.Entities.Tests
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                 Assert.IsTrue(JobHandle.CheckFenceIsDependencyOrDidSyncFence(readHandle, writeHandle));
 #endif
-            }
-        }
-
-        [Test]
-        public void BufferDependencies_GetBufferReadInUpdateDependsOnGetBufferLookupForEachWriteJob()
-        {
-            m_Manager.CreateEntity(typeof(EcsTestTag), typeof(EcsIntElement));
-
-            var sysWrite = World.CreateSystemManaged<GetBufferLookupInEntitiesForEachWriteSystem>();
-            var sysRead = World.CreateSystemManaged<GetBufferReadInUpdateSystem>();
-            sysWrite.Update();
-            Assert.DoesNotThrow(() => sysRead.Update());
-
-            unsafe
-            {
-                var writeHandle = sysWrite.CheckedState()->Dependency;
-                var readHandle = sysRead.CheckedState()->Dependency;
-                Assert.IsFalse(writeHandle.Equals(readHandle));
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-                Assert.IsTrue(JobHandle.CheckFenceIsDependencyOrDidSyncFence(readHandle, writeHandle));
-#endif
-            }
-        }
-
-        [Test]
-        public void BufferDependencies_GetBufferReadInForEachDependsOnGetBufferLookupWriteJob()
-        {
-            m_Manager.CreateEntity(typeof(EcsTestTag), typeof(EcsIntElement));
-
-            var sysWrite = World.CreateSystemManaged<GetBufferLookupWriteJobSystem>();
-            var sysRead = World.CreateSystemManaged<GetBufferInsideForEachWithEntityIteratorSystem>();
-            sysWrite.Update();
-            Assert.DoesNotThrow(() => sysRead.Update());
-
-            unsafe
-            {
-                var writeHandle = sysWrite.CheckedState()->Dependency;
-                var readHandle = sysRead.CheckedState()->Dependency;
-                Assert.IsFalse(writeHandle.Equals(readHandle));
-                // TODO: This fails, requires investigation DOTS-5964
-                //Assert.IsTrue(JobHandle.CheckFenceIsDependencyOrDidSyncFence(readHandle, writeHandle));
-            }
-        }
-
-        [Test]
-        public void BufferDependencies_GetBufferFromSingletonReadInForEachDependsOnGetBufferLookupWriteJob()
-        {
-            m_Manager.CreateEntity(typeof(EcsTestTag), typeof(EcsIntElement));
-
-            var sysWrite = World.CreateSystemManaged<GetBufferLookupWriteJobSystem>();
-            var sysRead = World.CreateSystemManaged<GetBufferInsideForEachWithSingletonSystem>();
-            sysWrite.Update();
-            Assert.DoesNotThrow(() => sysRead.Update());
-
-            unsafe
-            {
-                var writeHandle = sysWrite.CheckedState()->Dependency;
-                var readHandle = sysRead.CheckedState()->Dependency;
-                Assert.IsFalse(writeHandle.Equals(readHandle));
-                // TODO: This fails, requires investigation DOTS-5964
-                //Assert.IsTrue(JobHandle.CheckFenceIsDependencyOrDidSyncFence(readHandle, writeHandle));
             }
         }
 
@@ -933,22 +923,35 @@ namespace Unity.Entities.Tests
                 entitiesIndexMap.Dispose();
             }
 
+            [BurstCompile]
+            struct SetupJob : IJob
+            {
+                public NativeArray<Entity> entitiesArray;
+                public NativeParallelHashMap<Entity,int> entitiesIndex;
+                public NativeArray<InputStatus> inputStatus;
+
+                public void Execute()
+                {
+                    entitiesIndex.Clear();
+                    for (var i = 0; i < entitiesArray.Length; i++)
+                        entitiesIndex.Add(entitiesArray[i], i);
+                    for (var i = 0; i < inputStatus.Length; i++)
+                        inputStatus[i] = new InputStatus { };
+                }
+            }
+
             protected override void OnUpdate()
             {
                 var inputStatus = inputStatusArray;
                 var entitiesIndex = entitiesIndexMap;
-
                 var entitiesArray = entityQuery.ToEntityArray(Allocator.TempJob);
-                Dependency = Job.WithCode(() =>
+
+                Dependency = new SetupJob()
                 {
-                    entitiesIndex.Clear();
-
-                    for (var i = 0; i < entitiesArray.Length; i++)
-                        entitiesIndex.Add(entitiesArray[i], i);
-
-                    for (var i = 0; i < inputStatus.Length; i++)
-                        inputStatus[i] = new InputStatus { };
-                }).Schedule(Dependency);
+                    entitiesArray = entitiesArray,
+                    entitiesIndex = entitiesIndex,
+                    inputStatus = inputStatus,
+                }.Schedule(Dependency);
 
                 entitiesArray.Dispose(Dependency);
 

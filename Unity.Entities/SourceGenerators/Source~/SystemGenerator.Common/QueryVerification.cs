@@ -30,7 +30,6 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
                         queryTypeSymbol.InheritsFromInterface("Unity.Entities.IComponentData") ||
                         queryTypeSymbol.InheritsFromInterface("Unity.Entities.ISharedComponentData") ||
                         queryTypeSymbol.InheritsFromInterface("Unity.Entities.IBufferElementData") ||
-                        queryTypeSymbol.InheritsFromInterface($"Unity.Entities.IAspect") ||
                         queryTypeSymbol.Is("UnityEngine.Object");
 
                     if (!isValidQueryType)

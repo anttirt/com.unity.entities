@@ -24,7 +24,7 @@ namespace Unity.Entities.Editor.Tests
                 yield return null;
                 var events = receivedEvents.ToArrayNBC();
                 Assert.That(events, Is.Not.Empty);
-                Assert.That(events, Does.Contain(new GameObjectChangeTrackerEvent(go.GetInstanceID(), GameObjectChangeTrackerEventType.CreatedOrChanged)));
+                Assert.That(events, Does.Contain(new GameObjectChangeTrackerEvent(go.GetEntityId(), GameObjectChangeTrackerEventType.CreatedOrChanged)));
             }
             finally
             {

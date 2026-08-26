@@ -26,8 +26,8 @@ namespace Unity.Entities.Editor
     struct HierarchyNodeHandle : IEquatable<HierarchyNodeHandle>, IComparable<HierarchyNodeHandle>
     {
         public NodeKind Kind;
-        public int Index;
-        public int Version;
+        private int Index;
+        private int Version;
 
         internal HierarchyNodeHandle(NodeKind kind, int index = 0, int version = 0)
         {
@@ -39,10 +39,40 @@ namespace Unity.Entities.Editor
             Version = version;
         }
 
+        internal HierarchyNodeHandle(NodeKind kind, EntityId entityId)
+        {
+            Kind = kind;
+            var data = EntityId.ToULong(entityId);
+            Version = unchecked((int)(data >> 32));
+            Index = unchecked((int)data);
+        }
+
+        internal HierarchyNodeHandle(NodeKind kind, SceneHandle sceneHandle)
+        {
+            Kind = kind;
+            var data = sceneHandle.GetRawData();
+            Version = unchecked((int)(data >> 32));
+            Index = unchecked((int)data);
+        }
+
+        public readonly ulong ToULong() => unchecked((uint)Index | ((ulong)(uint)Version << 32));
+        public readonly EntityId ToEntityId() => EntityId.FromULong(ToULong());
+
         public bool Equals(HierarchyNodeHandle other) => Kind == other.Kind && Index == other.Index && Version == other.Version;
         public override bool Equals(object obj) => obj is HierarchyNodeHandle other && Equals(other);
         public static bool operator ==(HierarchyNodeHandle lhs, HierarchyNodeHandle rhs) => lhs.Equals(rhs);
         public static bool operator !=(HierarchyNodeHandle lhs, HierarchyNodeHandle rhs) => !(lhs == rhs);
+
+        public static bool operator ==(EntityId other, HierarchyNodeHandle handle)
+        {
+            var data = EntityId.ToULong(other);
+            return data == handle.ToULong();
+        }
+
+        public static bool operator !=(EntityId other, HierarchyNodeHandle handle)
+        {
+            return !(other == handle);
+        }
 
         public int CompareTo(HierarchyNodeHandle other)
         {
@@ -67,18 +97,17 @@ namespace Unity.Entities.Editor
 
         public static HierarchyNodeHandle FromEntity(Entity entity)
             => new HierarchyNodeHandle(NodeKind.Entity, entity.Index, entity.Version);
-
         public static HierarchyNodeHandle FromGameObject(GameObject gameObject)
-            => new HierarchyNodeHandle(NodeKind.GameObject, gameObject.GetInstanceID());
+            => new HierarchyNodeHandle(NodeKind.GameObject, gameObject.GetEntityId());
 
-        public static HierarchyNodeHandle FromGameObject(int instanceId)
-            => new HierarchyNodeHandle(NodeKind.GameObject, instanceId);
+        public static HierarchyNodeHandle FromGameObject(EntityId entityId)
+            => new HierarchyNodeHandle(NodeKind.GameObject, entityId);
 
         public static HierarchyNodeHandle FromScene(UnityEngine.SceneManagement.Scene scene)
-            => new HierarchyNodeHandle(NodeKind.Scene, index: scene.handle);
+            => new HierarchyNodeHandle(NodeKind.Scene, scene.handle);
 
         public static HierarchyNodeHandle FromScene(UnloadedScene scene)
-            => new HierarchyNodeHandle(NodeKind.Scene, index: scene.handle);
+            => new HierarchyNodeHandle(NodeKind.Scene, scene.handle);
 
         public static HierarchyNodeHandle FromSubScene(int subSceneMapIndex)
             => new HierarchyNodeHandle(NodeKind.SubScene, index: subSceneMapIndex);
@@ -89,12 +118,12 @@ namespace Unity.Entities.Editor
         public readonly Entity ToEntity()
             => new Entity {Index = Index, Version = Version};
 
+
         public GameObject ToGameObject()
         {
             if (Kind != NodeKind.GameObject)
                 throw new InvalidOperationException($"Cannot retrieve a GameObject instance from a node of kind {Kind}");
-
-            return EditorUtility.InstanceIDToObject(Index) as GameObject;
+            return EditorUtility.EntityIdToObject(ToEntityId()) as GameObject;
         }
     }
 }

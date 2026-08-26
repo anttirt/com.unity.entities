@@ -21,7 +21,7 @@ namespace Unity.Entities
 
         public void Dispose()
         {
-            CompanionLink.DestroyObject(Companion.Id.instanceId);
+            CompanionLink.DestroyObject(Companion.Id.entityId);
         }
     }
 
@@ -34,9 +34,9 @@ namespace Unity.Entities
     {
         public UnityObjectRef<GameObject> Companion;
 
-        public static void DestroyObject(int instanceID)
+        public static void DestroyObject(EntityId entityId)
         {
-            var unityObject = Resources.InstanceIDToObject(instanceID);
+            var unityObject = Resources.EntityIdToObject(entityId);
 #if UNITY_EDITOR
             if (Application.isPlaying)
                 UnityObject.Destroy(unityObject);

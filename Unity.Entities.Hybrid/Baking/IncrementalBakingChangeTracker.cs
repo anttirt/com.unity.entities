@@ -9,73 +9,73 @@ namespace Unity.Entities
 {
     internal class IncrementalBakingChangeTracker : IDisposable
     {
-        internal NativeList<int> DeletedInstanceIds;
-        internal NativeParallelHashSet<int> ChangedInstanceIds;
-        internal NativeParallelHashSet<int> BakeHierarchyInstanceIds;
-        internal NativeParallelHashSet<int> ForceBakeHierarchyInstanceIds;
-        internal NativeParallelHashMap<int, int> ParentChangeInstanceIds;
-        internal NativeList<int> ChangedAssets;
-        internal NativeList<int> DeletedAssets;
+        internal NativeList<EntityId> DeletedEntityIds;
+        internal NativeParallelHashSet<EntityId> ChangedEntityIds;
+        internal NativeParallelHashSet<EntityId> BakeHierarchyEntityIds;
+        internal NativeParallelHashSet<EntityId> ForceBakeHierarchyEntityIds;
+        internal NativeParallelHashMap<EntityId, EntityId> ParentChangeEntityIds;
+        internal NativeList<EntityId> ChangedAssets;
+        internal NativeList<EntityId> DeletedAssets;
         internal readonly HashSet<Component> ComponentChanges;
         private readonly List<Component> ValidComponents;
-        internal NativeList<int> ParentWithChildrenOrderChangedInstanceIds;
+        internal NativeList<EntityId> ParentWithChildrenOrderChangedEntityIds;
         internal bool LightBakingChanged;
 
         public IncrementalBakingChangeTracker()
         {
-            DeletedInstanceIds = new NativeList<int>(Allocator.Persistent);
-            ChangedInstanceIds = new NativeParallelHashSet<int>(10, Allocator.Persistent);
-            BakeHierarchyInstanceIds = new NativeParallelHashSet<int>(10, Allocator.Persistent);
-            ForceBakeHierarchyInstanceIds = new NativeParallelHashSet<int>(10, Allocator.Persistent);
-            ParentChangeInstanceIds = new NativeParallelHashMap<int, int>(10, Allocator.Persistent);
-            ChangedAssets = new NativeList<int>(Allocator.Persistent);
-            DeletedAssets = new NativeList<int>(Allocator.Persistent);
+            DeletedEntityIds = new NativeList<EntityId>(Allocator.Persistent);
+            ChangedEntityIds = new NativeParallelHashSet<EntityId>(10, Allocator.Persistent);
+            BakeHierarchyEntityIds = new NativeParallelHashSet<EntityId>(10, Allocator.Persistent);
+            ForceBakeHierarchyEntityIds = new NativeParallelHashSet<EntityId>(10, Allocator.Persistent);
+            ParentChangeEntityIds = new NativeParallelHashMap<EntityId, EntityId>(10, Allocator.Persistent);
+            ChangedAssets = new NativeList<EntityId>(Allocator.Persistent);
+            DeletedAssets = new NativeList<EntityId>(Allocator.Persistent);
             ComponentChanges = new HashSet<Component>();
             ValidComponents = new List<Component>();
-            ParentWithChildrenOrderChangedInstanceIds = new NativeList<int>(Allocator.Persistent);
+            ParentWithChildrenOrderChangedEntityIds = new NativeList<EntityId>(Allocator.Persistent);
             LightBakingChanged = false;
         }
 
         internal void Clear()
         {
-            DeletedInstanceIds.Clear();
-            ChangedInstanceIds.Clear();
-            BakeHierarchyInstanceIds.Clear();
-            ForceBakeHierarchyInstanceIds.Clear();
-            ParentChangeInstanceIds.Clear();
+            DeletedEntityIds.Clear();
+            ChangedEntityIds.Clear();
+            BakeHierarchyEntityIds.Clear();
+            ForceBakeHierarchyEntityIds.Clear();
+            ParentChangeEntityIds.Clear();
             ChangedAssets.Clear();
             DeletedAssets.Clear();
             ComponentChanges.Clear();
             ValidComponents.Clear();
-            ParentWithChildrenOrderChangedInstanceIds.Clear();
+            ParentWithChildrenOrderChangedEntityIds.Clear();
             LightBakingChanged = false;
         }
 
         internal bool HasAnyChanges()
         {
-            return DeletedInstanceIds.Length > 0 ||
-                !ChangedInstanceIds.IsEmpty ||
-                !BakeHierarchyInstanceIds.IsEmpty ||
-                !ForceBakeHierarchyInstanceIds.IsEmpty ||
+            return DeletedEntityIds.Length > 0 ||
+                !ChangedEntityIds.IsEmpty ||
+                !BakeHierarchyEntityIds.IsEmpty ||
+                !ForceBakeHierarchyEntityIds.IsEmpty ||
                 ComponentChanges.Count > 0 ||
-                !ParentChangeInstanceIds.IsEmpty ||
+                !ParentChangeEntityIds.IsEmpty ||
                 ChangedAssets.Length > 0 ||
                 DeletedAssets.Length > 0 ||
-                ParentWithChildrenOrderChangedInstanceIds.Length > 0 ||
+                ParentWithChildrenOrderChangedEntityIds.Length > 0 ||
                 LightBakingChanged;
         }
 
         internal void FillBatch(ref IncrementalBakingBatch batch)
         {
-            batch.DeletedInstanceIds = DeletedInstanceIds.AsArray();
-            batch.ChangedInstanceIds = ChangedInstanceIds.ToNativeArray(Allocator.Temp);
-            batch.BakeHierarchyInstanceIds = BakeHierarchyInstanceIds.ToNativeArray(Allocator.Temp);
-            batch.ForceBakeHierarchyInstanceIds = ForceBakeHierarchyInstanceIds.ToNativeArray(Allocator.Temp);
-            batch.ParentChangeInstanceIds = ParentChangeInstanceIds;
+            batch.DeletedEntityIds = DeletedEntityIds.AsArray();
+            batch.ChangedEntityIds = ChangedEntityIds.ToNativeArray(Allocator.Temp);
+            batch.BakeHierarchyEntityIds = BakeHierarchyEntityIds.ToNativeArray(Allocator.Temp);
+            batch.ForceBakeHierarchyEntityIds = ForceBakeHierarchyEntityIds.ToNativeArray(Allocator.Temp);
+            batch.ParentChangeEntityIds = ParentChangeEntityIds;
             batch.ChangedAssets = ChangedAssets.AsArray();
             batch.DeletedAssets = DeletedAssets.AsArray();
             batch.ChangedComponents = ValidComponents;
-            batch.ParentWithChildrenOrderChangedInstanceIds = ParentWithChildrenOrderChangedInstanceIds.AsArray();
+            batch.ParentWithChildrenOrderChangedEntityIds = ParentWithChildrenOrderChangedEntityIds.AsArray();
             // We don't need RecreateInstanceIds unless an previously baked entity has been deleted
             batch.RecreateInstanceIds = default;
             batch.LightBakingChanged = LightBakingChanged;
@@ -84,51 +84,51 @@ namespace Unity.Entities
 
         public void Dispose()
         {
-            if (DeletedInstanceIds.IsCreated)
-                DeletedInstanceIds.Dispose();
-            if (ChangedInstanceIds.IsCreated)
-                ChangedInstanceIds.Dispose();
-            if (BakeHierarchyInstanceIds.IsCreated)
-                BakeHierarchyInstanceIds.Dispose();
-            if (ForceBakeHierarchyInstanceIds.IsCreated)
-                ForceBakeHierarchyInstanceIds.Dispose();
-            if (ParentChangeInstanceIds.IsCreated)
-                ParentChangeInstanceIds.Dispose();
+            if (DeletedEntityIds.IsCreated)
+                DeletedEntityIds.Dispose();
+            if (ChangedEntityIds.IsCreated)
+                ChangedEntityIds.Dispose();
+            if (BakeHierarchyEntityIds.IsCreated)
+                BakeHierarchyEntityIds.Dispose();
+            if (ForceBakeHierarchyEntityIds.IsCreated)
+                ForceBakeHierarchyEntityIds.Dispose();
+            if (ParentChangeEntityIds.IsCreated)
+                ParentChangeEntityIds.Dispose();
             if (ChangedAssets.IsCreated)
                 ChangedAssets.Dispose();
             if (DeletedAssets.IsCreated)
                 DeletedAssets.Dispose();
-            if (ParentWithChildrenOrderChangedInstanceIds.IsCreated)
-                ParentWithChildrenOrderChangedInstanceIds.Dispose();
+            if (ParentWithChildrenOrderChangedEntityIds.IsCreated)
+                ParentWithChildrenOrderChangedEntityIds.Dispose();
         }
 
-        public void MarkAssetChanged(int assetInstanceId) => ChangedAssets.Add(assetInstanceId);
+        public void MarkAssetChanged(EntityId assetEntityId) => ChangedAssets.Add(assetEntityId);
 
-        public void MarkRemoved(int instanceId)
+        public void MarkRemoved(EntityId emtityId)
         {
-            BakeHierarchyInstanceIds.Remove(instanceId);
-            ForceBakeHierarchyInstanceIds.Remove(instanceId);
-            ChangedInstanceIds.Remove(instanceId);
-            ParentChangeInstanceIds.Remove(instanceId);
-            DeletedInstanceIds.Add(instanceId);
+            BakeHierarchyEntityIds.Remove(emtityId);
+            ForceBakeHierarchyEntityIds.Remove(emtityId);
+            ChangedEntityIds.Remove(emtityId);
+            ParentChangeEntityIds.Remove(emtityId);
+            DeletedEntityIds.Add(emtityId);
         }
 
-        public void MarkParentChanged(int instanceId, int parentInstanceId)
+        public void MarkParentChanged(EntityId entityId, EntityId parentEntityId)
         {
-            if (!ParentChangeInstanceIds.TryAdd(instanceId, parentInstanceId))
+            if (!ParentChangeEntityIds.TryAdd(entityId, parentEntityId))
             {
-                ParentChangeInstanceIds.Remove(instanceId);
-                ParentChangeInstanceIds.Add(instanceId, parentInstanceId);
+                ParentChangeEntityIds.Remove(entityId);
+                ParentChangeEntityIds.Add(entityId, parentEntityId);
             }
         }
 
         public void MarkComponentChanged(Component c) => ComponentChanges.Add(c);
-        public void MarkBakeHierarchy(int instanceId) => BakeHierarchyInstanceIds.Add(instanceId);
-        public void MarkForceBakeHierarchy(int instanceId) => ForceBakeHierarchyInstanceIds.Add(instanceId);
-        public void MarkChanged(int instanceId) => ChangedInstanceIds.Add(instanceId);
+        public void MarkBakeHierarchy(EntityId entityId) => BakeHierarchyEntityIds.Add(entityId);
+        public void MarkForceBakeHierarchy(EntityId entityId) => ForceBakeHierarchyEntityIds.Add(entityId);
+        public void MarkChanged(EntityId entityId) => ChangedEntityIds.Add(entityId);
 
-        public void MarkChildrenOrderChange(int instanceId) =>
-            ParentWithChildrenOrderChangedInstanceIds.Add(instanceId);
+        public void MarkChildrenOrderChange(EntityId entityId) =>
+            ParentWithChildrenOrderChangedEntityIds.Add(entityId);
 
         public void MarkLightBakingChanged() => LightBakingChanged = true;
     }
@@ -142,47 +142,47 @@ namespace Unity.Entities
         /// Instance IDs of all GameObjects that were deleted.
         /// Note that this can overlap with any of the other collections.
         /// </summary>
-        public NativeArray<int> DeletedInstanceIds;
+        public NativeArray<EntityId> DeletedEntityIds;
 
         /// <summary>
         /// Instance IDs of all GameObjects that were changed.
         /// /// Note that this might include IDs of destroyed GameObjects.
         /// </summary>
-        public NativeArray<int> ChangedInstanceIds;
+        public NativeArray<EntityId> ChangedEntityIds;
 
         /// <summary>
         /// Instance IDs of all GameObjects that should have the entire hierarchy below them reconverted.
         /// Note that this might include IDs of destroyed GameObjects.
         /// </summary>
-        public NativeArray<int> BakeHierarchyInstanceIds;
+        public NativeArray<EntityId> BakeHierarchyEntityIds;
 
         /// <summary>
         /// Instance IDs of all GameObjects that should have the entire hierarchy below them reconverted.
         /// Note that this might include IDs of destroyed GameObjects.
         /// </summary>
-        public NativeArray<int> ForceBakeHierarchyInstanceIds;
+        public NativeArray<EntityId> ForceBakeHierarchyEntityIds;
 
         /// <summary>
         /// Instance IDs of all GameObjects that have lost their Primary Entity
         /// Note that this might include IDs of destroyed GameObjects.
         /// </summary>
-        public NativeArray<int> RecreateInstanceIds;
+        public NativeArray<EntityId> RecreateInstanceIds;
 
         /// <summary>
         /// Maps instance IDs of GameObjects to the instance ID of their last recorded parent if the parenting changed.
         /// Note that this might included instance IDs of destroyed GameObjects on either side.
         /// </summary>
-        public NativeParallelHashMap<int, int> ParentChangeInstanceIds;
+        public NativeParallelHashMap<EntityId, EntityId> ParentChangeEntityIds;
 
         /// <summary>
         /// Contains the instance IDs of all assets that were changed since the last conversion.
         /// </summary>
-        public NativeArray<int> ChangedAssets;
+        public NativeArray<EntityId> ChangedAssets;
 
         /// <summary>
         /// Contains the GUIDs of all assets that were deleted since the last conversion.
         /// </summary>
-        public NativeArray<int> DeletedAssets;
+        public NativeArray<EntityId> DeletedAssets;
 
         /// <summary>
         /// Contains a list of all components that were changed since the last conversion. Note that the components
@@ -193,7 +193,7 @@ namespace Unity.Entities
         /// <summary>
         /// Contains all the instance ids of the parents with children being reordered
         /// </summary>
-        public NativeArray<int> ParentWithChildrenOrderChangedInstanceIds;
+        public NativeArray<EntityId> ParentWithChildrenOrderChangedEntityIds;
 
         /// <summary>
         /// True if the lights have been baked, meaning that the components that depend on light mapping should be updated
@@ -202,14 +202,14 @@ namespace Unity.Entities
 
         public void Dispose()
         {
-            DeletedInstanceIds.Dispose();
-            ChangedInstanceIds.Dispose();
-            BakeHierarchyInstanceIds.Dispose();
-            ForceBakeHierarchyInstanceIds.Dispose();
-            ParentChangeInstanceIds.Dispose();
+            DeletedEntityIds.Dispose();
+            ChangedEntityIds.Dispose();
+            BakeHierarchyEntityIds.Dispose();
+            ForceBakeHierarchyEntityIds.Dispose();
+            ParentChangeEntityIds.Dispose();
             ChangedAssets.Dispose();
             DeletedAssets.Dispose();
-            ParentWithChildrenOrderChangedInstanceIds.Dispose();
+            ParentWithChildrenOrderChangedEntityIds.Dispose();
             if (RecreateInstanceIds.IsCreated)
                 RecreateInstanceIds.Dispose();
         }
@@ -229,10 +229,10 @@ namespace Unity.Entities
             sb.Append(": ");
             sb.AppendLine(LightBakingChanged.ToString());
 
-            PrintOut(sb, nameof(DeletedInstanceIds), DeletedInstanceIds);
-            PrintOut(sb, nameof(ChangedInstanceIds), ChangedInstanceIds);
-            PrintOut(sb, nameof(BakeHierarchyInstanceIds), BakeHierarchyInstanceIds);
-            PrintOut(sb, nameof(ForceBakeHierarchyInstanceIds), ForceBakeHierarchyInstanceIds);
+            PrintOut(sb, nameof(DeletedEntityIds), DeletedEntityIds);
+            PrintOut(sb, nameof(ChangedEntityIds), ChangedEntityIds);
+            PrintOut(sb, nameof(BakeHierarchyEntityIds), BakeHierarchyEntityIds);
+            PrintOut(sb, nameof(ForceBakeHierarchyEntityIds), ForceBakeHierarchyEntityIds);
             if (RecreateInstanceIds.IsCreated)
                 PrintOut(sb, nameof(RecreateInstanceIds), RecreateInstanceIds);
             PrintOut(sb, nameof(ChangedAssets), ChangedAssets);
@@ -253,29 +253,29 @@ namespace Unity.Entities
                 sb.AppendLine();
             }
 
-            if (!ParentChangeInstanceIds.IsEmpty)
+            if (!ParentChangeEntityIds.IsEmpty)
             {
-                sb.Append(nameof(ParentChangeInstanceIds));
+                sb.Append(nameof(ParentChangeEntityIds));
                 sb.Append(": ");
-                sb.Append(ParentChangeInstanceIds.Count());
+                sb.Append(ParentChangeEntityIds.Count());
                 sb.AppendLine();
-                foreach (var kvp in ParentChangeInstanceIds)
+                foreach (var kvp in ParentChangeEntityIds)
                 {
                     sb.Append('\t');
-                    sb.Append(kvp.Key);
+                    sb.Append(kvp.Key.ToString());
                     sb.Append(" (");
                     {
-                        var obj = EditorUtility.InstanceIDToObject(kvp.Key);
+                        var obj = EditorUtility.EntityIdToObject(kvp.Key);
                         if (obj == null)
                             sb.Append("null");
                         else
                             sb.Append(obj.name);
                     }
                     sb.Append(") reparented to ");
-                    sb.Append(kvp.Value);
+                    sb.Append(kvp.Value.ToString());
                     sb.Append(" (");
                     {
-                        var obj = EditorUtility.InstanceIDToObject(kvp.Value);
+                        var obj = EditorUtility.EntityIdToObject(kvp.Value);
                         if (obj == null)
                             sb.Append("null");
                         else
@@ -286,20 +286,20 @@ namespace Unity.Entities
             }
         }
 
-        static void PrintOut(StringBuilder sb, string name, NativeArray<int> instanceIds)
+        static void PrintOut(StringBuilder sb, string name, NativeArray<EntityId> entityIds)
         {
-            if (instanceIds.Length == 0)
+            if (entityIds.Length == 0)
                 return;
             sb.Append(name);
             sb.Append(": ");
-            sb.Append(instanceIds.Length);
+            sb.Append(entityIds.Length);
             sb.AppendLine();
-            for (int i = 0; i < instanceIds.Length; i++)
+            for (int i = 0; i < entityIds.Length; i++)
             {
                 sb.Append('\t');
-                sb.Append(instanceIds[i]);
+                sb.Append(entityIds[i].ToString());
                 sb.Append(" - ");
-                var obj = EditorUtility.InstanceIDToObject(instanceIds[i]);
+                var obj = EditorUtility.EntityIdToObject(entityIds[i]);
                 if (obj == null)
                     sb.AppendLine("(null)");
                 else
@@ -308,7 +308,6 @@ namespace Unity.Entities
 
             sb.AppendLine();
         }
-
 #endif
     }
 }

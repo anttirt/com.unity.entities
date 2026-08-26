@@ -1,9 +1,9 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 // Uncomment this line only if you need to generate csv export.
 // Do not commit this line enabled, make sure to discard that change.
 //#define GENERATE_CSV_EXPORT
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
 using NUnit.Framework;
 using System;
 using System.Collections;
@@ -14,6 +14,8 @@ using System.Text.RegularExpressions;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
+using UnityEngine.TestTools;
+using UnityEngine;
 using static Unity.Entities.EntitiesJournaling;
 
 namespace Unity.Entities.Tests
@@ -21,25 +23,12 @@ namespace Unity.Entities.Tests
     [TestFixture]
     unsafe partial class EntitiesJournalingTests : ECSTestsFixture
     {
-#if !UNITY_ANDROID // APK bundling breaks reading from streamingAssets (DOTS-7038)
-        static readonly string k_CSVExportFilePath;
-
-        static EntitiesJournalingTests()
-        {
 #if UNITY_EDITOR
 #if !DOTS_DISABLE_DEBUG_NAMES
-            k_CSVExportFilePath = "Packages/com.unity.entities/Unity.Entities.Tests/Journaling/entities-journaling-export.csv";
+        const string k_CSVExportFilePath = "Packages/com.unity.entities/Unity.Entities.Tests/Journaling/entities-journaling-export.csv";
 #else
-            k_CSVExportFilePath = "Packages/com.unity.entities/Unity.Entities.Tests/Journaling/entities-journaling-export-no-debug-names.csv";
+        const string k_CSVExportFilePath = "Packages/com.unity.entities/Unity.Entities.Tests/Journaling/entities-journaling-export-no-debug-names.csv";
 #endif
-#else
-#if !DOTS_DISABLE_DEBUG_NAMES
-            k_CSVExportFilePath = Path.Combine(UnityEngine.Application.streamingAssetsPath, "Journaling", "entities-journaling-export.csv");
-#else
-            k_CSVExportFilePath = Path.Combine(UnityEngine.Application.streamingAssetsPath, "Journaling", "entities-journaling-export-no-debug-names.csv");
-#endif
-#endif
-        }
 #endif
 
         public partial class TestEmptySystemManaged : SystemBase
@@ -89,63 +78,11 @@ namespace Unity.Entities.Tests
         {
             protected override void OnUpdate()
             {
-                Entities
-                    .ForEach((ref EcsTestData writable1, ref EcsTestData2 writable2, in EcsTestData3 readOnly) =>
-                    {
-                        writable1.value += 1;
-                    }).Run();
-            }
-        }
-
-        public partial class TestComponentWithoutBurstSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithoutBurst()
-                    .ForEach((ref EcsTestData writable1, ref EcsTestData2 writable2, in EcsTestData3 readOnly) =>
-                    {
-                        writable1.value += 1;
-                    }).Run();
-            }
-        }
-
-        public partial class TestComponentWithStructuralChangesSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithStructuralChanges()
-                    .ForEach((ref EcsTestData writable1, ref EcsTestData2 writable2, in EcsTestData3 readOnly) =>
-                    {
-                        writable1.value += 1;
-                    }).Run();
-            }
-        }
-
-        public partial class TestSharedComponentWithoutBurstSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithoutBurst()
-                    .ForEach((EcsTestSharedComp writable1, EcsTestSharedComp2 writable2, in EcsTestSharedComp3 readOnly) =>
-                    {
-                        writable1.value += 1;
-                    }).Run();
-            }
-        }
-
-        public partial class TestSharedComponentWithStructuralChangesSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithStructuralChanges()
-                    .ForEach((EcsTestSharedComp writable1, EcsTestSharedComp2 writable2, in EcsTestSharedComp3 readOnly) =>
-                    {
-                        writable1.value += 1;
-                    }).Run();
+                foreach (var (writable1, writable2, readOnly)
+                         in SystemAPI.Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRO<EcsTestData3>>())
+                {
+                    writable1.ValueRW.value += 1;
+                }
             }
         }
 
@@ -153,67 +90,13 @@ namespace Unity.Entities.Tests
         {
             protected override void OnUpdate()
             {
-                Entities
-                    .ForEach((ref DynamicBuffer<EcsIntElement> writable1, ref DynamicBuffer<EcsIntElement2> writable2, in DynamicBuffer<EcsIntElement3> readOnly) =>
-                    {
-                        writable1.Add(new EcsIntElement { Value = 1 });
-                    }).Run();
+                foreach (var (writable1, writable2, readOnly)
+                         in SystemAPI.Query<DynamicBuffer<EcsIntElement>, DynamicBuffer<EcsIntElement2>, DynamicBuffer<EcsIntElement3>>())
+                {
+                    writable1.Add(new EcsIntElement { Value = 1 });
+                }
             }
         }
-
-        public partial class TestBufferElementWithoutBurstSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithoutBurst()
-                    .ForEach((ref DynamicBuffer<EcsIntElement> writable1, ref DynamicBuffer<EcsIntElement2> writable2, in DynamicBuffer<EcsIntElement3> readOnly) =>
-                    {
-                        writable1.Add(new EcsIntElement { Value = 1 });
-                    }).Run();
-            }
-        }
-
-        public partial class TestBufferElementWithStructuralChangesSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithStructuralChanges()
-                    .ForEach((ref DynamicBuffer<EcsIntElement> writable1, ref DynamicBuffer<EcsIntElement2> writable2, in DynamicBuffer<EcsIntElement3> readOnly) =>
-                    {
-                        writable1.Add(new EcsIntElement { Value = 1 });
-                    }).Run();
-            }
-        }
-
-#if !UNITY_DISABLE_MANAGED_COMPONENTS
-        public partial class TestManagedComponentWithoutBurstSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithoutBurst()
-                    .ForEach((EcsTestManagedComponent writable1, EcsTestManagedComponent2 writable2, in EcsTestManagedComponent3 readOnly) =>
-                    {
-                        writable1.value = "hello";
-                    }).Run();
-            }
-        }
-
-        public partial class TestManagedComponentWithStructuralChangesSystem : SystemBase
-        {
-            protected override void OnUpdate()
-            {
-                Entities
-                    .WithStructuralChanges()
-                    .ForEach((EcsTestManagedComponent writable1, EcsTestManagedComponent2 writable2, in EcsTestManagedComponent3 readOnly) =>
-                    {
-                        writable1.value = "hello";
-                    }).Run();
-            }
-        }
-#endif
 
         static T[] ToArray<T>(T value) => new T[] { value };
         static T[] ToArray<T>(NativeArray<T> array) where T : struct => array.ToArray();
@@ -420,7 +303,11 @@ namespace Unity.Entities.Tests
             Assert.That(systemEntities.Length, Is.EqualTo(1));
 
             CheckRecords(
+#if UNITY_EDITOR
+                new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance), typeof(HideInHierarchy), typeof(Simulate))),
+#else
                 new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance), typeof(Simulate))),
+#endif
                 new RecordDesc(1, RecordType.GetComponentDataRW, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance)), data: ToArray(new SystemInstance())),
                 new RecordDesc(2, RecordType.SystemAdded, World, data: new SystemView(&systemHandle)),
 
@@ -457,7 +344,11 @@ namespace Unity.Entities.Tests
             Assert.That(systemEntities.Length, Is.EqualTo(1));
 
             CheckRecords(
+#if UNITY_EDITOR
+                new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance), typeof(HideInHierarchy), typeof(Simulate))),
+#else
                 new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance), typeof(Simulate))),
+#endif
                 new RecordDesc(1, RecordType.GetComponentDataRW, World, entities: ToArray(systemEntities), componentTypes: ToArray(typeof(SystemInstance)), data: ToArray(new SystemInstance())),
                 new RecordDesc(2, RecordType.SystemAdded, World, data: new SystemView(&system)),
 
@@ -521,15 +412,27 @@ namespace Unity.Entities.Tests
             Assert.That(systemEntities.Length, Is.EqualTo(3));
 
             CheckRecords(
+#if UNITY_EDITOR
+                new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities.GetSubArray(0, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(HideInHierarchy), typeof(Simulate))),
+#else
                 new RecordDesc(0, RecordType.CreateEntity, World, entities: ToArray(systemEntities.GetSubArray(0, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(Simulate))),
+#endif
                 new RecordDesc(1, RecordType.GetComponentDataRW, World, entities: ToArray(systemEntities.GetSubArray(0, 1)), componentTypes: ToArray(typeof(SystemInstance)), data: ToArray(new SystemInstance())),
                 new RecordDesc(2, RecordType.SystemAdded, World, data: new SystemView(&systemHandle)),
 
+#if UNITY_EDITOR
+                new RecordDesc(3, RecordType.CreateEntity, World, executingSystem: system.SystemHandle, entities: ToArray(systemEntities.GetSubArray(1, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(HideInHierarchy), typeof(Simulate))),
+#else
                 new RecordDesc(3, RecordType.CreateEntity, World, executingSystem: system.SystemHandle, entities: ToArray(systemEntities.GetSubArray(1, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(Simulate))),
+#endif
                 new RecordDesc(4, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(systemEntities.GetSubArray(1, 1)), componentTypes: ToArray(typeof(SystemInstance)), data: ToArray(new SystemInstance())),
                 new RecordDesc(5, RecordType.SystemAdded, World, executingSystem: system.SystemHandle, data: new SystemView(&managedSystem)),
 
+#if UNITY_EDITOR
+                new RecordDesc(6, RecordType.CreateEntity, World, executingSystem: system.SystemHandle, entities: ToArray(systemEntities.GetSubArray(2, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(HideInHierarchy), typeof(Simulate))),
+#else
                 new RecordDesc(6, RecordType.CreateEntity, World, executingSystem: system.SystemHandle, entities: ToArray(systemEntities.GetSubArray(2, 1)), componentTypes: ToArray(typeof(SystemInstance), typeof(Simulate))),
+#endif
                 new RecordDesc(7, RecordType.GetComponentDataRW, World, entities: ToArray(systemEntities.GetSubArray(2, 1)), componentTypes: ToArray(typeof(SystemInstance)), data: ToArray(new SystemInstance())),
                 new RecordDesc(8, RecordType.SystemAdded, World, executingSystem: system.SystemHandle, data: new SystemView(&unmanagedSystem))
             );
@@ -1159,7 +1062,7 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void SetComponentData_EntitiesForEach()
+        public void SetComponentData_IdiomaticForEach()
         {
             using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3)), 3, Allocator.Temp))
             {
@@ -1172,43 +1075,6 @@ namespace Unity.Entities.Tests
                 CheckRecords(
                     new RecordDesc(0, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestData)), data: MakeArray(entities.Length, new EcsTestData())),
                     new RecordDesc(1, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestData2)), data: MakeArray(entities.Length, new EcsTestData2()))
-                );
-            }
-        }
-
-        [Test]
-        public void SetComponentData_EntitiesForEach_WithoutBurst()
-        {
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3)), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestComponentWithoutBurstSystem>();
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestData)), data: MakeArray(entities.Length, new EcsTestData())),
-                    new RecordDesc(1, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestData2)), data: MakeArray(entities.Length, new EcsTestData2()))
-                );
-            }
-        }
-
-        [Test]
-        public void SetComponentData_EntitiesForEach_WithStructuralChanges()
-        {
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3)), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestComponentWithStructuralChangesSystem>();
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsTestData)), data: ToArray(new EcsTestData())),
-                    new RecordDesc(1, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsTestData)), data: ToArray(new EcsTestData())),
-                    new RecordDesc(2, RecordType.GetComponentDataRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsTestData)), data: ToArray(new EcsTestData()))
                 );
             }
         }
@@ -1226,66 +1092,6 @@ namespace Unity.Entities.Tests
             CheckRecords(
                 new RecordDesc(0, RecordType.GetComponentObjectRW, World, entities: ToArray(entity), componentTypes: ToArray(typeof(EcsTestManagedComponent)))
             );
-        }
-
-        [Test]
-        public void SetComponentDataManaged_EntitiesForEach_WithoutBurst()
-        {
-            var componentTypes = new ComponentType[] { typeof(EcsTestManagedComponent), typeof(EcsTestManagedComponent2), typeof(EcsTestManagedComponent3) };
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(componentTypes), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestManagedComponentWithoutBurstSystem>();
-                foreach (var entity in entities)
-                {
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent());
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent2());
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent3());
-                }
-
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestManagedComponent))),
-                    new RecordDesc(1, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestManagedComponent2))),
-                    new RecordDesc(2, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsTestManagedComponent3)))
-                );
-            }
-        }
-
-        [Test]
-        public void SetComponentDataManaged_EntitiesForEach_WithStructuralChanges()
-        {
-            var componentTypes = new ComponentType[] { typeof(EcsTestManagedComponent), typeof(EcsTestManagedComponent2), typeof(EcsTestManagedComponent3) };
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(componentTypes), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestManagedComponentWithStructuralChangesSystem>();
-                foreach (var entity in entities)
-                {
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent());
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent2());
-                    m_Manager.SetComponentData(entity, new EcsTestManagedComponent3());
-                }
-
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsTestManagedComponent))),
-                    new RecordDesc(1, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsTestManagedComponent2))),
-                    new RecordDesc(2, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsTestManagedComponent3))),
-                    new RecordDesc(3, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsTestManagedComponent))),
-                    new RecordDesc(4, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsTestManagedComponent2))),
-                    new RecordDesc(5, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsTestManagedComponent3))),
-                    new RecordDesc(6, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsTestManagedComponent))),
-                    new RecordDesc(7, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsTestManagedComponent2))),
-                    new RecordDesc(8, RecordType.GetComponentObjectRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsTestManagedComponent3)))
-                );
-            }
         }
 #endif
 
@@ -1402,7 +1208,7 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void SetBuffer_EntitiesForEach()
+        public void SetBuffer_IdiomaticForEach()
         {
             using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsIntElement), typeof(EcsIntElement2), typeof(EcsIntElement3)), 3, Allocator.Temp))
             {
@@ -1414,50 +1220,8 @@ namespace Unity.Entities.Tests
 
                 CheckRecords(
                     new RecordDesc(0, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement))),
-                    new RecordDesc(1, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement2)))
-                );
-            }
-        }
-
-        [Test]
-        public void SetBuffer_EntitiesForEach_WithoutBurst()
-        {
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsIntElement), typeof(EcsIntElement2), typeof(EcsIntElement3)), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestBufferElementWithoutBurstSystem>();
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement))),
-                    new RecordDesc(1, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement2)))
-                );
-            }
-        }
-
-        [Test]
-        public void SetBuffer_EntitiesForEach_WithStructuralChanges()
-        {
-            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsIntElement), typeof(EcsIntElement2), typeof(EcsIntElement3)), 3, Allocator.Temp))
-            {
-                var system = World.GetOrCreateSystemManaged<TestBufferElementWithStructuralChangesSystem>();
-                using (var scope = new RecordScope())
-                {
-                    system.Update();
-                }
-
-                CheckRecords(
-                    new RecordDesc(0, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsIntElement))),
-                    new RecordDesc(1, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsIntElement2))),
-                    new RecordDesc(2, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[0]), componentTypes: ToArray(typeof(EcsIntElement3))),
-                    new RecordDesc(3, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsIntElement))),
-                    new RecordDesc(4, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsIntElement2))),
-                    new RecordDesc(5, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[1]), componentTypes: ToArray(typeof(EcsIntElement3))),
-                    new RecordDesc(6, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsIntElement))),
-                    new RecordDesc(7, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsIntElement2))),
-                    new RecordDesc(8, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities[2]), componentTypes: ToArray(typeof(EcsIntElement3)))
+                    new RecordDesc(1, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement2))),
+                    new RecordDesc(2, RecordType.GetBufferRW, World, executingSystem: system.SystemHandle, entities: ToArray(entities), componentTypes: ToArray(typeof(EcsIntElement3)))
                 );
             }
         }
@@ -1473,20 +1237,6 @@ namespace Unity.Entities.Tests
 
             CheckRecords(
                 new RecordDesc(0, RecordType.GetComponentDataRW, World, entities: ToArray(entity), componentTypes: ToArray(typeof(EcsTestData)), data: ToArray(new EcsTestData()))
-            );
-        }
-
-        [Test]
-        public void GetComponentObject()
-        {
-            var entity = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(UnityEngine.Camera)));
-            using (var scope = new RecordScope())
-            {
-                m_Manager.GetComponentObject<UnityEngine.Camera>(entity);
-            }
-
-            CheckRecords(
-                new RecordDesc(0, RecordType.GetComponentObjectRW, World, entities: ToArray(entity), componentTypes: ToArray(typeof(UnityEngine.Camera)))
             );
         }
 
@@ -1609,9 +1359,10 @@ namespace Unity.Entities.Tests
             );
         }
 
-#if !UNITY_ANDROID // APK bundling breaks reading from streamingAssets (DOTS-7038)
+// editor-only: requires access to reference CSV files in the package directory
+#if UNITY_EDITOR
         [Test]
-        public void ExportToCSV()
+        public void ExportToCSV_MatchesReferenceFile()
         {
             using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3)), 3, Allocator.Temp))
             {
@@ -1623,40 +1374,65 @@ namespace Unity.Entities.Tests
 #else
                 var actual = lines.ToArray();
                 var expected = File.ReadAllLines(k_CSVExportFilePath, Encoding.UTF8);
-                Assert.IsTrue(actual.Length > 1);
-                Assert.IsTrue(expected.Length > 1);
-                Assert.AreEqual(expected.Length, actual.Length);
+                Assert.That(actual.Length, Is.GreaterThan(1), "Exported CSV should have header and at least one data row");
+                Assert.That(expected.Length, Is.GreaterThan(1), "Reference CSV should have header and at least one data row");
+                Assert.That(actual.Length, Is.EqualTo(expected.Length), "Exported CSV row count should match reference");
 
                 var frameIndexColumnNumber = Array.IndexOf(expected[0].Split(','), "FrameIndex");
-                var entitiesIndexColumnNumber = Array.IndexOf(expected[0].Split(','), "Entities");
 
-                // start at 1 to skip the CSV header
                 for (int line = 1; line < expected.Length; ++line)
                 {
                     var actualLine = actual[line];
                     var expectedLine = expected[line];
 
-#if !ENTITY_STORE_V1
-                    // global allocation means we cannot guarantee determinism of entity IDs for that kind of tests
+                    // entity IDs are non-deterministic due to global allocation
                     actualLine = Regex.Replace(actualLine, @"\((\d+):(\d+)\)", "<EntityID>");
                     expectedLine = Regex.Replace(expectedLine, @"\((\d+):(\d+)\)", "<EntityID>");
-#endif
 
                     var actualColumns = actualLine.Split(',');
                     var expectedColumns = expectedLine.Split(',');
-                    Assert.AreEqual(expectedColumns.Length, actualColumns.Length);
+                    Assert.That(actualColumns.Length, Is.EqualTo(expectedColumns.Length), $"Row {line} column count should match reference");
 
-                    int numColumns = expectedColumns.Length;
-                    for (int column = 0; column < numColumns; ++column)
+                    for (int column = 0; column < expectedColumns.Length; ++column)
                     {
-                        // Frame indices are non-deterministic so skip comparing them
+                        // frame indices are non-deterministic
                         if (column == frameIndexColumnNumber)
                             continue;
 
-                        Assert.AreEqual(expectedColumns[column], actualColumns[column]);
+                        Assert.That(actualColumns[column], Is.EqualTo(expectedColumns[column]), $"Row {line} column {column} should match reference");
                     }
                 }
 #endif
+            }
+        }
+#endif
+
+// player-only: validates CSV structure without reference files which aren't available in player builds
+#if !UNITY_EDITOR
+        [Test]
+        public void ExportToCSV_ProducesValidOutput()
+        {
+            using (var entities = m_Manager.CreateEntity(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3)), 3, Allocator.Temp))
+            {
+                World.GetOrCreateSystemManaged<TestComponentSystem>().Update();
+
+                var actual = EntitiesJournaling.ExportToCSV().ToArray();
+                Assert.That(actual.Length, Is.GreaterThan(1), "CSV should have header and at least one data row");
+
+                var expectedColumns = new[] { "Index", "RecordType", "FrameIndex", "World", "ExecutingSystem", "OriginSystem", "Entities", "ComponentTypes", "Data" };
+                var headerColumns = actual[0].Split(',');
+                Assert.That(headerColumns, Is.EqualTo(expectedColumns), "Header columns mismatch");
+
+                var validRecordTypes = Enum.GetNames(typeof(RecordType));
+                for (int line = 1; line < actual.Length; line++)
+                {
+                    // split respecting quoted fields since Data column contains JSON with commas
+                    var columns = Regex.Split(actual[line], ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+                    Assert.That(columns.Length, Is.EqualTo(expectedColumns.Length), $"Row {line} column count mismatch");
+                    Assert.That(ulong.TryParse(columns[0], out _), Is.True, $"Row {line}: Index is not a valid number");
+                    Assert.That(validRecordTypes.Contains(columns[1]), Is.True, $"Row {line}: RecordType '{columns[1]}' is not valid");
+                    Assert.That(ulong.TryParse(columns[2], out _), Is.True, $"Row {line}: FrameIndex is not a valid number");
+                }
             }
         }
 #endif
@@ -1796,7 +1572,7 @@ namespace Unity.Entities.Tests
             {
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 ecb2.AddComponent(query, typeof(EcsTestData), EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             }
             // NOTE: ECB playback being bursted does not add to the error message, so we are disabling it for the test
             ecb2.m_Data->m_MainThreadChain.m_CanBurstPlayback = false;
@@ -1828,7 +1604,7 @@ namespace Unity.Entities.Tests
             {
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 ecb2.SetSharedComponent(query, new EcsTestSharedComp { value = 10 }, EntityQueryCaptureMode.AtRecord);
-#pragma warning restore
+#pragma warning restore 0618
             }
             // NOTE: ECB playback being bursted does not add to the error message, so we are disabling it for the test
             ecb2.m_Data->m_MainThreadChain.m_CanBurstPlayback = false;
@@ -1839,4 +1615,5 @@ namespace Unity.Entities.Tests
         }
     }
 }
+#pragma warning restore 0618
 #endif

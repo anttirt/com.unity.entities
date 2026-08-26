@@ -151,7 +151,9 @@ namespace Unity.Entities.Tests
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e1, new EcsTestData(1));
+            #pragma warning restore 0618
 
             AssertSameChunk(e0, e1);
             AssetHasChangeVersion<EcsTestData>(e0, NewVersion);
@@ -168,7 +170,9 @@ namespace Unity.Entities.Tests
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e1, new EcsTestManagedComponent {value = "SomeString"});
+            #pragma warning restore 0618
 
             AssertSameChunk(e0, e1);
             AssetHasChangeVersion<EcsTestManagedComponent>(e0, NewVersion);
@@ -182,12 +186,16 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestManagedComponent), typeof(EcsTestData2));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestManagedComponent), typeof(EcsTestData2));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e0, new EcsTestManagedComponent {value = "e0"});
             m_Manager.SetComponentData(e1, new EcsTestManagedComponent {value = "e1"});
+            #pragma warning restore 0618
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetComponentData<EcsTestManagedComponent>(e1).value = "SomeString";
+            #pragma warning restore 0618
 
             AssertSameChunk(e0, e1);
             AssetHasChangeVersion<EcsTestManagedComponent>(e0, NewVersion);
@@ -245,7 +253,9 @@ namespace Unity.Entities.Tests
             BumpGlobalSystemVersion();
 
             // Individual Entity not changed in place.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e1, new EcsTestSharedComp(7));
+            #pragma warning restore 0618
 
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData>(e1, OldVersion);
@@ -261,8 +271,10 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e0, new EcsTestSharedComp(1));
             m_Manager.SetSharedComponentManaged(e1, new EcsTestSharedComp(2));
+            #pragma warning restore 0618
 
             var chunk0 = m_Manager.GetChunk(e0);
             var chunk1 = m_Manager.GetChunk(e1);
@@ -288,8 +300,10 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(e0, new EcsTestSharedComp(1));
             m_Manager.SetSharedComponentManaged(e1, new EcsTestSharedComp(2));
+            #pragma warning restore 0618
 
             var chunk0 = m_Manager.GetChunk(e0);
             var chunk1 = m_Manager.GetChunk(e1);
@@ -316,8 +330,10 @@ namespace Unity.Entities.Tests
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestDataEntity));
             var e2 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestDataEntity));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(e1, new EcsTestDataEntity {value0 = 0, value1 = e0});
             m_Manager.SetComponentData(e2, new EcsTestDataEntity {value0 = 0, value1 = e0});
+            #pragma warning restore 0618
             m_Manager.DestroyEntity(e0);
 
             var chunk0 = m_Manager.GetChunk(e1);
@@ -362,7 +378,9 @@ namespace Unity.Entities.Tests
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.UniversalQuery, new SharedData1(5));
+            #pragma warning restore 0618
 
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasSharedChangeVersion<SharedData1>(e0, NewVersion);
@@ -399,7 +417,9 @@ namespace Unity.Entities.Tests
             BumpGlobalSystemVersion();
 
             // Individual Entity not changed in place.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e0, new SharedData1(5));
+            #pragma warning restore 0618
 
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasSharedChangeVersion<SharedData1>(e0, NewVersion);
@@ -412,7 +432,9 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             BumpGlobalSystemVersion();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestData3(7));
+            #pragma warning restore 0618
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData2>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData>(e1, OldVersion);
@@ -429,7 +451,9 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             BumpGlobalSystemVersion();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestManagedComponent {value = "SomeString"});
+            #pragma warning restore 0618
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData2>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData>(e1, OldVersion);
@@ -484,7 +508,9 @@ namespace Unity.Entities.Tests
             var e0 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             var e1 = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestData2));
             BumpGlobalSystemVersion();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestTag());
+            #pragma warning restore 0618
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData2>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData>(e1, OldVersion);
@@ -519,7 +545,9 @@ namespace Unity.Entities.Tests
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e1, new EcsTestSharedComp {value = 2});
+            #pragma warning restore 0618
 
             AssetHasChangeVersion<EcsTestData>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData2>(e0, OldVersion);
@@ -538,7 +566,9 @@ namespace Unity.Entities.Tests
 
             BumpGlobalSystemVersion();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e1, new EcsTestSharedComp {value = 2});
+            #pragma warning restore 0618
 
             AssetHasChangeVersion<EcsTestManagedComponent>(e0, OldVersion);
             AssetHasChangeVersion<EcsTestData2>(e0, OldVersion);

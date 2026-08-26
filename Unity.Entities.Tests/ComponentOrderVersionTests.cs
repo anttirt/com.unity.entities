@@ -226,7 +226,9 @@ namespace Unity.Entities.Tests
         public void SetSharedComponent()
         {
             var entity = m_Manager.CreateEntity(typeof(SharedData1), typeof(SharedData2));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new SharedData1(1));
+            #pragma warning restore 0618
 
             Assert.LessOrEqual(2, m_Manager.GetComponentOrderVersion<SharedData2>());
             Assert.LessOrEqual(2, m_Manager.GetComponentOrderVersion<SharedData1>());
@@ -239,7 +241,9 @@ namespace Unity.Entities.Tests
             var sharedData = new SharedData1(1);
 
             var destroyEntity = m_Manager.CreateEntity(typeof(SharedData1));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(destroyEntity, sharedData);
+            #pragma warning restore 0618
             /*var dontDestroyEntity = */ m_Manager.Instantiate(destroyEntity);
 
             Assert.LessOrEqual(2, m_Manager.GetSharedComponentOrderVersion(sharedData));
@@ -253,50 +257,72 @@ namespace Unity.Entities.Tests
         public void GetSharedComponentOrderVersionIncrementingWithManaged([Values(0, 1)]int value)
         {
             int unaffectedSharedValue = 15;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new ManagedSharedData2(unaffectedSharedValue));
             var unaffectedVersion = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(unaffectedSharedValue));
+            #pragma warning restore 0618
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var v0 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
 
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new ManagedSharedData2(value));
             var v1 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v1, v0);
 
             m_Manager.RemoveComponent<ManagedSharedData2>(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var v2 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v2, v1);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new ManagedSharedData2(value));
             var v3 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v3, v2);
 
             var clone = m_Manager.Instantiate(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var v4 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v4, v3);
 
             m_Manager.DestroyEntity(clone);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var v5 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v5, v4);
 
             m_Manager.DestroyEntity(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var v6 = m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(value));
+            #pragma warning restore 0618
             Assert.Greater(v6, v5);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(unaffectedVersion, m_Manager.GetSharedComponentOrderVersionManaged(new ManagedSharedData2(unaffectedSharedValue)));
+            #pragma warning restore 0618
         }
 
         [Test]
         public void GetUnmanagedSharedComponentOrderVersionIncrementing([Values(0, 1)]int value)
         {
             int unaffectedSharedValue = 15;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(m_Manager.CreateEntity(), new SharedData1(unaffectedSharedValue));
+            #pragma warning restore 0618
             var unaffectedVersion = m_Manager.GetSharedComponentOrderVersion(new SharedData1(unaffectedSharedValue));
 
             var v0 = m_Manager.GetSharedComponentOrderVersion(new SharedData1(value));
 
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new SharedData1(value));
+            #pragma warning restore 0618
             var v1 = m_Manager.GetSharedComponentOrderVersion(new SharedData1(value));
             Assert.Greater(v1, v0);
 
@@ -304,7 +330,9 @@ namespace Unity.Entities.Tests
             var v2 = m_Manager.GetSharedComponentOrderVersion(new SharedData1(value));
             Assert.Greater(v2, v1);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new SharedData1(value));
+            #pragma warning restore 0618
             var v3 = m_Manager.GetSharedComponentOrderVersion(new SharedData1(value));
             Assert.Greater(v3, v2);
 

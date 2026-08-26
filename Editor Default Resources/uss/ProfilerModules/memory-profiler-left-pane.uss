@@ -47,25 +47,9 @@
     height: 24px;
 }
 
-.memory-profiler-left-pane__column1
+.memory-profiler-left-pane__column-header
 {
     flex-grow: 1;
-    width: auto;
-    padding-left: 5px;
-    -unity-text-align: middle-left;
-}
-
-.memory-profiler-left-pane__column2
-{
-    width: 80px;
-    padding-left: 4px;
-    border-left-width: 1px;
-    -unity-text-align: middle-left;
-}
-
-.memory-profiler-left-pane__column3
-{
-    width: 80px;
     padding-left: 4px;
     border-left-width: 1px;
     -unity-text-align: middle-left;

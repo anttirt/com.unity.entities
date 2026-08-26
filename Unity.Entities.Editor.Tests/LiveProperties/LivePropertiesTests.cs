@@ -96,6 +96,7 @@ namespace Unity.Entities.Editor.Tests
         }
 
         [UnityTest]
+        [Ignore("https://jira.unity3d.com/browse/UUM-138984")]
         public IEnumerator ShouldUpdateLiveProperties_ManualConversion_Test()
         {
             var subscene = CreateSubScene("subscene1", "parentScene1");

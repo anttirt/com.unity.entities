@@ -29,7 +29,9 @@ namespace Unity.Entities.Editor
             { IsBuffer: true } => ComponentViewData.ComponentKind.Buffer,
             { IsSharedComponent: true } => ComponentViewData.ComponentKind.Shared,
             { IsChunkComponent: true } => ComponentViewData.ComponentKind.Chunk,
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             { IsManagedComponent: true } => ComponentViewData.ComponentKind.Managed,
+            #pragma warning restore 0618
             _ => ComponentViewData.ComponentKind.Default
         };
 

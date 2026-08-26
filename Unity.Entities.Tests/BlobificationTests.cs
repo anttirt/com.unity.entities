@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using UnityEngine;
 using NUnit.Framework;
 using System;
@@ -19,17 +18,23 @@ using Unity.IO.LowLevel.Unsafe;
 
 public partial class BlobTests : ECSTestsFixture
 {
-    BlobTestSystemEFE _blobTestSystemEFE => World.CreateSystemManaged<BlobTestSystemEFE>();
-    partial class BlobTestSystemEFE : SystemBase
+    BlobDisposeSystemIJobEntity _blobDisposeSystemIJobEntity => World.CreateSystemManaged<BlobDisposeSystemIJobEntity>();
+    partial class BlobDisposeSystemIJobEntity : SystemBase
     {
-        public JobHandle ValidateBlobData_Job(JobHandle inputDependency = default)
+        [BurstCompile]
+        partial struct ValidateBlobDataJob : IJobEntity
         {
-            return Entities.ForEach((ref ComponentWithBlobData data) =>
+            void Execute(ref ComponentWithBlobData data)
             {
                 ValidateBlobData(ref data.blobAsset.Value);
                 data.blobAsset.Dispose();
                 data.DidSucceed = true;
-            }).Schedule(inputDependency);
+            }
+        }
+
+        public JobHandle ValidateBlobData_Job(JobHandle inputDependency = default)
+        {
+            return new ValidateBlobDataJob().Schedule(inputDependency);
         }
         protected override void OnUpdate() {}
     }
@@ -243,7 +248,7 @@ public partial class BlobTests : ECSTestsFixture
     {
         var entities = CreateUniqueBlob();
 
-        _blobTestSystemEFE.ValidateBlobData_Job().Complete();
+        _blobDisposeSystemIJobEntity.ValidateBlobData_Job().Complete();
 
         foreach (var e in entities)
         {
@@ -320,6 +325,80 @@ public partial class BlobTests : ECSTestsFixture
 
         var floatArray = root.floatArray.ToArray();
         Assert.AreEqual(new float[] { 0, 1, 2 }, floatArray);
+
+        blob.Dispose();
+    }
+
+    [Test]
+    public void BlobArrayAsSpanReturnsCorrectData()
+    {
+        var blob = ConstructBlobData();
+        ref MyData root = ref blob.Value;
+
+        var span = root.floatArray.AsSpan();
+        Assert.AreEqual(3, span.Length);
+        Assert.AreEqual(0f, span[0]);
+        Assert.AreEqual(1f, span[1]);
+        Assert.AreEqual(2f, span[2]);
+
+        blob.Dispose();
+    }
+
+    [Test]
+    public void BlobArrayAsSpanEmptyArray()
+    {
+        var builder = new BlobBuilder(Allocator.Temp);
+        ref var root = ref builder.ConstructRoot<BlobArray<int>>();
+        builder.Allocate(ref root, 0);
+        var blob = builder.CreateBlobAssetReference<BlobArray<int>>(Allocator.Temp);
+        builder.Dispose();
+
+        var span = blob.Value.AsSpan();
+        Assert.AreEqual(0, span.Length);
+
+        blob.Dispose();
+    }
+
+    [Test]
+    public void BlobStringAsSpanReturnsUtf8Bytes()
+    {
+        var blob = ConstructBlobData();
+        ref MyData root = ref blob.Value;
+
+        var span = root.str.AsSpan();
+        Assert.AreEqual(4, span.Length);
+        Assert.AreEqual((byte)'B', span[0]);
+        Assert.AreEqual((byte)'l', span[1]);
+        Assert.AreEqual((byte)'a', span[2]);
+        Assert.AreEqual((byte)'h', span[3]);
+
+        blob.Dispose();
+    }
+
+    [Test]
+    public void BlobStringAsSpanEmptyString()
+    {
+        var blob = ConstructBlobData();
+        ref MyData root = ref blob.Value;
+
+        var span = root.emptyStr.AsSpan();
+        Assert.AreEqual(0, span.Length);
+
+        blob.Dispose();
+    }
+
+    [Test]
+    public void BlobStringAsSpanExcludesNullTerminator()
+    {
+        var builder = new BlobBuilder(Allocator.Temp);
+        ref var root = ref builder.ConstructRoot<BlobString>();
+        builder.AllocateString(ref root, "Test");
+        var blob = builder.CreateBlobAssetReference<BlobString>(Allocator.Temp);
+        builder.Dispose();
+
+        var span = blob.Value.AsSpan();
+        Assert.AreEqual(4, span.Length);
+        Assert.AreEqual(5, blob.Value.Data.Length);
 
         blob.Dispose();
     }
@@ -782,7 +861,7 @@ public partial class BlobTests : ECSTestsFixture
     {
         // note that the size of the internal chunks used by the builder is set to 64 bytes
         // nothing special with 64 but there's no reason to use large chunks (default is 64k)
-        var blobBuilder = new BlobBuilder(Allocator.Temp, 64);
+        var blobBuilder = new BlobBuilder(World.UpdateAllocator.ToAllocator, 64);
 
         // constructing the root creates the first chunk (1st allocation)
         ref var root = ref blobBuilder.ConstructRoot<BlobArray<BlobArray<BlobString>>>();
@@ -832,5 +911,8 @@ public partial class BlobTests : ECSTestsFixture
         // This error would not happen without the large allocation. Because when two chunks have consecutive
         // addresses, they usually end up after each other in the finalized blob, causing the off by one error
         // to be completely harmless.
+
+        // Finally, let's clean up the allocator we used to avoid interfering with other tests.
+        World.UpdateAllocator.Rewind();
     }
 }

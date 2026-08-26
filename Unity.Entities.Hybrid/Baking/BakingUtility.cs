@@ -195,12 +195,18 @@ namespace Unity.Entities
         {
             using (s_BakeGameObjects.Auto())
             {
+                PrepareWorldForBaking(conversionWorld, settings);
                 var bakingSystem = conversionWorld.GetOrCreateSystemManaged<BakingSystem>();
-                bakingSystem.PrepareForBaking(settings, default);
-                PreprocessBake(conversionWorld, settings);
                 bakingSystem.Bake(default, rootGameObjects);
                 PostprocessBake(conversionWorld, settings, bakingSystem);
             }
+        }
+
+        internal static void PrepareWorldForBaking(World world, BakingSettings settings)
+        {
+            var bakingSystem = world.GetOrCreateSystemManaged<BakingSystem>();
+            bakingSystem.PrepareForBaking(settings, default);
+            PreprocessBake(world, settings);
         }
 
         struct BakingRootGroups : DefaultWorldInitialization.IIdentifyRootGroups
@@ -238,6 +244,13 @@ namespace Unity.Entities
         internal static HashSet<ComponentType> AdditionalCompanionComponentTypes = new();
         internal static void AddAdditionalCompanionComponentType(ComponentType newType)
         {
+            var managedType = newType.GetManagedType();
+            var closedType = typeof(CompanionComponent<>).MakeGenericType(managedType);
+            if (!TypeManager.TryGetTypeIndex(closedType, out _))
+                throw new ArgumentException(
+                    $"Companion component type '{managedType.FullName}' has no registered unmanaged wrapper. " +
+                    $"Add [assembly: RegisterGenericComponentType(typeof(CompanionComponent<{managedType.Name}>))] " +
+                    $"in the assembly that declares the type.");
             AdditionalCompanionComponentTypes.Add(newType);
         }
 #endif

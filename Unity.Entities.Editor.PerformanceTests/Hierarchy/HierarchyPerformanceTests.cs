@@ -147,6 +147,7 @@ namespace Unity.Entities.Editor.PerformanceTests
 
             hierarchy.Dispose();
             immutable.Dispose();
+            generator.Dispose();
             fakeSceneTagToSubSceneNodeHandleMap.Dispose();
         }
 

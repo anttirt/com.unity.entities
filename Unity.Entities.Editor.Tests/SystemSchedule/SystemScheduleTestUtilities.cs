@@ -3,30 +3,29 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Unity.Editor.Bridge;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
+
 using Object = UnityEngine.Object;
-using TreeView = Unity.Editor.Bridge.TreeView;
 
 namespace Unity.Entities.Editor.Tests
 {
     static class SystemScheduleTreeViewExtension
     {
-        public static bool CheckIfTreeViewContainsGivenSystemType(this SystemTreeView @this, Type systemType, out SystemTreeViewItem item)
+        public static bool CheckIfTreeViewContainsGivenSystemType(this SystemTreeView @this, Type systemType, out SystemTreeViewItemData item)
         {
-            if (@this.m_TreeViewRootItems == null || @this.m_TreeViewRootItems.Count == 0)
+            if (@this.TreeViewRootItems == null || @this.TreeViewRootItems.Count == 0)
             {
                 item = null;
                 return false;
             }
 
             var systemName = systemType.Name;
-            foreach (var rootItem in @this.m_TreeViewRootItems)
+            foreach (var rootItem in @this.TreeViewRootItems)
             {
-                if (!(rootItem is SystemTreeViewItem systemTreeViewItem))
+                if (!(rootItem.data is SystemTreeViewItemData systemTreeViewItem))
                 {
                     item = null;
                     return false;
@@ -43,7 +42,7 @@ namespace Unity.Entities.Editor.Tests
             return false;
         }
 
-        static bool CheckIfTreeViewItemContainsSystem(SystemTreeViewItem item, string systemName, out SystemTreeViewItem outItem)
+        static bool CheckIfTreeViewItemContainsSystem(SystemTreeViewItemData item, string systemName, out SystemTreeViewItemData outItem)
         {
             var itemName = item.GetSystemName();
             itemName = Regex.Replace(itemName, @"[(].*", string.Empty);
@@ -57,7 +56,7 @@ namespace Unity.Entities.Editor.Tests
 
             foreach (var childItem in item.children)
             {
-                if (CheckIfTreeViewItemContainsSystem(childItem as SystemTreeViewItem, systemName, out outItem))
+                if (CheckIfTreeViewItemContainsSystem(childItem.data, systemName, out outItem))
                     return true;
             }
 
@@ -82,13 +81,13 @@ namespace Unity.Entities.Editor.Tests
             Object.DestroyImmediate(window);
         }
 
-        public static void CollectExpandedGroupNodeNames(SystemTreeView treeView, ITreeViewItem item, List<string> resultList)
+        public static void CollectExpandedGroupNodeNames(SystemTreeView treeView, SystemTreeViewItemData item, List<string> resultList)
         {
             if (!item.children.Any())
                 return;
 
-            var systemTreeView = treeView.Q<TreeView>();
-            var systemTreeViewItem = item as SystemTreeViewItem;
+            var systemTreeView = treeView.Q<MultiColumnTreeView>();
+            var systemTreeViewItem = item as SystemTreeViewItemData;
             var itemName = systemTreeViewItem?.GetSystemName();
 
             if (systemTreeView.IsExpanded(item.id))
@@ -96,31 +95,29 @@ namespace Unity.Entities.Editor.Tests
 
             foreach (var child in item.children)
             {
-                CollectExpandedGroupNodeNames(treeView, child, resultList);
+                CollectExpandedGroupNodeNames(treeView, child.data, resultList);
             }
         }
 
-        public static void ExpandAllGroupNodes(SystemTreeView treeView, ITreeViewItem item)
+        public static void ExpandAllGroupNodes(SystemTreeView treeView, SystemTreeViewItemData item)
         {
             if (!item.children.Any())
                 return;
 
-            var systemTreeView = treeView.Q<TreeView>();
+            var systemTreeView = treeView.Q<MultiColumnTreeView>();
             if (!systemTreeView.IsExpanded(item.id))
                 systemTreeView.ExpandItem(item.id);
 
             foreach (var child in item.children)
             {
-                ExpandAllGroupNodes(treeView, child);
+                ExpandAllGroupNodes(treeView, child.data);
             }
         }
 
         public class UpdateSystemGraph : IEditModeTestYieldInstruction
         {
-            const int k_WaitFrames = 6000;
             readonly SystemScheduleWindow m_SystemScheduleWindow;
             readonly Type m_GivenSystemType;
-            int m_Count;
 
             public UpdateSystemGraph(Type systemType)
             {
@@ -130,24 +127,18 @@ namespace Unity.Entities.Editor.Tests
 
             public IEnumerator Perform()
             {
+                if (m_GivenSystemType == null)
+                    throw new ArgumentNullException(nameof(m_GivenSystemType), $"{nameof(m_GivenSystemType)} is null.");
+                
+                // Force immediate synchronous update
+                m_SystemScheduleWindow.ForceUpdate();
+
+                // Wait one frame for UIElements to render
+                yield return null;
+
                 var systemTreeView = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
-
-                for (;;)
-                {
-                    if (m_GivenSystemType != null &&
-                        systemTreeView.CheckIfTreeViewContainsGivenSystemType(m_GivenSystemType, out _)
-                        || m_GivenSystemType == null && systemTreeView.m_TreeViewRootItems.Count > 0)
-                        break;
-
-                    if (++m_Count > k_WaitFrames)
-                    {
-                        throw new TimeoutException( m_GivenSystemType == null
-                                                    ? $"System tree view is empty within {k_WaitFrames} frames."
-                                                    : $"Expected system of type {m_GivenSystemType.Name} is not detected in system tree view within {k_WaitFrames} frames." );
-                    }
-
-                    yield return null;
-                }
+                if (!systemTreeView.CheckIfTreeViewContainsGivenSystemType(m_GivenSystemType, out _))
+                    throw new TimeoutException($"Expected system of type {m_GivenSystemType.Name} is not detected in system tree view after forced update.");
             }
 
             public bool ExpectDomainReload { get; }

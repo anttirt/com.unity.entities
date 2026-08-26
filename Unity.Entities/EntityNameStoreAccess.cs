@@ -6,7 +6,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using UnityEngine;
 
-#if !ENTITY_STORE_V1 && !DOTS_DISABLE_DEBUG_NAMES
+#if !DOTS_DISABLE_DEBUG_NAMES
 internal unsafe struct EntityNameStoreAccessData
 {
     public ulong m_NameChangeBitsSequenceNum;
@@ -17,18 +17,15 @@ internal unsafe struct EntityNameStoreAccess : IDisposable
     public const ulong InitialNameChangeBitsSequenceNum = 1;
     public ulong NameChangeBitsSequenceNum => m_Data->m_NameChangeBitsSequenceNum;
 
-    [NativeDisableUnsafePtrRestriction]
-    private EntityComponentStore* m_EntityComponentStore;
-    private UnsafeHashSet<Entity> m_EntitiesNameSet;
+    private UnsafeHashSet<Entity> m_EntitiesWithNames;
     [NativeDisableUnsafePtrRestriction]
     private EntityNameStoreAccessData* m_Data;
 
     public EntityNameStoreAccess(EntityComponentStore* componentStore)
     {
-        m_EntityComponentStore = componentStore;
         m_Data = Memory.Unmanaged.Allocate<EntityNameStoreAccessData>(Allocator.Persistent);
         m_Data->m_NameChangeBitsSequenceNum = InitialNameChangeBitsSequenceNum;
-        m_EntitiesNameSet = new UnsafeHashSet<Entity>(1000, Allocator.Persistent);
+        m_EntitiesWithNames = new UnsafeHashSet<Entity>(1000, Allocator.Persistent);
     }
 
     public bool IsCreated => m_Data != null;
@@ -36,10 +33,9 @@ internal unsafe struct EntityNameStoreAccess : IDisposable
     public void Dispose()
     {
         Memory.Unmanaged.Free(m_Data, Allocator.Persistent);
-        m_EntitiesNameSet.Dispose();
+        m_EntitiesWithNames.Dispose();
 
         m_Data = null;
-        m_EntityComponentStore = null;
     }
 
     public ulong IncNameChangeBitsVersion()
@@ -53,52 +49,34 @@ internal unsafe struct EntityNameStoreAccess : IDisposable
         m_Data->m_NameChangeBitsSequenceNum = nameChangeBitsVersion;
     }
 
-    public EntityName GetEntityNameByEntityIndex(int index)
+    public int CountEntitiesWithNames()
     {
-        return EntityComponentStore.s_entityStore.Data.GetEntityName(index);
+        return m_EntitiesWithNames.Count;
     }
 
-    public EntityName GetEntityName(Entity entity)
+    public void ResetEntitiesWithNames()
     {
-        return EntityComponentStore.s_entityStore.Data.GetEntityName(entity);
+        m_EntitiesWithNames.Clear();
     }
 
-    public void SetEntityName(Entity entity, EntityName name)
+    public void AddEntityToEntitiesWithNames(Entity entity)
     {
-        EntityComponentStore.s_entityStore.Data.SetEntityName(entity, name);
+        m_EntitiesWithNames.Add(entity);
     }
 
-    public int CountEntitiesWithNamesSet()
-    {
-        return m_EntitiesNameSet.Count;
-    }
 
-    public void ResetEntitiesWithNamesSet()
-    {
-        m_EntitiesNameSet.Clear();
-    }
-
-    public void AddEntityWithNameSet(Entity entity)
-    {
-        m_EntitiesNameSet.Add(entity);
-    }
-
-    public void RemoveEntityWithNameSet(Entity entity)
-    {
-        m_EntitiesNameSet.Remove(entity);
-    }
-
-    public void RemoveEntityWithNameSet(Entity* entities, int count)
+    public void RemoveEntitiesFromEntitiesWithNames(Entity* entities, int count)
     {
         for (int i = 0; i < count; ++i)
         {
-            m_EntitiesNameSet.Remove(entities[i]);
+            m_EntitiesWithNames.Remove(entities[i]);
         }
     }
 
-    public UnsafeHashSet<Entity>.ReadOnly GetEntityWithNameSetRO()
+    public UnsafeHashSet<Entity>.ReadOnly GetEntitiesWithNamesRO()
     {
-        return m_EntitiesNameSet.AsReadOnly();
+        return m_EntitiesWithNames.AsReadOnly();
     }
+
 }
 #endif

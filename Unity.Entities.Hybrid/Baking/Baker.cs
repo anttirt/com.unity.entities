@@ -37,7 +37,7 @@ namespace Unity.Entities
         {
             internal Component                                AuthoringSource;
             internal GameObject                               AuthoringObject;
-            internal int                                      AuthoringId;
+            internal EntityId                                 AuthoringId;
             internal BakerState*                              BakerState;
             internal BakerEntityUsage*                        Usage;
             internal BakeDependencies.RecordedDependencies*   Dependencies;
@@ -123,7 +123,7 @@ namespace Unity.Entities
         {
             var hasComponent = gameObject.TryGetComponent<T>(out var returnedComponent);
 
-            _State.Dependencies->DependOnGetComponent(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), hasComponent ? returnedComponent.GetInstanceID() : 0, BakeDependencies.GetComponentDependencyType.GetComponent);
+            _State.Dependencies->DependOnGetComponent(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), hasComponent ? returnedComponent.GetEntityId() : EntityId.None, BakeDependencies.GetComponentDependencyType.GetComponent);
 
             // Transform component takes an implicit dependency on the entire parent hierarchy
             // since transform.position and friends returns a value calculated from all parents
@@ -169,7 +169,7 @@ namespace Unity.Entities
         {
             gameObject.GetComponents<T>(components);
 
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetOrCreateTypeIndex(typeof(T)), components, BakeDependencies.GetComponentDependencyType.GetComponent);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetOrCreateTypeIndex(typeof(T)), components, BakeDependencies.GetComponentDependencyType.GetComponent);
 
             foreach (var component in components)
             {
@@ -216,7 +216,7 @@ namespace Unity.Entities
         {
             var components = gameObject.GetComponents<T>();
 
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponent);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponent);
 
             foreach (var component in components)
             {
@@ -263,7 +263,7 @@ namespace Unity.Entities
         {
             var component = gameObject.GetComponentInParent<T>(kDefaultIncludeInactive);
 
-            _State.Dependencies->DependOnGetComponent(gameObject.GetInstanceID(), TypeManager.GetOrCreateTypeIndex(typeof(T)), component != null ? component.GetInstanceID() : 0, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
+            _State.Dependencies->DependOnGetComponent(gameObject.GetEntityId(), TypeManager.GetOrCreateTypeIndex(typeof(T)), component != null ? component.GetEntityId() : EntityId.None, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
 
             // Transform component takes an implicit dependency on the entire parent hierarchy
             // since transform.position and friends returns a value calculated from all parents
@@ -308,7 +308,7 @@ namespace Unity.Entities
         {
             gameObject.GetComponentsInParent<T>(kDefaultIncludeInactive, components);
 
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
 
             foreach (var component in components)
             {
@@ -353,7 +353,7 @@ namespace Unity.Entities
         public T[] GetComponentsInParent<T>(GameObject gameObject) where T : Component
         {
             var components = gameObject.GetComponentsInParent<T>(kDefaultIncludeInactive);
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInParent);
 
             foreach (var component in components)
             {
@@ -401,7 +401,7 @@ namespace Unity.Entities
         {
             var component = gameObject.GetComponentInChildren<T>(kDefaultIncludeInactive);
 
-            _State.Dependencies->DependOnGetComponent(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), component != null ? component.GetInstanceID() : 0, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
+            _State.Dependencies->DependOnGetComponent(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), component != null ? component.GetEntityId() : EntityId.None, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
 
             // Transform component takes an implicit dependency on the entire parent hierarchy
             // since transform.position and friends returns a value calculated from all parents
@@ -445,7 +445,7 @@ namespace Unity.Entities
         {
             gameObject.GetComponentsInChildren(kDefaultIncludeInactive, components);
 
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
 
             foreach (var component in components)
             {
@@ -491,7 +491,7 @@ namespace Unity.Entities
         {
             var components = gameObject.GetComponentsInChildren<T>(kDefaultIncludeInactive);
 
-            _State.Dependencies->DependOnGetComponents(gameObject.GetInstanceID(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
+            _State.Dependencies->DependOnGetComponents(gameObject.GetEntityId(), TypeManager.GetTypeIndex<T>(), components, BakeDependencies.GetComponentDependencyType.GetComponentInChildren);
 
             foreach (var component in components)
             {
@@ -544,7 +544,7 @@ namespace Unity.Entities
                 parent = parentTransform.gameObject;
             }
 
-            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetInstanceID(), parent != null ? parent.GetInstanceID() : 0, 0, BakeDependencies.GetHierarchySingleDependencyType.Parent);
+            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetEntityId(), parent != null ? parent.GetEntityId() : EntityId.None, 0, BakeDependencies.GetHierarchySingleDependencyType.Parent);
 
             return parent;
         }
@@ -620,7 +620,7 @@ namespace Unity.Entities
                 parentTransform = parentTransform.parent;
             }
 
-            _State.Dependencies->DependOnGetHierarchy(gameObject.GetInstanceID(), parents, BakeDependencies.GetHierarchyDependencyType.Parent);
+            _State.Dependencies->DependOnGetHierarchy(gameObject.GetEntityId(), parents, BakeDependencies.GetHierarchyDependencyType.Parent);
         }
 
         /// <summary>
@@ -662,7 +662,7 @@ namespace Unity.Entities
                 child = childTransform.gameObject;
             }
 
-            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetInstanceID(), child != null ? child.GetInstanceID() : 0, 0, BakeDependencies.GetHierarchySingleDependencyType.Child);
+            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetEntityId(), child != null ? child.GetEntityId() : EntityId.None, 0, BakeDependencies.GetHierarchySingleDependencyType.Child);
 
             return child;
         }
@@ -745,7 +745,7 @@ namespace Unity.Entities
                 {
                     gameObjects.Add(child.gameObject);
                 }
-                _State.Dependencies->DependOnGetHierarchy(gameObject.GetInstanceID(), gameObjects, BakeDependencies.GetHierarchyDependencyType.ImmediateChildren);
+                _State.Dependencies->DependOnGetHierarchy(gameObject.GetEntityId(), gameObjects, BakeDependencies.GetHierarchyDependencyType.ImmediateChildren);
             }
             else
             {
@@ -755,7 +755,7 @@ namespace Unity.Entities
                 {
                     gameObjects.Add(transforms[index].gameObject);
                 }
-                _State.Dependencies->DependOnGetHierarchy(gameObject.GetInstanceID(), gameObjects, BakeDependencies.GetHierarchyDependencyType.AllChildren);
+                _State.Dependencies->DependOnGetHierarchy(gameObject.GetEntityId(), gameObjects, BakeDependencies.GetHierarchyDependencyType.AllChildren);
             }
         }
 
@@ -789,7 +789,7 @@ namespace Unity.Entities
         public int GetChildCount(GameObject gameObject)
         {
             var childCount = gameObject.transform.childCount;
-            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetInstanceID(), childCount, 0, BakeDependencies.GetHierarchySingleDependencyType.ChildCount);
+            _State.Dependencies->DependOnGetHierarchySingle(gameObject.GetEntityId(), childCount, 0, BakeDependencies.GetHierarchySingleDependencyType.ChildCount);
             return childCount;
         }
 
@@ -824,7 +824,7 @@ namespace Unity.Entities
         {
             string name = gameObject.name;
 
-            _State.Dependencies->DependOnObjectName(gameObject.GetInstanceID(), _State.AuthoringId, name);
+            _State.Dependencies->DependOnObjectName(gameObject.GetEntityId(), _State.AuthoringId, name);
 
             return name;
         }
@@ -860,7 +860,7 @@ namespace Unity.Entities
         {
             int layer = gameObject.layer;
 
-            _State.Dependencies->DependOnObjectLayer(gameObject.GetInstanceID(), _State.AuthoringId, layer);
+            _State.Dependencies->DependOnObjectLayer(gameObject.GetEntityId(), _State.AuthoringId, layer);
 
             return layer;
         }
@@ -896,7 +896,7 @@ namespace Unity.Entities
         {
             string tag = gameObject.tag;
 
-            _State.Dependencies->DependOnObjectTag(gameObject.GetInstanceID(), _State.AuthoringId, tag);
+            _State.Dependencies->DependOnObjectTag(gameObject.GetEntityId(), _State.AuthoringId, tag);
 
             return tag;
         }
@@ -971,7 +971,7 @@ namespace Unity.Entities
 #if UNITY_EDITOR
                 if (authoring.IsPrefab())
                 {
-                    var prefabInstanceId = authoring.GetInstanceID();
+                    var prefabInstanceId = authoring.GetEntityId();
                     if (!_State.BakerState->ReferencedPrefabs.Contains(prefabInstanceId))
                     {
                         _State.BakerState->ReferencedPrefabs.Add(prefabInstanceId);
@@ -1045,7 +1045,7 @@ namespace Unity.Entities
         {
             var isActive = UnityEngineExtensions.IsActiveIgnorePrefab(gameObject);
 
-            _State.Dependencies->DependOnActive(gameObject.GetInstanceID(), _State.AuthoringId, isActive);
+            _State.Dependencies->DependOnActive(gameObject.GetEntityId(), _State.AuthoringId, isActive);
 
             return isActive;
         }
@@ -1117,7 +1117,7 @@ namespace Unity.Entities
             var staticOptimizeEntity = gameObject.GetComponentInParent<StaticOptimizeEntity>(gameObject) != null;
             bool isStatic = (staticOptimizeEntity || InternalIsStaticRecursive(gameObject));
 
-            _State.Dependencies->DependOnStatic(gameObject.GetInstanceID(), _State.AuthoringId, isStatic);
+            _State.Dependencies->DependOnStatic(gameObject.GetEntityId(), _State.AuthoringId, isStatic);
 
             return isStatic;
         }
@@ -1169,7 +1169,7 @@ namespace Unity.Entities
         /// <returns>The Object of type T if a dependency was taken, null otherwise.</returns>
         public T DependsOn<T>(T dependency) where T : UnityEngine.Object
         {
-            _State.Dependencies->DependResolveReference(_State.AuthoringSource.GetInstanceID(), dependency);
+            _State.Dependencies->DependResolveReference(_State.AuthoringSource.GetEntityId(), dependency);
 
             // Transform component takes an implicit dependency on the entire parent hierarchy
             // since transform.position and friends returns a value calculated from all parents
@@ -1699,7 +1699,9 @@ namespace Unity.Entities
         public void AddComponentObject<T>(T component) where T : class
         {
             var entity = GetEntity(TransformUsageFlags.Dynamic);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddComponentObject<T>(entity, component);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -1708,6 +1710,7 @@ namespace Unity.Entities
         /// <param name="entity">The Entity to add the component to</param>
         /// <param name="component">The component to add</param>
         /// <typeparam name="T">The type of component to add</typeparam>
+        [Obsolete("Managed-component access (AddComponentObject/GetComponentObject/SetComponentObject) is deprecated and will be removed. Convert your data to an unmanaged IComponentData and use the unmanaged Add/Get/SetComponentData APIs. To reference UnityEngine.Object instances, use UnityObjectRef<T>. First deprecated in 6.6.")]
         public void AddComponentObject<T>(Entity entity, T component) where T : class
         {
             if (_State.PrimaryEntity == entity)
@@ -1733,7 +1736,9 @@ namespace Unity.Entities
         public void AddSharedComponentManaged<T>(T component) where T : struct, ISharedComponentData
         {
             var entity = GetEntity(TransformUsageFlags.Dynamic);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged<T>(entity, component);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -1742,6 +1747,7 @@ namespace Unity.Entities
         /// <param name="entity">The Entity to add the component to</param>
         /// <param name="component">The component to add</param>
         /// <typeparam name="T">The type of component to add</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public void AddSharedComponentManaged<T>(Entity entity, T component) where T : struct, ISharedComponentData
         {
             if (_State.PrimaryEntity == entity)
@@ -1752,7 +1758,9 @@ namespace Unity.Entities
             }
             else
                 CheckValidAdditionalEntity(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             _State.Ecb.AddSharedComponentManaged(entity, component);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -1901,6 +1909,7 @@ namespace Unity.Entities
         /// <param name="entity">The Entity to set the component to</param>
         /// <param name="component">The component to set</param>
         /// <typeparam name="T">The type of component to set</typeparam>
+        [Obsolete("Managed ISharedComponentData support is deprecated and will be removed. Convert <T> to an unmanaged ISharedComponentData and use the equivalent without the 'Managed' suffix. First deprecated in 6.6.")]
         public void SetSharedComponentManaged<T>(Entity entity, in T component) where T : struct, ISharedComponentData
         {
             if (_State.PrimaryEntity != entity)
@@ -1908,7 +1917,9 @@ namespace Unity.Entities
             else
                 CheckComponentHasBeenAddedByThisBaker(entity, TypeManager.GetTypeIndex<T>());
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             _State.Ecb.SetSharedComponentManaged(entity, component);
+            #pragma warning restore 0618
         }
 
         /// <summary>
@@ -2128,7 +2139,7 @@ namespace Unity.Entities
                 return;
 
 #if UNITY_EDITOR
-            var prefabInstanceId = authoring.GetInstanceID();
+            var prefabInstanceId = authoring.GetEntityId();
             if (!_State.BakerState->ReferencedPrefabs.Contains(prefabInstanceId))
             {
                 _State.BakerState->ReferencedPrefabs.Add(prefabInstanceId);

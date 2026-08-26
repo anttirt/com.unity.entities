@@ -34,7 +34,6 @@ struct IfeStructWriter : IMemberWriter
                     $"state.EntityManager.CompleteDependencyBeforeRO<{element.TypeSymbolFullName}>();",
                 QueryType.ManagedSharedComponent =>
                     $"state.EntityManager.CompleteDependencyBeforeRW<{element.TypeSymbolFullName}>();",
-                QueryType.Aspect => $"default({element.TypeSymbolFullName}).CompleteDependencyBeforeRW(ref state);",
                 QueryType.DynamicBuffer =>
                     $"state.EntityManager.CompleteDependencyBeforeRW<{element.TypeArgumentFullName}>();",
                 QueryType.ValueTypeComponent =>

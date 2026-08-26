@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Unity.Collections;
+using UnityEngine;
 
 namespace Unity.Entities.Editor.Tests
 {
@@ -11,6 +12,9 @@ namespace Unity.Entities.Editor.Tests
         EntityDiffer m_Differ;
 
         protected World World => m_World;
+
+
+        EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
 
         [SetUp]
         public void Setup()
@@ -58,24 +62,6 @@ namespace Unity.Entities.Editor.Tests
             }
         }
 
-#if ENTITY_STORE_V1
-        [Test]
-        public void EntityDiffer_HandleGrowEntityManagerCapacity()
-        {
-            var initialCapacity = m_World.EntityManager.EntityCapacity;
-            var archetype = m_World.EntityManager.CreateArchetype(typeof(EcsTestData));
-            using (var entities = m_World.EntityManager.CreateEntity(archetype, initialCapacity + 1, World.UpdateAllocator.ToAllocator))
-            {
-                Assert.That(m_World.EntityManager.EntityCapacity, Is.GreaterThan(initialCapacity));
-
-                using (var query = m_World.EntityManager.CreateEntityQuery(typeof(EcsTestData)))
-                {
-                    var (created, _) = GetEntityQueryMatchDiff(query);
-                    Assert.That(created, Is.EquivalentTo(entities.ToArray()));
-                }
-            }
-        }
-#endif
 
         [Test]
         public unsafe void EntityDiffer_DetectEntityChangesReusingSameQuery()
@@ -217,9 +203,9 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch1_NoFind()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(0, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(0), EntityId.None, 0, 0));
 
-            Assert.AreEqual(-1, data.BinarySearchRange(new EntityGuid(1, 0, 0, 0), 0, data.List.Length, 0));
+            Assert.AreEqual(-1, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0), 0, data.List.Length, 0));
 
             data.Dispose();
         }
@@ -228,9 +214,9 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch1_FindFirst()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(0, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(0), EntityId.None, 0, 0));
 
-            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(0, 0, 0, 0), 0, data.List.Length, 0));
+            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(0), EntityId.None, 0, 0), 0, data.List.Length, 0));
 
             data.Dispose();
         }
@@ -239,11 +225,11 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch1_Search2()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(1, 0, 0, 0));
-            data.List.Add(new EntityGuid(2, 0, 0, 0));
-            data.List.Add(new EntityGuid(3, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(3), EntityId.None, 0, 0));
 
-            Assert.AreEqual(1, data.BinarySearchRange(new EntityGuid(2, 0, 0, 0), 0, data.List.Length, 0));
+            Assert.AreEqual(1, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0), 0, data.List.Length, 0));
 
             data.Dispose();
         }
@@ -252,14 +238,14 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch1_Search4()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(1, 0, 0, 0));
-            data.List.Add(new EntityGuid(2, 0, 0, 0));
-            data.List.Add(new EntityGuid(3, 0, 0, 0));
-            data.List.Add(new EntityGuid(4, 0, 0, 0));
-            data.List.Add(new EntityGuid(5, 0, 0, 0));
-            data.List.Add(new EntityGuid(6, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(3), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(4), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(5), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(6), EntityId.None, 0, 0));
 
-            Assert.AreEqual(3, data.BinarySearchRange(new EntityGuid(4, 0, 0, 0), 0, data.List.Length, 0));
+            Assert.AreEqual(3, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(4), EntityId.None, 0, 0), 0, data.List.Length, 0));
 
             data.Dispose();
         }
@@ -268,10 +254,10 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch2_Search()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(1, 0, 0, 0));
-            data.List.Add(new EntityGuid(2, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0));
 
-            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(1, 0, 0, 0), 0, data.List.Length, 2));
+            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0), 0, data.List.Length, 2));
 
             data.Dispose();
         }
@@ -280,13 +266,13 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch2_Search_BadHint()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(1, 0, 0, 0));
-            data.List.Add(new EntityGuid(2, 0, 0, 0));
-            data.List.Add(new EntityGuid(3, 0, 0, 0));
-            data.List.Add(new EntityGuid(4, 0, 0, 0));
-            data.List.Add(new EntityGuid(5, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(3), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(4), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(5), EntityId.None, 0, 0));
 
-            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(1, 0, 0, 0), 0, data.List.Length, 5));
+            Assert.AreEqual(0, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0), 0, data.List.Length, 5));
 
             data.Dispose();
         }
@@ -295,13 +281,13 @@ namespace Unity.Entities.Editor.Tests
         public void EntityDiffer_Test_BinarySearch2_Search_NoFind()
         {
             var data = new Entities.EntityDiffer.PackedEntityGuidsCollection(10, Allocator.Temp);
-            data.List.Add(new EntityGuid(1, 0, 0, 0));
-            data.List.Add(new EntityGuid(2, 0, 0, 0));
-            data.List.Add(new EntityGuid(3, 0, 0, 0));
-            data.List.Add(new EntityGuid(4, 0, 0, 0));
-            data.List.Add(new EntityGuid(5, 0, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(1), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(2), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(3), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(4), EntityId.None, 0, 0));
+            data.List.Add(new EntityGuid(CreateTestEntityId(5), EntityId.None, 0, 0));
 
-            Assert.AreEqual(-1, data.BinarySearchRange(new EntityGuid(7, 0, 0, 0), 0, data.List.Length, 7));
+            Assert.AreEqual(-1, data.BinarySearchRange(new EntityGuid(CreateTestEntityId(7), EntityId.None, 0, 0), 0, data.List.Length, 7));
 
             data.Dispose();
         }

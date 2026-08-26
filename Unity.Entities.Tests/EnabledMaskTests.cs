@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Unity.Burst;
+using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Jobs;
 
@@ -387,6 +388,95 @@ namespace Unity.Entities.Tests
                 enabledMask[3] = true; // on -> on;
             // If the disabled counts are not updated correctly, we'll get an internal consistency
             // failure when the EntityManager is destroyed during TearDown.
+        }
+
+        [Test]
+        public unsafe void GetEnableableBits_ComponentTypeHandle_ReturnsExpectedBits()
+        {
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEnableable));
+            using var entities = m_Manager.CreateEntity(archetype, archetype.ChunkCapacity, Allocator.Temp);
+            Assert.AreEqual(1, archetype.ChunkCount);
+
+            // Disable every other entity.
+            ulong expectedLow = 0;
+            ulong expectedHigh = 0;
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                bool enabled = (i % 2) == 0;
+                m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], enabled);
+                if (enabled)
+                {
+                    if (i < 64)
+                        expectedLow |= 1ul << i;
+                    else
+                        expectedHigh |= 1ul << (i - 64);
+                }
+            }
+
+            var chunk = m_Manager.GetChunk(entities[0]);
+            var typeHandle = m_Manager.GetComponentTypeHandle<EcsTestDataEnableable>(isReadOnly: true);
+            v128 bits = chunk.GetEnableableBits(ref typeHandle);
+
+            Assert.AreEqual(expectedLow, bits.ULong0);
+            Assert.AreEqual(expectedHigh, bits.ULong1);
+        }
+
+        [Test]
+        public unsafe void GetEnableableBits_ComponentTypeHandle_TypeNotInChunk_ReturnsDefault()
+        {
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEnableable));
+            using var entities = m_Manager.CreateEntity(archetype, archetype.ChunkCapacity, Allocator.Temp);
+            var chunk = m_Manager.GetChunk(entities[0]);
+
+            var missingHandle = m_Manager.GetComponentTypeHandle<EcsTestDataEnableable2>(isReadOnly: true);
+            v128 bits = chunk.GetEnableableBits(ref missingHandle);
+
+            Assert.AreEqual(0ul, bits.ULong0);
+            Assert.AreEqual(0ul, bits.ULong1);
+        }
+
+        [Test]
+        public unsafe void GetEnableableBits_DynamicComponentTypeHandle_ReturnsExpectedBits()
+        {
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEnableable));
+            using var entities = m_Manager.CreateEntity(archetype, archetype.ChunkCapacity, Allocator.Temp);
+            Assert.AreEqual(1, archetype.ChunkCount);
+
+            ulong expectedLow = 0;
+            ulong expectedHigh = 0;
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                bool enabled = (i % 2) == 0;
+                m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entities[i], enabled);
+                if (enabled)
+                {
+                    if (i < 64)
+                        expectedLow |= 1ul << i;
+                    else
+                        expectedHigh |= 1ul << (i - 64);
+                }
+            }
+
+            var chunk = m_Manager.GetChunk(entities[0]);
+            var typeHandle = m_Manager.GetDynamicComponentTypeHandle(ComponentType.ReadOnly<EcsTestDataEnableable>());
+            v128 bits = chunk.GetEnableableBits(ref typeHandle);
+
+            Assert.AreEqual(expectedLow, bits.ULong0);
+            Assert.AreEqual(expectedHigh, bits.ULong1);
+        }
+
+        [Test]
+        public unsafe void GetEnableableBits_DynamicComponentTypeHandle_TypeNotInChunk_ReturnsDefault()
+        {
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEnableable));
+            using var entities = m_Manager.CreateEntity(archetype, archetype.ChunkCapacity, Allocator.Temp);
+            var chunk = m_Manager.GetChunk(entities[0]);
+
+            var missingHandle = m_Manager.GetDynamicComponentTypeHandle(ComponentType.ReadOnly<EcsTestDataEnableable2>());
+            v128 bits = chunk.GetEnableableBits(ref missingHandle);
+
+            Assert.AreEqual(0ul, bits.ULong0);
+            Assert.AreEqual(0ul, bits.ULong1);
         }
     }
 }

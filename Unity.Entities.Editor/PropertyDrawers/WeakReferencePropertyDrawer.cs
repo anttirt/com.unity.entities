@@ -33,6 +33,15 @@ namespace Unity.Entities.Editor
                 GenerationType);
 
             var currObject = UntypedWeakReferenceId.GetEditorObject(uwrid);
+            if (currObject == null && uwrid.GlobalId.AssetGUID.IsValid)
+            {
+                // currObject can be null if SceneObjectIdentifier0 is 0 (only AssetGUID has been set when creating the WeakAssetReference from code)
+                // The drawer resolves the object through GlobalObjectId.GlobalObjectIdentifierToObjectSlow
+                // GlobalObjectIdentifierToObjectSlow can't resolve an object without a local file id. So let's reload the asset at path from its GUID
+                var path = AssetDatabase.GUIDToAssetPath((UnityEngine.GUID)uwrid.GlobalId.AssetGUID);
+                if (!string.IsNullOrEmpty(path))
+                    currObject = AssetDatabase.LoadAssetAtPath(path, targetObjectType);
+            }
             var objectField = new ObjectField
             {
                 objectType = targetObjectType,
@@ -78,7 +87,15 @@ namespace Unity.Entities.Editor
                 GenerationType);
 
             var currObject = UntypedWeakReferenceId.GetEditorObject(uwrid);
-
+            if (currObject == null && uwrid.GlobalId.AssetGUID.IsValid)
+            {
+                // currObject can be null if SceneObjectIdentifier0 is 0 (only AssetGUID has been set when creating the WeakAssetReference from code)
+                // The drawer resolves the object through GlobalObjectId.GlobalObjectIdentifierToObjectSlow
+                // GlobalObjectIdentifierToObjectSlow can't resolve an object without a local file id. So let's reload the asset at path from its GUID
+                var path = AssetDatabase.GUIDToAssetPath((UnityEngine.GUID)uwrid.GlobalId.AssetGUID);
+                if (!string.IsNullOrEmpty(path))
+                    currObject = AssetDatabase.LoadAssetAtPath(path, targetObjectType);
+            }
             EditorGUI.BeginChangeCheck();
 
             var newObject = EditorGUI.ObjectField(position, label, currObject, targetObjectType, false);

@@ -119,10 +119,9 @@ namespace Unity.Entities
 
             public void LogEntityAndComponentCommand(Entity cmdEntity, TypeIndex typeIndex, in FixedString64Bytes commandAction)
             {
-                Entity entity = SelectEntity(cmdEntity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmdEntity, out var entityName);
 
-                Debug.Log($"{commandAction} component on entity {entityName}({entity.Index},{entity.Version}) for component index {typeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
+                Debug.Log($"{commandAction} component on entity {entityName}({cmdEntity.Index},{cmdEntity.Version}) for component index {typeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
             }
 
             public void LogEntitiesOnlyCommand(Entity* entities, int count, in FixedString64Bytes commandAction)
@@ -135,18 +134,16 @@ namespace Unity.Entities
 
             public void LogEntityOnlyCommand(Entity cmdEntity, in FixedString64Bytes commandAction)
             {
-                Entity entity = SelectEntity(cmdEntity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmdEntity, out var entityName);
 
-                Debug.Log($"{commandAction} entity {entityName}({entity.Index},{entity.Version}); recorded from {originSystemDebugName}.");
+                Debug.Log($"{commandAction} entity {entityName}({cmdEntity.Index},{cmdEntity.Version}); recorded from {originSystemDebugName}.");
             }
 
             public void LogLinkedEntityGroupCommand(Entity cmdEntity, TypeIndex typeIndex, in EntityQueryMask mask, in FixedString64Bytes commandAction)
             {
-                Entity entity = SelectEntity(cmdEntity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmdEntity, out var entityName);
                 var linkedTypeIndex = TypeManager.GetTypeIndex<LinkedEntityGroup>();
-                using var linkedEntities = mgr->GetBuffer<LinkedEntityGroup>(entity
+                using var linkedEntities = mgr->GetBuffer<LinkedEntityGroup>(cmdEntity
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                         , mgr->DependencyManager->Safety.GetSafetyHandle(linkedTypeIndex, false),
                         mgr->DependencyManager->Safety.GetBufferSafetyHandle(linkedTypeIndex)
@@ -159,7 +156,7 @@ namespace Unity.Entities
                 {
                     if (mask.MatchesIgnoreFilter(e))
                     {
-                        Debug.Log($"{commandAction} component to {entityName}({entity.Index},{entity.Version})'s linked entity ({e.Index},{e.Version}) for component index {typeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
+                        Debug.Log($"{commandAction} component to {entityName}({cmdEntity.Index},{cmdEntity.Version})'s linked entity ({e.Index},{e.Version}) for component index {typeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
                     }
                 }
             }
@@ -192,22 +189,21 @@ namespace Unity.Entities
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void CreateEntity(BasicCommand* header)
+            public void CreateEntity(ECBPlaybackState* ecbPlaybackState, BasicCommand* header)
             {
                 var cmd = (CreateCommand*)header;
 
-                Debug.Log($"Creating {cmd->BatchCount} entity; recorded from {originSystemDebugName}.");
-                playbackProcessor.CreateEntity(header);
+                Debug.Log($"Creating {cmd->EntityCount} entity; recorded from {originSystemDebugName}.");
+                playbackProcessor.CreateEntity(ecbPlaybackState, header);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void InstantiateEntity(BasicCommand* header)
             {
                 var cmd = (EntityCommand*)header;
-                Entity entity = SelectEntity(cmd->Entity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmd->Entity, out var entityName);
 
-                Debug.Log($"Instantiating {cmd->BatchCount} instance(s) of entity {entityName}({entity.Index},{entity.Version}); recorded from {originSystemDebugName}.");
+                Debug.Log($"Instantiating {cmd->EntityCount} instance(s) of entity {entityName}({cmd->Entity.Index},{cmd->Entity.Version}); recorded from {originSystemDebugName}.");
                 playbackProcessor.InstantiateEntity(header);
             }
 
@@ -241,11 +237,10 @@ namespace Unity.Entities
             public void SetEnabled(BasicCommand* header)
             {
                 var cmd = (EntityEnabledCommand*)header;
-                Entity entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmd->Header.Entity, out var entityName);
                 FixedString32Bytes enabled = cmd->IsEnabled == 0 ? "DISABLED" : "ENABLED";
 
-                Debug.Log($"Setting entity {entityName}({entity.Index},{entity.Version}) to {enabled}; recorded from {originSystemDebugName}.");
+                Debug.Log($"Setting entity {entityName}({cmd->Header.Entity.Index},{cmd->Header.Entity.Version}) to {enabled}; recorded from {originSystemDebugName}.");
                 playbackProcessor.SetEnabled(header);
             }
 
@@ -253,11 +248,10 @@ namespace Unity.Entities
             public void SetComponentEnabled(BasicCommand* header)
             {
                 var cmd = (EntityComponentEnabledCommand*)header;
-                Entity entity = SelectEntity(cmd->Header.Header.Entity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmd->Header.Header.Entity, out var entityName);
                 FixedString32Bytes enabled = cmd->Header.IsEnabled == 0 ? "FALSE" : "TRUE";
 
-                Debug.Log($"Setting component enableable on entity {entityName}({entity.Index},{entity.Version}) for component index {cmd->ComponentTypeIndex.ToFixedString()} to {enabled}; recorded from {originSystemDebugName}.");
+                Debug.Log($"Setting component enableable on entity {entityName}({cmd->Header.Header.Entity.Index},{cmd->Header.Header.Entity.Version}) for component index {cmd->ComponentTypeIndex.ToFixedString()} to {enabled}; recorded from {originSystemDebugName}.");
                 playbackProcessor.SetComponentEnabled(header);
             }
 
@@ -265,10 +259,9 @@ namespace Unity.Entities
             public void SetName(BasicCommand* header)
             {
                 var cmd = (EntityNameCommand*)header;
-                Entity entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmd->Header.Entity, out var entityName);
 
-                Debug.Log($"Setting name on entity {entityName}({entity.Index},{entity.Version}) with name {cmd->Name}; recorded from {originSystemDebugName}.");
+                Debug.Log($"Setting name on entity {entityName}({cmd->Header.Entity.Index},{cmd->Header.Entity.Version}) with name {cmd->Name}; recorded from {originSystemDebugName}.");
                 playbackProcessor.SetName(header);
             }
 
@@ -415,10 +408,9 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentCommand*) header;
                 FixedString64Bytes commandAction = "Replacing";
-                Entity entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                mgr->GetName(entity, out var entityName);
+                mgr->GetName(cmd->Header.Entity, out var entityName);
                 var linkedTypeIndex = TypeManager.GetTypeIndex<LinkedEntityGroup>();
-                using var linkedEntities = mgr->GetBuffer<LinkedEntityGroup>(entity
+                using var linkedEntities = mgr->GetBuffer<LinkedEntityGroup>(cmd->Header.Entity
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                         , mgr->DependencyManager->Safety.GetSafetyHandle(linkedTypeIndex, false),
                         mgr->DependencyManager->Safety.GetBufferSafetyHandle(linkedTypeIndex)
@@ -431,7 +423,7 @@ namespace Unity.Entities
                 {
                     if (mgr->HasComponent(e, ComponentType.FromTypeIndex(cmd->ComponentTypeIndex)))
                     {
-                        Debug.Log($"{commandAction} component to {entityName}({entity.Index},{entity.Version})'s linked entity ({e.Index},{e.Version}) for component index {cmd->ComponentTypeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
+                        Debug.Log($"{commandAction} component to {entityName}({cmd->Header.Entity.Index},{cmd->Header.Entity.Version})'s linked entity ({e.Index},{e.Version}) for component index {cmd->ComponentTypeIndex.ToFixedString()}; recorded from {originSystemDebugName}.");
                     }
                 }
 
@@ -664,23 +656,13 @@ namespace Unity.Entities
             }
 
             [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
-            private void ThrowIfPrefab(Entity* entities, int entityCount, bool skipDeferredEntityLookup)
+            private void ThrowIfPrefab(Entity* entities, int entityCount)
             {
-                if (skipDeferredEntityLookup)
+                for (int len = entityCount, i = 0; i < len; ++i)
                 {
-                    for (int len = entityCount, i = 0; i < len; ++i)
-                    {
-                        ThrowIfPrefab(entities[i]);
-                    }
+                    ThrowIfPrefab(entities[i]);
                 }
-                else
-                {
-                    for (int len = entityCount, i = 0; i < len; ++i)
-                    {
-                        var ent = SelectEntity(entities[i], playbackProcessor.playbackState);
-                        ThrowIfPrefab(ent);
-                    }
-                }
+
             }
 
             [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
@@ -697,8 +679,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityCommand*)header;
 
-                Entity entity = SelectEntity(cmd->Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Entity);
 
                 playbackProcessor.DestroyEntity(header);
             }
@@ -708,8 +689,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
                 ThrowIfPrefabComponent(ComponentType.FromTypeIndex(cmd->ComponentTypeIndex));
 
                 playbackProcessor.RemoveComponent(header);
@@ -720,16 +700,15 @@ namespace Unity.Entities
             {
                 var cmd = (EntityMultipleComponentsCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
                 var componentTypes = cmd->TypeSet;
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
                 ThrowIfPrefabComponentInSet(in componentTypes);
 
                 playbackProcessor.RemoveMultipleComponents(header);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void CreateEntity(BasicCommand* header)
+            public void CreateEntity(ECBPlaybackState* ecbPlaybackState, BasicCommand* header)
             {
                 var cmd = (CreateCommand*)header;
 
@@ -738,7 +717,7 @@ namespace Unity.Entities
                     at = mgr->GetEntityAndSimulateArchetype();
                 ThrowIfPrefabComponentInArchetype(at);
 
-                playbackProcessor.CreateEntity(header);
+                playbackProcessor.CreateEntity(ecbPlaybackState, header);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -754,8 +733,7 @@ namespace Unity.Entities
                 var cmd = (EntityComponentCommand*)header;
 
                 var componentType = ComponentType.FromTypeIndex(cmd->ComponentTypeIndex);
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
                 ThrowIfPrefabComponent(componentType);
 
                 playbackProcessor.AddComponent(header);
@@ -766,8 +744,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityMultipleComponentsCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
                 ThrowIfPrefabComponentInSet(in cmd->TypeSet);
 
                 playbackProcessor.AddMultipleComponents(header);
@@ -778,8 +755,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetComponent(header);
             }
@@ -788,8 +764,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityEnabledCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetEnabled(header);
             }
@@ -799,8 +774,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentEnabledCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Header.Entity);
 
                 playbackProcessor.SetComponentEnabled(header);
             }
@@ -810,8 +784,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityNameCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetName(header);
             }
@@ -821,8 +794,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityBufferCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.AddBuffer(header);
             }
@@ -832,8 +804,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityBufferCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetBuffer(header);
             }
@@ -843,8 +814,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.AppendToBuffer(header);
             }
@@ -871,7 +841,7 @@ namespace Unity.Entities
                 var componentType = ComponentType.FromTypeIndex(cmd->ComponentTypeIndex);
                 ThrowIfPrefabComponent(componentType);
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.AddComponentForMultipleEntities(header);
             }
@@ -898,7 +868,7 @@ namespace Unity.Entities
                 var componentType = ComponentType.FromTypeIndex(cmd->ComponentTypeIndex);
                 ThrowIfPrefabComponent(componentType);
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.RemoveComponentForMultipleEntities(header);
             }
@@ -910,7 +880,7 @@ namespace Unity.Entities
 
                 ThrowIfPrefabComponentInSet(in cmd->TypeSet);
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.AddMultipleComponentsForMultipleEntities(header);
             }
@@ -935,7 +905,7 @@ namespace Unity.Entities
 
                 ThrowIfPrefabComponentInSet(in cmd->TypeSet);
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.RemoveMultipleComponentsForMultipleEntities(header);
             }
@@ -958,7 +928,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesCommand*)header;
 
-                ThrowIfPrefab(cmd->Entities.Ptr, cmd->EntitiesCount, cmd->SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Entities.Ptr, cmd->EntitiesCount);
 
                 playbackProcessor.DestroyMultipleEntities(header);
             }
@@ -979,8 +949,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityQueryMaskCommand*) header;
 
-                var entity = SelectEntity(cmd->Header.Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Header.Entity);
 
                 ThrowIfPrefabComponent(ComponentType.FromTypeIndex(cmd->Header.ComponentTypeIndex));
 
@@ -992,8 +961,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityQueryMaskCommand*) header;
 
-                var entity = SelectEntity(cmd->Header.Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Header.Entity);
 
                 playbackProcessor.SetComponentLinkedEntityGroup(header);
             }
@@ -1003,8 +971,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityComponentCommand*) header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.ReplaceComponentLinkedEntityGroup(header);
             }
@@ -1015,8 +982,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityManagedComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.AddManagedComponentData(header);
             }
@@ -1027,10 +993,8 @@ namespace Unity.Entities
             {
                 var cmd = (EntityMoveManagedComponentCommand*)header;
 
-                var dstEntity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(dstEntity);
-                var srcEntity = SelectEntity(cmd->SrcEntity, playbackProcessor.playbackState);
-                ThrowIfPrefab(srcEntity);
+                ThrowIfPrefab(cmd->Header.Entity);
+                ThrowIfPrefab(cmd->SrcEntity);
 
                 playbackProcessor.MoveManagedComponentData(header);
             }
@@ -1040,8 +1004,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityUnmanagedSharedComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.AddUnmanagedSharedComponentData(header);
             }
@@ -1052,8 +1015,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntitySharedComponentCommand*) header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.AddSharedComponentData(header);
             }
@@ -1067,7 +1029,7 @@ namespace Unity.Entities
                 var componentType = ComponentType.FromTypeIndex(cmd->ComponentTypeIndex);
                 ThrowIfPrefabComponent(componentType);
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.AddComponentObjectForMultipleEntities(header);
             }
@@ -1078,7 +1040,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesComponentCommandWithObject*)header;
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.SetComponentObjectForMultipleEntities(header);
             }
@@ -1089,7 +1051,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesComponentCommandWithObject*)header;
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.AddSharedComponentWithValueForMultipleEntities(header);
             }
@@ -1112,7 +1074,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesComponentCommandWithObject*)header;
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.SetSharedComponentValueForMultipleEntities(header);
             }
@@ -1135,8 +1097,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityManagedComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetManagedComponentData(header);
             }
@@ -1146,8 +1107,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntityUnmanagedSharedComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetUnmanagedSharedComponentData(header);
             }
@@ -1157,7 +1117,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesCommand_WithUnmanagedSharedComponent*)header;
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.AddUnmanagedSharedComponentValueForMultipleEntities(header);
             }
@@ -1178,7 +1138,7 @@ namespace Unity.Entities
             {
                 var cmd = (MultipleEntitiesCommand_WithUnmanagedSharedComponent*)header;
 
-                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount, cmd->Header.SkipDeferredEntityLookup != 0);
+                ThrowIfPrefab(cmd->Header.Entities.Ptr, cmd->Header.EntitiesCount);
 
                 playbackProcessor.SetUnmanagedSharedComponentValueForMultipleEntities(header);
             }
@@ -1200,8 +1160,7 @@ namespace Unity.Entities
             {
                 var cmd = (EntitySharedComponentCommand*)header;
 
-                var entity = SelectEntity(cmd->Header.Entity, playbackProcessor.playbackState);
-                ThrowIfPrefab(entity);
+                ThrowIfPrefab(cmd->Header.Entity);
 
                 playbackProcessor.SetSharedComponentData(header);
             }
@@ -1236,7 +1195,7 @@ namespace Unity.Entities
                 commands.Add(header);
             }
 
-            public unsafe void CreateEntity(BasicCommand* header)
+            public unsafe void CreateEntity(ECBPlaybackState *ecbPlaybackState, BasicCommand* header)
             {
                 commands.Add(header);
             }
@@ -1468,8 +1427,8 @@ namespace Unity.Entities
         internal class CreateCommandView : BasicCommandView
         {
             public EntityArchetype EntityArchetype;
-            public int EntityIdentityIndex;
-            public int BatchCount;
+            public Entity* Entities;
+            public int EntityCount;
 
             public CreateCommandView(CreateCommand* cmd)
             {
@@ -1477,8 +1436,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.SortKey;
                 TotalSizeInBytes = cmd->Header.TotalSize;
                 EntityArchetype = cmd->Archetype;
-                EntityIdentityIndex = cmd->IdentityIndex;
-                BatchCount = cmd->BatchCount;
+                Entities = cmd->Entities;
+                EntityCount = cmd->EntityCount;
             }
 
             public override string ToString()
@@ -1490,14 +1449,14 @@ namespace Unity.Entities
         internal class EntityCommandView : BasicCommandView
         {
             public Entity Entity;
-            public int IdentityIndex;
-            public int BatchCount;
+            public Entity* Entities;
+            public int EntityCount;
 
             public EntityCommandView()
             {
                 Entity = Entity.Null;
-                IdentityIndex = Int32.MinValue;
-                BatchCount = 0;
+                EntityCount = 0;
+                Entities = null;
             }
 
             public EntityCommandView(EntityCommand* cmd)
@@ -1506,13 +1465,13 @@ namespace Unity.Entities
                 SortKey = cmd->Header.SortKey;
                 TotalSizeInBytes = cmd->Header.TotalSize;
                 Entity = cmd->Entity;
-                IdentityIndex = cmd->IdentityIndex;
-                BatchCount = cmd->BatchCount;
+                Entities = cmd->Entities;
+                EntityCount = cmd->EntityCount;
             }
 
             public override string ToString()
             {
-                return (CommandType == ECBCommand.InstantiateEntity) ? $"Instantiate Entity (count={BatchCount})" : "Destroy Entity";
+                return (CommandType == ECBCommand.InstantiateEntity) ? $"Instantiate Entity (count={EntityCount})" : "Destroy Entity";
             }
         }
 
@@ -1590,7 +1549,6 @@ namespace Unity.Entities
         {
             public EntityNode Entities;
             public int EntitiesCount;
-            public bool SkipDeferredEntityLookup;
             public AllocatorManager.AllocatorHandle Allocator;
 
             public MultipleEntitiesCommandView()
@@ -1598,7 +1556,6 @@ namespace Unity.Entities
                 Entities = new EntityNode();
                 EntitiesCount = 0;
                 Allocator = Unity.Collections.Allocator.Invalid;
-                SkipDeferredEntityLookup = false;
             }
 
             public MultipleEntitiesCommandView(MultipleEntitiesCommand *cmd)
@@ -1608,7 +1565,6 @@ namespace Unity.Entities
                 TotalSizeInBytes = cmd->Header.TotalSize;
                 Entities = cmd->Entities;
                 EntitiesCount = cmd->EntitiesCount;
-                SkipDeferredEntityLookup = cmd->SkipDeferredEntityLookup != 0;
                 Allocator = cmd->Allocator.ToAllocator;
             }
 
@@ -1623,7 +1579,6 @@ namespace Unity.Entities
             public TypeIndex ComponentTypeIndex;
             public short ComponentSize;
             public object ComponentValue;
-            public bool ValueRequiresEntityFixup;
 
             public MultipleEntitiesComponentCommandView(MultipleEntitiesComponentCommand* cmd, byte* componentValue)
             {
@@ -1632,11 +1587,9 @@ namespace Unity.Entities
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entities = cmd->Header.Entities;
                 EntitiesCount = cmd->Header.EntitiesCount;
-                SkipDeferredEntityLookup = cmd->Header.SkipDeferredEntityLookup != 0;
                 Allocator = cmd->Header.Allocator.ToAllocator;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 ComponentSize = cmd->ComponentSize;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 if (ComponentSize > 0 && componentValue != null)
                 {
                     ComponentValue = TypeManager.ConstructComponentFromBuffer(ComponentTypeIndex, componentValue);
@@ -1675,7 +1628,6 @@ namespace Unity.Entities
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entities = cmd->Header.Entities;
                 EntitiesCount = cmd->Header.EntitiesCount;
-                SkipDeferredEntityLookup = cmd->Header.SkipDeferredEntityLookup != 0;
                 Allocator = cmd->Header.Allocator.ToAllocator;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 HashCode = cmd->HashCode;
@@ -1738,7 +1690,6 @@ namespace Unity.Entities
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entities = cmd->Header.Entities;
                 EntitiesCount = cmd->Header.EntitiesCount;
-                SkipDeferredEntityLookup = cmd->Header.SkipDeferredEntityLookup != 0;
                 Allocator = cmd->Header.Allocator.ToAllocator;
                 TypeSet = cmd->TypeSet;
             }
@@ -1755,7 +1706,6 @@ namespace Unity.Entities
             public TypeIndex ComponentTypeIndex;
             public short ComponentSize;
             public object ComponentValue;
-            public bool ValueRequiresEntityFixup;
 
             public EntityComponentCommandView()
             {
@@ -1770,11 +1720,10 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 ComponentSize = cmd->ComponentSize;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 if (ComponentSize > 0 && componentValue != null)
                 {
                     ComponentValue = TypeManager.ConstructComponentFromBuffer(ComponentTypeIndex, componentValue);
@@ -1819,12 +1768,11 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.Header.TotalSize;
                 Entity = cmd->Header.Header.Entity;
-                IdentityIndex = cmd->Header.Header.IdentityIndex;
-                BatchCount = cmd->Header.Header.BatchCount;
+                EntityCount = cmd->Header.Header.EntityCount;
+                Entities = cmd->Header.Header.Entities;
                 Mask = cmd->Mask;
                 ComponentTypeIndex = cmd->Header.ComponentTypeIndex;
                 ComponentSize = cmd->Header.ComponentSize;
-                ValueRequiresEntityFixup = cmd->Header.ValueRequiresEntityFixup != 0;
                 ComponentValue = (ComponentSize > 0 && componentValue != null)
                     ? TypeManager.ConstructComponentFromBuffer(ComponentTypeIndex, componentValue) : default;
             }
@@ -1853,8 +1801,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 IsEnabled = cmd->IsEnabled;
             }
 
@@ -1876,8 +1824,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.Header.TotalSize;
                 Entity = cmd->Header.Header.Entity;
-                IdentityIndex = cmd->Header.Header.IdentityIndex;
-                BatchCount = cmd->Header.Header.BatchCount;
+                EntityCount = cmd->Header.Header.EntityCount;
+                Entities = cmd->Header.Header.Entities;
                 IsEnabled = cmd->Header.IsEnabled;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
             }
@@ -1901,8 +1849,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 Name = cmd->Name;
             }
 
@@ -1922,8 +1870,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 TypeSet = cmd->TypeSet;
             }
 
@@ -1941,7 +1889,6 @@ namespace Unity.Entities
         {
             public TypeIndex ComponentTypeIndex;
             public short ComponentSize;
-            public bool ValueRequiresEntityFixup;
             // Must point to original buffer node in ECB, so that we can find the buffer data embedded after it.
             public BufferHeaderNode* BufferNode;
 
@@ -1951,11 +1898,10 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 ComponentSize = cmd->ComponentSize;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 BufferNode = &(cmd->BufferNode);
             }
 
@@ -1985,8 +1931,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 GCNode = cmd->GCNode;
             }
@@ -2010,8 +1956,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 SrcEntity = cmd->SrcEntity;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
             }
@@ -2029,7 +1975,6 @@ namespace Unity.Entities
             public TypeIndex ComponentTypeIndex;
             public int HashCode;
             public short ComponentSize;
-            public bool ValueRequiresEntityFixup;
             public object ComponentValue;
 
             public EntityUnmanagedSharedComponentCommandView(EntityUnmanagedSharedComponentCommand* cmd, byte* componentValue)
@@ -2038,12 +1983,11 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 HashCode = cmd->HashCode;
                 ComponentSize = (short)TypeManager.GetTypeInfo(cmd->ComponentTypeIndex).TypeSize;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 ComponentValue = TypeManager.ConstructComponentFromBuffer(cmd->ComponentTypeIndex, componentValue);
             }
 
@@ -2059,7 +2003,6 @@ namespace Unity.Entities
         {
             public TypeIndex ComponentTypeIndex;
             public int ComponentSize;
-            public bool ValueRequiresEntityFixup;
             public object ComponentValue;
 
             public MultipleEntitiesComponentCommandView_WithUnmanagedSharedValue(MultipleEntitiesCommand_WithUnmanagedSharedComponent* cmd,
@@ -2073,8 +2016,6 @@ namespace Unity.Entities
                 Allocator = cmd->Header.Allocator.ToAllocator;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 ComponentSize = cmd->ComponentSize;
-                SkipDeferredEntityLookup = cmd->Header.SkipDeferredEntityLookup != 0;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 if (ComponentSize > 0 && componentValue != null)
                     ComponentValue = TypeManager.ConstructComponentFromBuffer(cmd->ComponentTypeIndex, componentValue);
                 else
@@ -2094,7 +2035,6 @@ namespace Unity.Entities
         internal class EntityQueryComponentCommandView_WithUnmanagedSharedValue : EntityQueryComponentCommandView
         {
             public int ComponentSize;
-            public bool ValueRequiresEntityFixup;
             public object ComponentValue;
 
             public EntityQueryComponentCommandView_WithUnmanagedSharedValue(EntityQueryComponentCommandWithUnmanagedSharedComponent* cmd,
@@ -2106,7 +2046,6 @@ namespace Unity.Entities
                 Query = cmd->Header.Header.QueryImpl;
                 ComponentTypeIndex = cmd->Header.ComponentTypeIndex;
                 ComponentSize = cmd->ComponentSize;
-                ValueRequiresEntityFixup = cmd->ValueRequiresEntityFixup != 0;
                 if (ComponentSize > 0 && componentValue != null)
                     ComponentValue = TypeManager.ConstructComponentFromBuffer(cmd->Header.ComponentTypeIndex, componentValue);
                 else
@@ -2142,8 +2081,8 @@ namespace Unity.Entities
                 SortKey = cmd->Header.Header.SortKey;
                 TotalSizeInBytes = cmd->Header.Header.TotalSize;
                 Entity = cmd->Header.Entity;
-                IdentityIndex = cmd->Header.IdentityIndex;
-                BatchCount = cmd->Header.BatchCount;
+                EntityCount = cmd->Header.EntityCount;
+                Entities = cmd->Header.Entities;
                 ComponentTypeIndex = cmd->ComponentTypeIndex;
                 HashCode = cmd->HashCode;
                 GCNode = cmd->GCNode;

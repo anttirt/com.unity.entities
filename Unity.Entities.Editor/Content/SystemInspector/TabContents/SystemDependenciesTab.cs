@@ -1,6 +1,7 @@
 using JetBrains.Annotations;
 using Unity.Entities.UI;
 using UnityEditor;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
@@ -35,8 +36,8 @@ namespace Unity.Entities.Editor
 
         VisualElement BuildDependencyView()
         {
-            using var readList = PooledList<ComponentViewData>.Make();
-            using var writeList = PooledList<ComponentViewData>.Make();
+            using var _ = ListPool<ComponentViewData>.Get(out var readList);
+            using var __ = ListPool<ComponentViewData>.Get(out var writeList);
             Target.SystemProxy.FillListWithJobDependencyForReadingSystems(readList);
             Target.SystemProxy.FillListWithJobDependencyForWritingSystems(writeList);
 
@@ -45,7 +46,7 @@ namespace Unity.Entities.Editor
             var readSection = new FoldoutWithoutActionButton
             {
                 HeaderName = { text = L10n.Tr("Read Dependencies") },
-                MatchingCount = { text = readList.List.Count.ToString() }
+                MatchingCount = { text = readList.Count.ToString() }
             };
             readSection.Q<Toggle>().AddToClassList(UssClasses.FoldoutWithoutActionButton.ToggleNoBorder);
             sectionElement.Add(readSection);
@@ -53,15 +54,15 @@ namespace Unity.Entities.Editor
             var writeSection = new FoldoutWithoutActionButton
             {
                 HeaderName = { text = L10n.Tr("Write Dependencies") },
-                MatchingCount = { text = writeList.List.Count.ToString() }
+                MatchingCount = { text = writeList.Count.ToString() }
             };
             writeSection.Q<Toggle>().AddToClassList(UssClasses.FoldoutWithoutActionButton.ToggleNoBorder);
             sectionElement.Add(writeSection);
 
-            foreach (var comp in readList.List)
+            foreach (var comp in readList)
                 readSection.Add(new ComponentView(comp));
 
-            foreach (var comp in writeList.List)
+            foreach (var comp in writeList)
                 writeSection.Add(new ComponentView(comp));
 
             return sectionElement;

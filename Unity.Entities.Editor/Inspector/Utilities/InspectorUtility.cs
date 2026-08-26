@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.Properties;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -12,13 +12,9 @@ namespace Unity.Entities.Editor
     static class InspectorUtility
     {
         public static InspectorSettings Settings => UserSettings<InspectorSettings>.GetOrCreate(Constants.Settings.Inspector);
-        static readonly Dictionary<string, Texture2D> k_AspectIconsDict = new Dictionary<string, Texture2D>();
 
         static InspectorUtility()
         {
-            k_AspectIconsDict.Add("RigidbodyAspect", EditorGUIUtility.IconContent(EditorGUIUtility.isProSkin ? "d_Rigidbody Icon" : "Rigidbody Icon").image as Texture2D);
-            k_AspectIconsDict.Add("CameraAspect", EditorGUIUtility.IconContent(EditorGUIUtility.isProSkin ? "d_Camera Icon" : "Camera Icon").image as Texture2D);
-            k_AspectIconsDict.Add("RendererAspect", EditorGUIUtility.IconContent(EditorGUIUtility.isProSkin ? "d_MeshRenderer Icon" : "MeshRenderer Icon").image as Texture2D);
         }
 
         public static void CreateComponentHeader(VisualElement parent, ComponentPropertyType type, string displayName)
@@ -91,28 +87,6 @@ namespace Unity.Entities.Editor
                 case ComponentPropertyType.All:
                 default: throw new ArgumentOutOfRangeException(nameof(type), type, null);
             }
-        }
-
-        public static void CreateAspectHeader(VisualElement parent, Type type, string displayName)
-        {
-            Resources.Templates.Inspector.ComponentHeader.Clone(parent);
-            var foldout = parent.Q<Foldout>(className: UssClasses.Inspector.Component.Header);
-            foldout.text = displayName;
-            foldout.Q<Label>(className: UssClasses.UIToolkit.Toggle.Text).AddToClassList(UssClasses.Inspector.Component.Name);
-
-            var icon = new BindableElement();
-            icon.AddToClassList(UssClasses.Inspector.Icons.Small);
-            if (k_AspectIconsDict.TryGetValue(type.Name, out var texture))
-                icon.style.backgroundImage = texture;
-
-            icon.AddToClassList(UssClasses.Inspector.Component.AspectIcon);
-
-            var input = foldout.Q<VisualElement>(className: UssClasses.UIToolkit.Toggle.Input);
-            input.AddToClassList(UssClasses.Inspector.Component.Shrink);
-            input.Insert(1, icon);
-
-            var menu = CreateDropdownSettings(UssClasses.Inspector.Component.Menu);
-            input.Add(menu);
         }
 
         public static ToolbarMenu CreateDropdownSettings(string ussClass)
@@ -253,6 +227,35 @@ namespace Unity.Entities.Editor
 
             runtimeBar.style.left = 2f - element.worldBound.x;
             element.UnregisterCallback<GeometryChangedEvent, VisualElement>(SetRuntimeBarPosition);
+        }
+
+        public static ToolbarSearchField CreateSearchField(
+            string cssClass,
+            Action<string> onSearchChanged,
+            Action onSearchCleared)
+        {
+            var searchField = new ToolbarSearchField();
+            searchField.AddToClassList(cssClass);
+
+            searchField.RegisterValueChangedCallback(evt =>
+            {
+                var previousSearchText = evt.previousValue ?? string.Empty;
+                var newSearchText = evt.newValue ?? string.Empty;
+
+                // Fast path for identical values before calling Trim() to minimize allocations
+                if (previousSearchText == newSearchText)
+                    return;
+
+                if (string.Equals(previousSearchText.Trim(), newSearchText.Trim(), StringComparison.Ordinal))
+                    return;
+
+                if (newSearchText != string.Empty)
+                    onSearchChanged(newSearchText);
+                else
+                    onSearchCleared();
+            });
+
+            return searchField;
         }
     }
 }

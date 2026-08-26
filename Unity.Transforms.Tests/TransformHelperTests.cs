@@ -1,6 +1,8 @@
 using NUnit.Framework;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Unity.Entities.Tests
 {
@@ -93,9 +95,12 @@ namespace Unity.Entities.Tests
             AssertNearlyEqual(math.normalize(m.Rotation()).value, q.value, 0.00001f);
         }
 
+#if UNITY_EDITOR
         [Test]
         public void ComputeWorldTransformMatrix_InvalidTargetEntity_Throws()
         {
+            Assume.That(Application.isEditor, "Test disabled for Standalone Player");
+
             var localTransformLookup = m_Manager.GetComponentLookup<LocalTransform>(true);
             var parentLookup = m_Manager.GetComponentLookup<Parent>(true);
             var scaleLookup = m_Manager.GetComponentLookup<PostTransformMatrix>(true);
@@ -107,6 +112,8 @@ namespace Unity.Entities.Tests
         [Test]
         public void ComputeWorldTransformMatrix_InvalidParentEntity_Throws()
         {
+            Assume.That(Application.isEditor, "Test disabled for Standalone Player");
+
             Entity e = m_Manager.CreateEntity(typeof(LocalToWorld), typeof(LocalTransform), typeof(Parent));
             Entity parent = m_Manager.CreateEntity();
             m_Manager.SetComponentData(e, new Parent { Value = parent });
@@ -124,6 +131,8 @@ namespace Unity.Entities.Tests
         [Test]
         public void ComputeWorldTransformMatrix_ParentHasNoTransform_Throws()
         {
+            Assume.That(Application.isEditor, "Test disabled for Standalone Player");
+
             Entity e = m_Manager.CreateEntity(typeof(LocalToWorld), typeof(LocalTransform), typeof(Parent));
             Entity parent = m_Manager.CreateEntity();
             m_Manager.SetComponentData(e, new Parent { Value = parent });
@@ -134,6 +143,7 @@ namespace Unity.Entities.Tests
                     ref localTransformLookup, ref parentLookup, ref scaleLookup),
                 Throws.InvalidOperationException.With.Message.Contains("does not have the required LocalTransform component"));
         }
+#endif
 
         [Test]
         public void ComputeWorldTransformMatrix_MatchesLocalToWorld([Values] bool withNonUniformScale)

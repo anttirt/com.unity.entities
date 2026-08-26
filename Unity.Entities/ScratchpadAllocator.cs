@@ -17,6 +17,7 @@ namespace Unity.Entities
     public unsafe struct ScratchpadAllocator : AllocatorManager.IAllocator
     {
         const int kMaximumAlignment = 16384; // 16k, can't align any coarser than this many bytes
+
         byte* m_pointer; // pointer to the memory preserved
         internal AllocatorManager.AllocatorHandle m_handle;
         internal int m_bytes;
@@ -114,7 +115,8 @@ namespace Unity.Entities
         public void Dispose()
         {
             Rewind();
-            Memory.Unmanaged.Free(m_pointer, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Allocator.Scratchpad", Allocator.Persistent);
+            Memory.Unmanaged.Free(m_pointer, memoryLabel);
         }
 
         /// <summary>
@@ -123,7 +125,8 @@ namespace Unity.Entities
         /// <param name="bytes">The amount of memory to allocate.</param>
         public void Initialize(int bytes)
         {
-            m_pointer = (byte*)Memory.Unmanaged.Allocate(bytes, kMaximumAlignment, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Allocator.Scratchpad", Allocator.Persistent);
+            m_pointer = (byte*)Memory.Unmanaged.Allocate(bytes, kMaximumAlignment, memoryLabel);
             m_bytes = bytes;
             m_next = 0;
         }
@@ -345,11 +348,7 @@ namespace Unity.Entities
         {
             if (IsInstalled.Data == 0)
             {
-#if UNITY_2022_2_14F1_OR_NEWER
                 int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-                int maxThreadCount = JobsUtility.MaxJobThreadCount + 1; // account for main thread
-#endif
                 Pad.Data.Initialize(maxThreadCount, BlockSize, true, (int)AllocatorManager.GlobalAllocatorBaseIndex);
                 IsInstalled.Data = 1;
             }

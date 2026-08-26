@@ -174,46 +174,12 @@ namespace Unity.Entities
 
             var entityInChunkStart = (Entity*)chunk.Buffer + baseIndex;
 
-#if !ENTITY_STORE_V1
-            s_entityStore.Data.AllocateEntities(entityInChunkStart, count, chunk, baseIndex);
+            s_entityStore.Data.AllocateEntitiesDirect(entityInChunkStart, count, chunk, baseIndex);
 
             if (outputEntities != null)
             {
                 UnsafeUtility.MemCpy(outputEntities, entityInChunkStart, count * sizeof(Entity));
             }
-#else
-            for (var i = 0; i != count; i++)
-            {
-                var entityIndexInChunk = m_EntityInChunkByEntity[m_NextFreeEntityIndex].IndexInChunk;
-                if (entityIndexInChunk == -1)
-                {
-                    IncreaseCapacity();
-                    entityIndexInChunk = m_EntityInChunkByEntity[m_NextFreeEntityIndex].IndexInChunk;
-                }
-
-                var entityVersion = m_VersionByEntity[m_NextFreeEntityIndex];
-
-                if (outputEntities != null)
-                {
-                    outputEntities[i].Index = m_NextFreeEntityIndex;
-                    outputEntities[i].Version = entityVersion;
-                }
-
-                var entityInChunk = entityInChunkStart + i;
-
-                entityInChunk->Index = m_NextFreeEntityIndex;
-                entityInChunk->Version = entityVersion;
-
-                m_EntityInChunkByEntity[m_NextFreeEntityIndex].IndexInChunk = baseIndex + i;
-                m_EntityInChunkByEntity[m_NextFreeEntityIndex].Chunk = chunk;
-#if !DOTS_DISABLE_DEBUG_NAMES
-                m_NameByEntity[m_NextFreeEntityIndex] = new EntityName();
-#endif
-
-                m_NextFreeEntityIndex = entityIndexInChunk;
-                m_EntityCreateDestroyVersion++;
-            }
-#endif
         }
 
         internal void DeallocateDataEntitiesInChunk(ChunkIndex chunk, Archetype* archetype, int indexInChunk, int batchCount)
@@ -223,27 +189,11 @@ namespace Unity.Entities
 
             var entities = (Entity*)chunk.Buffer + indexInChunk;
 
-#if ENTITY_STORE_V1
-            var freeIndex = m_NextFreeEntityIndex;
-
-            for (var i = batchCount - 1; i >= 0; --i)
-            {
-                var entityIndex = entities[i].Index;
-
-                m_EntityInChunkByEntity[entityIndex].Chunk = ChunkIndex.Null;
-                m_VersionByEntity[entityIndex]++;
-                m_EntityInChunkByEntity[entityIndex].IndexInChunk = freeIndex;
-#if !DOTS_DISABLE_DEBUG_NAMES
-                m_NameByEntity[entityIndex] = new EntityName();
-#endif
-
-                freeIndex = entityIndex;
-            }
-
-            m_NextFreeEntityIndex = freeIndex;
-            m_EntityCreateDestroyVersion++;
-#else
             s_entityStore.Data.DeallocateEntities(entities, batchCount);
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            EntityNameStorage.RemoveEntitiesFromNameMap(entities, batchCount);
+            m_NameStoreAccess.RemoveEntitiesFromEntitiesWithNames(entities, batchCount);
 #endif
 
 
@@ -263,13 +213,9 @@ namespace Unity.Entities
             var movedEntities = (Entity*)chunk.Buffer + (chunk.Count - patchCount);
             for (var i = 0; i != patchCount; i++)
             {
-#if ENTITY_STORE_V1
-                m_EntityInChunkByEntity[movedEntities[i].Index].IndexInChunk = indexInChunk + i;
-#else
                 var entityInChunk = GetEntityInChunk(movedEntities[i]);
                 entityInChunk.IndexInChunk = indexInChunk + i;
                 SetEntityInChunk(movedEntities[i], entityInChunk);
-#endif
             }
 
             // Move component data from the end to where we deleted components
@@ -289,14 +235,11 @@ namespace Unity.Entities
         {
             var archetype = GetArchetype(chunk);
             var chunkBuffer = chunk.Buffer;
+            var bufferComponentsEnd = archetype->BufferComponentsEnd;
 
-            for (int ti = 0, count = archetype->TypesCount; ti < count; ++ti)
+            for (var ti = archetype->FirstBufferComponent; ti < bufferComponentsEnd; ++ti)
             {
-                var type = archetype->Types[ti];
-
-                if (!type.IsBuffer)
-                    continue;
-
+                Assert.IsTrue(archetype->Types[ti].IsBuffer);
                 var basePtr = chunkBuffer + archetype->Offsets[ti];
                 var stride = archetype->SizeOfs[ti];
 

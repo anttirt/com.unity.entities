@@ -31,6 +31,5 @@ You can record ECB changes on the main thread, such as in the following situatio
 
 Every structural change operation triggers a [sync point](concepts-structural-changes.md#sync-points), which means that the operation must wait for some or all scheduled jobs to complete. If you combine the structural changes into an ECB, the frame has fewer sync points.
 
->[!NOTE] 
-> If you have a lot of the same types of commands in an ECB, and you can afford to make the change instantly, it can be faster to use the EntityManager variants on whole batches of entities at once.
-
+> [!NOTE]
+> If you record many commands of the same type, use the batched `EntityCommandBuffer` overloads, such as `CreateEntity(EntityArchetype, NativeArray<Entity>)` or `Instantiate(Entity, NativeArray<Entity>)`. ECB doesn't automatically combine identical commands that you record one at a time, so recording them as a single batch is more efficient. If you don't need to defer the changes, you can instead use the equivalent batched `EntityManager` methods, which act on many entities at once.

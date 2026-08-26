@@ -291,13 +291,17 @@ namespace Unity.Entities.PerformanceTests
             for (int i = 0; i != entities.Length; i++)
             {
                 m_Manager.SetComponentData(entities[i], new EcsTestData(i));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(entities[i], new EcsTestSharedComp(i % 2));
+                #pragma warning restore 0618
             }
 
 
             using (var query = m_Manager.CreateEntityQuery(typeof(EcsTestData),typeof(EcsTestSharedComp)))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 query.SetSharedComponentFilterManaged(new EcsTestSharedComp { value = 0 });
+                #pragma warning restore 0618
                 Measure.Method(() => { dstManager.MoveEntitiesFrom(m_Manager,query);  })
                     .CleanUp(() =>
                     {
@@ -356,7 +360,9 @@ namespace Unity.Entities.PerformanceTests
 
             using (var query = m_Manager.CreateEntityQuery(typeof(EcsTestData),typeof(EcsTestSharedComp)))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 query.SetSharedComponentFilterManaged(new EcsTestSharedComp { value = 0 });
+                #pragma warning restore 0618
                 Measure.Method(() => { dstManager.MoveEntitiesFrom(m_Manager,query);  })
                     .CleanUp(() =>
                     {
@@ -477,7 +483,9 @@ namespace Unity.Entities.PerformanceTests
         [Test, Performance]
         public void AddSharedComponentWithGroup()
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Measure.Method(() => { m_Manager.AddSharedComponentManaged(group, new EcsTestSharedComp(7)); })
+            #pragma warning restore 0618
                 .SetUp(CreateEntities)
                 .CleanUp(DestroyEntities)
                 .WarmupCount(1)
@@ -572,7 +580,9 @@ namespace Unity.Entities.PerformanceTests
                 .SetUp(() =>
                 {
                     CreateEntities();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.AddSharedComponentManaged(group, new EcsTestSharedComp(7));
+                    #pragma warning restore 0618
                 })
                 .CleanUp(DestroyEntities)
                 .WarmupCount(1)
@@ -600,7 +610,9 @@ namespace Unity.Entities.PerformanceTests
         {
             Measure.Method(() =>
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(group, new EcsTestSharedCompWithMaxChunkCapacity(7));
+                #pragma warning restore 0618
             })
                 .SetUp(() =>
                 {
@@ -1534,6 +1546,7 @@ namespace Unity.Entities.PerformanceTests
         {
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         public struct WobbleParcelShared : ISharedComponentData, IEquatable<WobbleParcelShared>
         {
             public string Value;
@@ -1548,6 +1561,7 @@ namespace Unity.Entities.PerformanceTests
                 return Value.GetHashCode();
             }
         }
+        #pragma warning restore EA0017
 
 
         delegate void TestQuery(EntityQuery query, ComponentType componentType);
@@ -1618,9 +1632,13 @@ namespace Unity.Entities.PerformanceTests
                                 var filterBy = new WobbleParcelBatch(i);
                                 queries[queryIndex] =
                                     m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(WobbleParcelBatch));
+                                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                 queries[queryIndex].SetSharedComponentFilterManaged(filterBy);
+                                #pragma warning restore 0618
                                 for (int j = i; j < i + remaining; j++)
+                                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                     m_Manager.AddSharedComponentManaged(entities[j], filterBy);
+                                    #pragma warning restore 0618
                                 queryIndex++;
                             }
                         }
@@ -1685,9 +1703,13 @@ namespace Unity.Entities.PerformanceTests
                                 var filterBy = new WobbleParcelBatch(i);
                                 var query =
                                     m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(WobbleParcelBatch));
+                                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                 query.SetSharedComponentFilterManaged(filterBy);
+                                #pragma warning restore 0618
                                 for (int j = i; j < i + remaining; j++)
+                                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                     m_Manager.AddSharedComponentManaged(entities[j], filterBy);
+                                    #pragma warning restore 0618
                                 entityBatches[queryIndex] = query.ToEntityArray(Allocator.Persistent);
                                 queryIndex++;
                             }
@@ -1751,9 +1773,13 @@ namespace Unity.Entities.PerformanceTests
                                 var filterBy = new WobbleParcelBatch(i);
                                 var query =
                                     m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(WobbleParcelBatch));
+                                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                 query.SetSharedComponentFilterManaged(filterBy);
+                                #pragma warning restore 0618
                                 for (int j = i; j < i + remaining; j++)
+                                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                                     m_Manager.AddSharedComponentManaged(entities[j], filterBy);
+                                    #pragma warning restore 0618
                                 entityBatches[queryIndex] = query.ToEntityArray(Allocator.Persistent);
                                 queryIndex++;
                             }

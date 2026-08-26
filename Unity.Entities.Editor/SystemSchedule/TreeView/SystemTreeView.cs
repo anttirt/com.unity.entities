@@ -1,174 +1,464 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using Unity.Editor.Bridge;
-using Unity.Entities.UI;
 using UnityEditor;
+using UnityEditor.Search;
+using UnityEngine;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
-using ListView = Unity.Editor.Bridge.ListView;
-using TreeView = Unity.Editor.Bridge.TreeView;
 
 namespace Unity.Entities.Editor
 {
-    class SystemTreeView : VisualElement, IDisposable
+    class SystemTreeView : VisualElement, System.IDisposable
     {
         static readonly string k_NoSystemsFoundTitle = L10n.Tr("No system matches your search");
-        static readonly string k_ComponentTypeNotFoundTitle = L10n.Tr("Type not found");
-        static readonly string k_ComponentTypeNotFoundContent = L10n.Tr("\"{0}\" is not a component type");
 
-        internal readonly TreeView m_SystemTreeView; // internal for test.
-        internal readonly IList<ITreeViewItem> m_TreeViewRootItems = new List<ITreeViewItem>();
-        internal readonly ListView m_SystemListView; // For search results.
-        internal readonly List<SystemTreeViewItem> m_ListViewFilteredItems = new List<SystemTreeViewItem>();
+        // internal for test.
+        internal MultiColumnTreeView MultiColumnTreeViewElement { get; }
+        internal IList<TreeViewItemData<SystemTreeViewItemData>> TreeViewRootItems { get; } = new List<TreeViewItemData<SystemTreeViewItemData>>();
+        // Column Labels
+        static readonly ObjectPool<VisualElement> k_CellLabelPool = new (() => new VisualElement());
+
+        internal readonly List<TreeViewItemData<SystemTreeViewItemData>> m_ListViewFilteredItems = new ();
+
+        internal System.Action<SystemProxy> systemSelectionChanged;
 
         int m_LastSelectedItemId;
         WorldProxy m_WorldProxy;
         readonly CenteredMessageElement m_SearchEmptyMessage;
         int m_ScrollToItemId = -1;
 
-        public SearchQueryParser.ParseResult SearchFilter;
-        ISearchQuery<SystemForSearch> m_CurrentSearchQuery;
+        bool m_IsSearching = false;
+        IList<SearchItem> m_SearchResults;
 
-        readonly List<SystemForSearch> m_AllSystemsForSearch = new List<SystemForSearch>();
-        readonly Dictionary<string, string[]> m_SystemDependencyMap = new Dictionary<string, string[]>();
-        readonly List<SystemForSearch> m_SearchResultsFlatSystemList = new List<SystemForSearch>();
+        readonly List<SystemDescriptor> m_AllSystemsForSearch = new();
+        readonly Dictionary<string, string[]> m_SystemDependencyMap = new();
+        readonly List<SystemDescriptor> m_SearchResultsFlatSystemList = new();
 
         internal SystemGraph LocalSystemGraph;
         public static SystemProxy SelectedSystem;
 
-        public bool ShowWorldColumn { get; set; }
-        public bool ShowNamespaceColumn { get; set; }
-        public bool ShowEntityCountColumn { get; set; }
+        readonly HashSet<int> m_UpdateAfterHighlightedSystems = new();
+        readonly HashSet<int> m_UpdateBeforeHighlightedSystems = new();
+
+        readonly HashSet<int> m_UpdateAfterReverseHighlightedSystems = new();
+        readonly HashSet<int> m_UpdateBeforeReverseHighlightedSystems = new();
+
+        readonly List<int> m_HighlightedTreeViewIndices = new();
+        bool m_IsProcessingSelectionChange;
+        VisualElement m_UpArrowIndicator;
+        VisualElement m_DownArrowIndicator;
+        Label m_UpArrowCount;
+        Label m_DownArrowCount;
+        bool m_ScrollCallbackRegistered;
+
         public bool ShowMorePrecisionForRunningTime { get; set; }
         public bool Show0sInEntityCountAndTimeColumn { get; set; }
-        public bool ShowTimeColumn { get; set; }
+        public bool ShowUnityNamespaceSystems { get; set; } = true;
+        public bool ShowPlayerLoop { get; set; } = true;
+
+        internal static bool ShouldShowNode(IPlayerLoopNode node, WorldProxy worldProxy, bool showUnityNamespaceSystems)
+        {
+            return ShouldShowNode(node, worldProxy, showUnityNamespaceSystems, true);
+        }
+
+        internal static bool ShouldShowNode(IPlayerLoopNode node, WorldProxy worldProxy, bool showUnityNamespaceSystems, bool showPlayerLoop)
+        {
+            if (node is IPlayerLoopSystemData)
+            {
+                if (showPlayerLoop)
+                    return true;
+                return HasVisibleEcsDescendants(node, worldProxy, showUnityNamespaceSystems);
+            }
+
+            if (!node.ShowForWorldProxy(worldProxy))
+                return false;
+
+            if (showUnityNamespaceSystems)
+                return true;
+
+            foreach (var child in node.Children)
+            {
+                if (ShouldShowNode(child, worldProxy, showUnityNamespaceSystems, showPlayerLoop))
+                    return true;
+            }
+
+            if (node is ISystemHandleNode systemHandleNode && systemHandleNode.SystemProxy.Valid)
+            {
+                var ns = systemHandleNode.SystemProxy.Namespace;
+                return string.IsNullOrEmpty(ns) || !(ns == "Unity" || ns.StartsWith("Unity.", System.StringComparison.Ordinal) || ns.StartsWith("UnityEngine", System.StringComparison.Ordinal) || ns.StartsWith("UnityEditor", System.StringComparison.Ordinal));
+            }
+
+            return false;
+        }
+
+        static bool HasVisibleEcsDescendants(IPlayerLoopNode node, WorldProxy worldProxy, bool showUnityNamespaceSystems)
+        {
+            foreach (var child in node.Children)
+            {
+                if (child is IPlayerLoopSystemData)
+                {
+                    if (HasVisibleEcsDescendants(child, worldProxy, showUnityNamespaceSystems))
+                        return true;
+                }
+                else if (ShouldShowNode(child, worldProxy, showUnityNamespaceSystems, false))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Column m_SystemColumn;
+        Column m_SchedulingColumn;
+        Column m_NamespaceColumn;
+        Column m_EntityCountColumn;
+        Column m_RunningTimeColumn;
 
         /// <summary>
         /// Constructor of the tree view.
         /// </summary>
         public SystemTreeView()
         {
-            m_SystemTreeView = new TreeView(m_TreeViewRootItems, Constants.ListView.ItemHeight, MakeTreeViewItem, ReleaseTreeViewItem, BindTreeViewItem)
+            MultiColumnTreeViewElement = new MultiColumnTreeView()
             {
+                name = "SystemTreeView",
+                fixedItemHeight = Constants.ListView.ItemHeight,
+                autoExpand = true,
                 viewDataKey = "full-view",
                 selectionType = SelectionType.Single,
-                name = "SystemTreeView",
                 style =
                 {
-                    flexGrow = 1,
-                    minWidth = 645f
+                    flexGrow = 1
                 }
             };
 
-            m_SystemTreeView.RegisterCallback<GeometryChangedEvent>(evt =>
+            CreateColumns();
+
+            MultiColumnTreeViewElement.columns.primaryColumnName = SystemScheduleWindow.Contents.System;
+            MultiColumnTreeViewElement.SetRootItems(TreeViewRootItems);
+
+            MultiColumnTreeViewElement.RegisterCallback<GeometryChangedEvent>(_ =>
             {
                 if (m_ScrollToItemId == -1)
                     return;
 
                 var tempId = m_ScrollToItemId;
                 m_ScrollToItemId = -1;
-                if (m_SystemTreeView.FindItem(tempId) != null)
-                    m_SystemTreeView.ScrollToItem(tempId);
+                if (MultiColumnTreeViewElement.GetItemDataForId<SystemTreeViewItemData>(tempId) != null)
+                    MultiColumnTreeViewElement.ScrollToItemById(tempId);
             });
 
-            m_SystemTreeView.onSelectionChange += OnSelectionChanged;
-            Add(m_SystemTreeView);
+            MultiColumnTreeViewElement.selectionChanged += OnSelectionChanged;
+            Add(MultiColumnTreeViewElement);
 
             m_SearchEmptyMessage = new CenteredMessageElement { Title = k_NoSystemsFoundTitle };
             m_SearchEmptyMessage.Hide();
             Add(m_SearchEmptyMessage);
 
-            // Create list view for search results.
-            m_SystemListView = new ListView(m_ListViewFilteredItems, Constants.ListView.ItemHeight, MakeListViewItem, ReleaseListViewItem, BindListViewItem)
+            MultiColumnTreeViewElement.RegisterCallback<PointerDownEvent>(evt =>
             {
-                viewDataKey = "search-view",
-                selectionType = SelectionType.Single,
-                name = "SystemListView",
-                style =
-                {
-                    flexGrow = 1,
-                    minWidth = 645f
-                }
-            };
-            m_SystemListView.RegisterCallback<PointerDownEvent>(evt =>
-            {
-#if UNITY_2023_2_OR_NEWER
-                if (evt.target == m_SystemListView.Q(className: ScrollView.contentAndVerticalScrollUssClassName))
+                if (evt.target == MultiColumnTreeViewElement.Q(className: ScrollView.contentAndVerticalScrollUssClassName))
                     Selection.activeObject = null;
-#else
-                if (evt.button == (int) MouseButton.LeftMouse)
-                    Selection.activeObject = null;
-#endif
             });
-            m_SystemTreeView.RegisterCallback<PointerDownEvent>(evt =>
-            {
-#if UNITY_2023_2_OR_NEWER
-                if (evt.target == m_SystemTreeView.Q(className: ScrollView.contentAndVerticalScrollUssClassName))
-                    Selection.activeObject = null;
-#else
-                if (evt.button == (int) MouseButton.LeftMouse)
-                    Selection.activeObject = null;
-#endif
-            });
-
-            m_SystemListView.onSelectionChange += OnSelectionChanged;
-
-            Add(m_SystemListView);
         }
 
+        void CreateArrowIndicators()
+        {
+            if (m_UpArrowIndicator != null)
+                return;
+
+            var foldoutIcon = EditorGUIUtility.IconContent("IN foldout on").image as Texture2D;
+
+            m_UpArrowIndicator = new VisualElement();
+            m_UpArrowIndicator.AddToClassList("scheduling-arrow-indicator");
+            m_UpArrowIndicator.AddToClassList("scheduling-arrow-indicator--up");
+            Resources.Templates.SystemScheduleItem.AddStyles(m_UpArrowIndicator);
+            m_UpArrowIndicator.style.display = DisplayStyle.None;
+            var upArrowIcon = new VisualElement { pickingMode = PickingMode.Ignore };
+            upArrowIcon.AddToClassList("scheduling-arrow-indicator__icon");
+            upArrowIcon.AddToClassList("scheduling-arrow-indicator__icon--up");
+            upArrowIcon.style.backgroundImage = foldoutIcon;
+            m_UpArrowCount = new Label { pickingMode = PickingMode.Ignore };
+            m_UpArrowCount.AddToClassList("scheduling-arrow-indicator__count-label");
+            m_UpArrowIndicator.Add(upArrowIcon);
+            m_UpArrowIndicator.Add(m_UpArrowCount);
+            m_UpArrowIndicator.RegisterCallback<ClickEvent>(_ => ScrollToNextHighlightedSystem(true));
+
+            m_DownArrowIndicator = new VisualElement();
+            m_DownArrowIndicator.AddToClassList("scheduling-arrow-indicator");
+            m_DownArrowIndicator.AddToClassList("scheduling-arrow-indicator--down");
+            Resources.Templates.SystemScheduleItem.AddStyles(m_DownArrowIndicator);
+            m_DownArrowIndicator.style.display = DisplayStyle.None;
+            var downArrowIcon = new VisualElement { pickingMode = PickingMode.Ignore };
+            downArrowIcon.AddToClassList("scheduling-arrow-indicator__icon");
+            downArrowIcon.style.backgroundImage = foldoutIcon;
+            m_DownArrowCount = new Label { pickingMode = PickingMode.Ignore };
+            m_DownArrowCount.AddToClassList("scheduling-arrow-indicator__count-label");
+            m_DownArrowIndicator.Add(downArrowIcon);
+            m_DownArrowIndicator.Add(m_DownArrowCount);
+            m_DownArrowIndicator.RegisterCallback<ClickEvent>(_ => ScrollToNextHighlightedSystem(false));
+
+            Add(m_UpArrowIndicator);
+            Add(m_DownArrowIndicator);
+
+            if (!m_ScrollCallbackRegistered)
+            {
+                var scrollView = MultiColumnTreeViewElement.Q<ScrollView>();
+                if (scrollView != null)
+                {
+                    scrollView.verticalScroller.valueChanged += _ => UpdateArrowIndicators();
+                    m_ScrollCallbackRegistered = true;
+                }
+            }
+        }
+
+        internal void RebuildColumns()
+        {
+            MultiColumnTreeViewElement.columns.Clear();
+            MultiColumnTreeViewElement.columns.Add(m_SystemColumn);
+            MultiColumnTreeViewElement.columns.Add(m_SchedulingColumn);
+            MultiColumnTreeViewElement.columns.Add(m_NamespaceColumn);
+            MultiColumnTreeViewElement.columns.Add(m_EntityCountColumn);
+            MultiColumnTreeViewElement.columns.Add(m_RunningTimeColumn);
+            Resources.Templates.SystemScheduleItem.AddStyles(MultiColumnTreeViewElement);
+        }
+
+        void CreateColumns()
+        {
+            const string headerStr = "Header";
+
+            m_SystemColumn = new Column()
+            {
+                name = SystemScheduleWindow.Contents.System,
+                makeHeader = MakeHeaderLabel,
+                bindHeader = e =>
+                {
+                    var label = e.Q<Label>(headerStr);
+                    label.text = SystemScheduleWindow.Contents.System;
+                    label.tooltip = SystemScheduleWindow.Contents.SystemTooltip;
+                    label.AddToClassList(UssClasses.SystemScheduleWindow.TreeViewHeader.System);
+                },
+                makeCell = MakeTreeViewItem,
+                bindCell = BindSystemItem,
+                resizable = true,
+                optional = false,
+                destroyCell = ReleaseTreeViewItem,
+                minWidth = 100,
+                width = 300
+            };
+
+            m_SchedulingColumn = new Column()
+            {
+                name = SystemScheduleWindow.Contents.Scheduling,
+                makeHeader = MakeHeaderLabel,
+                bindHeader = e =>
+                {
+                    var label = e.Q<Label>(headerStr);
+                    label.text = SystemScheduleWindow.Contents.Scheduling;
+                    label.tooltip = SystemScheduleWindow.Contents.SchedulingTooltip;
+                    label.AddToClassList(UssClasses.SystemScheduleWindow.TreeViewHeader.Scheduling);
+                },
+                makeCell = MakeSchedulingCell,
+                bindCell = BindSchedulingCell,
+                resizable = true,
+                minWidth = 100,
+                width = 300
+            };
+
+            m_NamespaceColumn = new Column()
+            {
+                name = SystemScheduleWindow.Contents.Namespace,
+                makeHeader = MakeHeaderLabel,
+                bindHeader = e =>
+                {
+                    var label = e.Q<Label>(headerStr);
+                    label.text = SystemScheduleWindow.Contents.Namespace;
+                    label.tooltip = SystemScheduleWindow.Contents.NamespaceTooltip;
+                    label.AddToClassList(UssClasses.SystemScheduleWindow.TreeViewHeader.Namespace);
+                },
+                makeCell = MakeCellLabel,
+                bindCell = BindNamespaceCell,
+                resizable = true,
+                width = 100
+            };
+
+            m_EntityCountColumn = new Column()
+            {
+                name = SystemScheduleWindow.Contents.EntityCount,
+                makeHeader = MakeHeaderLabel,
+                bindHeader = e =>
+                {
+                    var label = e.Q<Label>(headerStr);
+                    label.text = SystemScheduleWindow.Contents.EntityCount;
+                    label.tooltip = SystemScheduleWindow.Contents.EntityCountTooltip;
+                    label.AddToClassList(UssClasses.SystemScheduleWindow.TreeViewHeader.EntityCount);
+                },
+                makeCell = MakeCellLabel,
+                bindCell = BindEntityCountCell,
+                resizable = true,
+                width = 100
+            };
+
+           m_RunningTimeColumn = new Column()
+            {
+                name = SystemScheduleWindow.Contents.Time,
+                makeHeader = MakeHeaderLabel,
+                bindHeader = e =>
+                {
+                    var label = e.Q<Label>("Header");
+                    label.text = SystemScheduleWindow.Contents.Time;
+                    label.tooltip = SystemScheduleWindow.Contents.TimeTooltip;
+                    label.AddToClassList(UssClasses.SystemScheduleWindow.TreeViewHeader.Time);
+                },
+                makeCell = MakeCellLabel,
+                bindCell = BindRunningTimeCell,
+                resizable = true,
+                width = 100
+            };
+        }
         void OnSelectionChanged(IEnumerable<object> selection)
         {
-            if (selection.FirstOrDefault() is SystemTreeViewItem selectedItem)
-                OnSelectionChanged(selectedItem);
+            SystemTreeViewItemData selectedItem = null;
+            foreach (var obj in selection)
+            {
+                selectedItem = obj as SystemTreeViewItemData;
+                if (selectedItem != null)
+                    break;
+            }
+            OnSelectionChanged(selectedItem);
         }
 
-        void OnSelectionChanged(SystemTreeViewItem selectedItem)
+        void OnSelectionChanged(SystemTreeViewItemData selectedItem)
+        {
+            if (m_IsProcessingSelectionChange)
+                return;
+            m_IsProcessingSelectionChange = true;
+            try
+            {
+                OnSelectionChangedInternal(selectedItem);
+            }
+            finally
+            {
+                m_IsProcessingSelectionChange = false;
+            }
+        }
+
+        void OnSelectionChangedInternal(SystemTreeViewItemData selectedItem)
         {
             // By selecting a system within Systems window, we need to clear up SelectedSystem which is set only from the outside.
             SelectedSystem = default;
 
+            m_UpdateAfterHighlightedSystems.Clear();
+            m_UpdateBeforeHighlightedSystems.Clear();
+            m_UpdateBeforeReverseHighlightedSystems.Clear();
+            m_UpdateAfterReverseHighlightedSystems.Clear();
+
             if (selectedItem == null || !selectedItem.SystemProxy.Valid)
+            {
+                m_HighlightedTreeViewIndices.Clear();
+                if (m_UpArrowIndicator != null)
+                    m_UpArrowIndicator.style.display = DisplayStyle.None;
+                if (m_DownArrowIndicator != null)
+                    m_DownArrowIndicator.style.display = DisplayStyle.None;
+                MultiColumnTreeViewElement.RefreshItems();
                 return;
+            }
 
             m_LastSelectedItemId = selectedItem.id;
             m_ScrollToItemId = selectedItem.id;
 
-            OpenInspector(selectedItem.SystemProxy);
+            foreach (var dep in selectedItem.GetUpdateBeforeSystemNames())
+                m_UpdateBeforeHighlightedSystems.Add(dep.SystemIndex);
+
+            foreach (var dep in selectedItem.GetUpdateAfterSystemNames())
+                m_UpdateAfterHighlightedSystems.Add(dep.SystemIndex);
+
+            foreach (var dep in selectedItem.GetUpdateBeforeReverseSystemNames())
+                m_UpdateBeforeReverseHighlightedSystems.Add(dep.SystemIndex);
+
+            foreach (var dep in selectedItem.GetUpdateAfterReverseSystemNames())
+                m_UpdateAfterReverseHighlightedSystems.Add(dep.SystemIndex);
+
+            MultiColumnTreeViewElement.RefreshItems();
+
+            CreateArrowIndicators();
+            BuildHighlightedTreeViewIndices();
+            UpdateArrowIndicators();
+
+            systemSelectionChanged?.Invoke(selectedItem.SystemProxy);
         }
 
-        void OpenInspector(SystemProxy systemProxy)
+        VisualElement MakeHeaderLabel()
         {
-            SelectionUtility.ShowInInspector(new SystemContentProvider
+            var element = new VisualElement();
+            Resources.Templates.SystemScheduleTreeViewHeader.AddStyles(element);
+            var label = new Label
             {
-                World = systemProxy.World,
-                SystemProxy = systemProxy,
-                LocalSystemGraph = LocalSystemGraph
-            }, new InspectorContentParameters
+                name = "Header",
+            };
+            element.Add(label);
+            return element;
+        }
+
+        VisualElement MakeCellLabel()
+        {
+            var element = k_CellLabelPool.Get();
+            Resources.Templates.SystemScheduleItem.AddStyles(element);
+            var label = new Label
             {
-                UseDefaultMargins = false,
-                ApplyInspectorStyling = false
-            });
+                name = "Cell"
+            };
+            element.Add(label);
+            return element;
+        }
+
+        static readonly string k_UpdateBeforeLabel = "UpdateBefore";
+        static readonly string k_UpdateAfterLabel = "UpdateAfter";
+        static readonly string k_UpdateBeforeReverseLabel = "UpdateBeforeReverse";
+        static readonly string k_UpdateAfterReverseLabel = "UpdateAfterReverse";
+
+        VisualElement MakeSchedulingCell()
+        {
+            var element = k_CellLabelPool.Get();
+            Resources.Templates.SystemScheduleItem.AddStyles(element);
+            element.style.flexDirection = FlexDirection.Row;
+            element.style.alignItems = Align.Center;
+
+            element.Add(MakeSchedulingPill(k_UpdateBeforeLabel, "scheduling-pill--update-before", SystemScheduleWindow.Contents.UpdateBeforeSchedulingTooltip));
+            element.Add(MakeSchedulingPill(k_UpdateAfterLabel, "scheduling-pill--update-after", SystemScheduleWindow.Contents.UpdateAfterSchedulingTooltip));
+            element.Add(MakeSchedulingPill(k_UpdateBeforeReverseLabel, "scheduling-pill--update-before-reverse", SystemScheduleWindow.Contents.UpdateBeforeReverseSchedulingTooltip));
+            element.Add(MakeSchedulingPill(k_UpdateAfterReverseLabel, "scheduling-pill--update-after-reverse", SystemScheduleWindow.Contents.UpdateAfterReverseSchedulingTooltip));
+
+            return element;
+        }
+
+        static Label MakeSchedulingPill(string pillName, string variantClass, string tooltip)
+        {
+            var pill = new Label { name = pillName };
+            pill.AddToClassList("scheduling-pill");
+            pill.AddToClassList(variantClass);
+            pill.tooltip = tooltip;
+            pill.style.display = DisplayStyle.None;
+            return pill;
         }
 
         VisualElement MakeTreeViewItem() => SystemInformationVisualElement.Acquire(this);
 
-        static void ReleaseTreeViewItem(VisualElement ve) => ((SystemInformationVisualElement)ve).Release();
-
-        VisualElement MakeListViewItem()
+        static void ReleaseTreeViewItem(VisualElement ve)
         {
-            // ListView changes user created VisualElements in a way that no reversible using public API
-            // Wrapping pooled item in a non reusable container prevent us from reusing a pooled item in an eventual checked pseudo state
-            var wrapper = new VisualElement();
-            wrapper.Add(SystemInformationVisualElement.Acquire(this));
-            return wrapper;
+            if(ve  != null)
+                ((SystemInformationVisualElement)ve).Release();
         }
 
-        static void ReleaseListViewItem(VisualElement ve) => ((SystemInformationVisualElement)ve[0]).Release();
-
-        public void SetFilter(ISearchQuery<SystemForSearch> searchQuery, SearchQueryParser.ParseResult parseResult)
+        public void StopSearch()
         {
-            m_CurrentSearchQuery = searchQuery;
-            SearchFilter = parseResult;
+            m_IsSearching = false;
+            Refresh();
+        }
+
+        public void SetResults(IList<SearchItem> results)
+        {
+            m_IsSearching = true;
+            m_SearchResults = results;
             Refresh();
         }
 
@@ -180,7 +470,7 @@ namespace Unity.Entities.Editor
             m_SystemDependencyMap.Clear();
 
             RecreateTreeViewRootItems();
-            FillSystemDependencyCache();
+            FillSystemDependencyCache(m_AllSystemsForSearch, m_SystemDependencyMap);
             Refresh();
         }
 
@@ -188,36 +478,40 @@ namespace Unity.Entities.Editor
         {
             ReleaseAllPooledItems();
 
-            if (World.All.Count > 0 && string.IsNullOrEmpty(SearchFilter.ErrorComponentType))
+            if (World.All.Count > 0)
             {
                 var graph = LocalSystemGraph;
 
                 foreach (var node in graph.Roots)
                 {
-                    if (!node.ShowForWorldProxy(m_WorldProxy))
-                        continue;
-
-                    var item = SystemTreeViewItem.Acquire((PlayerLoopSystemGraph)graph, node, null, m_WorldProxy);
-                    PopulateAllChildren(item);
-                    m_TreeViewRootItems.Add(item);
+                    if (ShouldShowNode(node, m_WorldProxy, ShowUnityNamespaceSystems, ShowPlayerLoop))
+                        AddNodeToTreeView((PlayerLoopSystemGraph)graph, node);
                 }
 
-                m_SystemTreeView.Refresh();
+                MultiColumnTreeViewElement.SetRootItems(TreeViewRootItems);
+                MultiColumnTreeViewElement.Rebuild();
             }
         }
 
-        void PopulateAllChildren(SystemTreeViewItem item)
+        void AddNodeToTreeView(PlayerLoopSystemGraph graph, IPlayerLoopNode node)
+        {
+            var item = SystemTreeViewItemData.Acquire(graph, node, m_WorldProxy, ShowUnityNamespaceSystems, ShowPlayerLoop);
+            PopulateAllChildren(item);
+
+            var children = GetAllChildren(item);
+            TreeViewRootItems.Add(new TreeViewItemData<SystemTreeViewItemData>(item.id, item, children));
+        }
+
+        void PopulateAllChildren(SystemTreeViewItemData item)
         {
             if (item.SystemProxy.Valid)
             {
-                var systemForSearch = new SystemForSearch(item.SystemProxy)
+                var systemForSearch = new SystemDescriptor(item.SystemProxy)
                 {
                     Node = item.Node,
-                    SystemItemId = item.id
                 };
                 m_AllSystemsForSearch.Add(systemForSearch);
-
-                BuildSystemDependencyMap(item.SystemProxy);
+                SystemProxy.BuildSystemDependencyMap(item.SystemProxy, m_SystemDependencyMap);
             }
 
             if (!item.HasChildren)
@@ -226,66 +520,51 @@ namespace Unity.Entities.Editor
             item.PopulateChildren();
 
             foreach (var child in item.children)
-            {
-                PopulateAllChildren(child as SystemTreeViewItem);
-            }
+                PopulateAllChildren(child.data);
         }
 
-        void BuildSystemDependencyMap(SystemProxy systemProxy)
+        static List<TreeViewItemData<SystemTreeViewItemData>> GetAllChildren(SystemTreeViewItemData item)
         {
-            var keyString = systemProxy.TypeName;
-
-            // TODO: Find better solution to be able to uniquely identify each system.
-            // At the moment, we are using system name to identify each system, which is not reliable
-            // because there can be multiple systems with the same name in a world. This is only a
-            // temporary solution to avoid the error of adding the same key into the map. We need to
-            // find a proper solution to be able to uniquely identify each system.
-            if (!m_SystemDependencyMap.ContainsKey(keyString))
+            var result = new List<TreeViewItemData<SystemTreeViewItemData>>();
+            foreach (var child in item.children)
             {
-                var handle = systemProxy;
-                var dependencies = handle.UpdateBeforeSet
-                    .Concat(handle.UpdateAfterSet)
-                    .Select(s => s.TypeName)
-                    .ToArray();
-                m_SystemDependencyMap.Add(keyString, dependencies);
+                var children = GetAllChildren(child.data);
+                result.Add(new TreeViewItemData<SystemTreeViewItemData>(child.id, child.data, children));
             }
+            return result;
         }
 
-        void FillSystemDependencyCache()
+        static void FillSystemDependencyCache(List<SystemDescriptor> descriptors, Dictionary<string, string[]> dependencyMap)
         {
-            foreach (var systemForSearch in m_AllSystemsForSearch)
+            foreach (var desc in descriptors)
             {
-                systemForSearch.SystemDependencyCache = (from kvp in m_SystemDependencyMap where kvp.Value.Contains(systemForSearch.SystemName) select kvp.Key).ToArray();
+                var dependenciesList = new List<string>();
+                foreach (var (system, dependencies) in dependencyMap)
+                {
+                    if (dependencies != null && System.Array.IndexOf(dependencies, desc.Name) >= 0)
+                        dependenciesList.Add(system);
+                }
+                var dependenciesArr = dependenciesList.ToArray();
+                desc.UpdateDependencies(dependenciesArr);
             }
         }
 
         void BuildFilterResults()
         {
             m_SearchResultsFlatSystemList.Clear();
-            if (m_CurrentSearchQuery == null || string.IsNullOrWhiteSpace(m_CurrentSearchQuery.SearchString) || m_CurrentSearchQuery.Tokens.Count == 0 && string.IsNullOrEmpty(SearchFilter.ErrorComponentType))
-            {
+
+            if (!m_IsSearching)
                 m_SearchResultsFlatSystemList.AddRange(m_AllSystemsForSearch);
-            }
             else
             {
-#if QUICKSEARCH_AVAILABLE
-                m_SearchResultsFlatSystemList.AddRange( m_CurrentSearchQuery.Apply(m_AllSystemsForSearch));
-#else
-                using (var candidates = PooledHashSet<SystemForSearch>.Make())
+                foreach (var result in m_SearchResults)
                 {
-                    foreach (var system in m_AllSystemsForSearch)
-                    {
-                        if (SearchFilter.Names.All(n => system.SystemName.IndexOf(n, StringComparison.OrdinalIgnoreCase) >= 0))
-                            candidates.Set.Add(system);
-
-                        if (candidates.Set.Contains(system) && !SearchFilter.ComponentNames.All(component => system.ComponentNamesInQuery.Any(c => c.IndexOf(component, StringComparison.OrdinalIgnoreCase) >= 0)))
-                            candidates.Set.Remove(system);
-
-                        if (candidates.Set.Contains(system) && SearchFilter.DependencySystemNames.All(dependency => system.SystemDependency.Any(c => c.IndexOf(dependency, StringComparison.OrdinalIgnoreCase) >= 0)))
-                            m_SearchResultsFlatSystemList.Add(system);
-                    }
+                    // TODO: Make use of ComponentSystemBase directly
+                    var system = (SystemDescriptor)result.data;
+                    var index = m_AllSystemsForSearch.FindIndex(x => x.Proxy == system.Proxy);
+                    if (index > -1)
+                        m_SearchResultsFlatSystemList.Add(m_AllSystemsForSearch[index]);
                 }
-#endif
             }
         }
 
@@ -295,16 +574,14 @@ namespace Unity.Entities.Editor
 
             foreach (var filteredItem in m_ListViewFilteredItems)
             {
-                filteredItem.Release();
+                filteredItem.data.Release();
             }
             m_ListViewFilteredItems.Clear();
             foreach (var system in m_SearchResultsFlatSystemList)
             {
-                var listViewItems = SystemTreeViewItem.Acquire(LocalSystemGraph, system.Node, null, m_WorldProxy);
-                m_ListViewFilteredItems.Add(listViewItems);
+                var listViewItems = SystemTreeViewItemData.Acquire(LocalSystemGraph, system.Node, m_WorldProxy, ShowUnityNamespaceSystems, ShowPlayerLoop);
+                m_ListViewFilteredItems.Add(new TreeViewItemData<SystemTreeViewItemData>(listViewItems.id, listViewItems));
             }
-
-            m_SystemListView.Refresh();
         }
 
         /// <summary>
@@ -313,97 +590,357 @@ namespace Unity.Entities.Editor
         void Refresh()
         {
             // Check if there is search result
-            if (!SearchFilter.IsEmpty)
+            if (m_IsSearching)
             {
                 PopulateListViewWithSearchResults();
-                var hasSearchResult = m_ListViewFilteredItems.Any();
+                var hasSearchResult = m_ListViewFilteredItems.Count > 0;
 
-                m_SystemListView.SetVisibility(hasSearchResult);
-                m_SystemTreeView.Hide();
-
+                MultiColumnTreeViewElement.SetVisibility(hasSearchResult);
                 m_SearchEmptyMessage.SetVisibility(!hasSearchResult);
-                if (string.IsNullOrEmpty(SearchFilter.ErrorComponentType))
-                {
-                    m_SearchEmptyMessage.Title = k_NoSystemsFoundTitle;
-                    m_SearchEmptyMessage.Message = string.Empty;
-                }
-                else
-                {
-                    m_SearchEmptyMessage.Title = k_ComponentTypeNotFoundTitle;
-                    m_SearchEmptyMessage.Message = string.Format(k_ComponentTypeNotFoundContent, SearchFilter.ErrorComponentType);
-                }
+                m_SearchEmptyMessage.Title = k_NoSystemsFoundTitle;
+                m_SearchEmptyMessage.Message = string.Empty;
             }
             else
             {
-                m_SystemListView.Hide();
-                m_SystemTreeView.Show();
-
+                MultiColumnTreeViewElement.Show();
                 m_SearchEmptyMessage.Hide();
             }
-
             SetSelection();
         }
 
         public void SetSelection()
         {
-            if (m_WorldProxy == null)
+            // Update last selected item ID if we have a valid selected system
+            if (SelectedSystem.Valid && (m_WorldProxy == null || SelectedSystem.WorldProxy.Equals(m_WorldProxy)) && m_AllSystemsForSearch.Count > 0)
+            {
+                SystemDescriptor selectedSystem = null;
+                foreach (var s in m_AllSystemsForSearch)
+                {
+                    if (s.Proxy.Equals(SelectedSystem))
+                    {
+                        selectedSystem = s;
+                        break;
+                    }
+                }
+                // Tree view item ids are Node.Hash, not Proxy.SystemIndex.
+                if (selectedSystem?.Node != null)
+                    m_LastSelectedItemId = selectedSystem.Node.Hash;
+            }
+
+            // Set up tree view with appropriate root items and rebuild
+            MultiColumnTreeViewElement.ClearSelection();
+            MultiColumnTreeViewElement.SetRootItems(m_IsSearching ? m_ListViewFilteredItems : TreeViewRootItems);
+            MultiColumnTreeViewElement.Rebuild();
+
+            // Restore selection if we have a valid last selected item
+            if (MultiColumnTreeViewElement.GetItemDataForId<SystemTreeViewItemData>(m_LastSelectedItemId) == null)
                 return;
 
-            if (SelectedSystem.Valid && SelectedSystem.WorldProxy.Equals(m_WorldProxy) && m_AllSystemsForSearch.Count > 0)
-            {
-                 var selectedSystem = m_AllSystemsForSearch.FirstOrDefault(s => s.SystemProxy.Equals(SelectedSystem));
-                 if (selectedSystem != null)
-                     m_LastSelectedItemId = selectedSystem.SystemItemId;
-            }
-
-            if (SearchFilter.IsEmpty) // Tree view
-            {
-                m_SystemTreeView.ClearSelection();
-                if (m_SystemTreeView.FindItem(m_LastSelectedItemId) == null)
-                    return;
-
-                m_SystemTreeView.Select(m_LastSelectedItemId, false);
-            }
-            else // List view
-            {
-                m_SystemListView.ClearSelection();
-                var index = m_ListViewFilteredItems.FindIndex(item => item.id == m_LastSelectedItemId);
-                if (index == -1)
-                    return;
-
-                m_SystemListView.ScrollToItem(index);
-                m_SystemListView.selectedIndex = index;
-            }
+            MultiColumnTreeViewElement.SetSelectionByIdWithoutNotify(new []{ m_LastSelectedItemId });
+            MultiColumnTreeViewElement.RefreshItems();
+            MultiColumnTreeViewElement.ScrollToItemById(m_LastSelectedItemId);
         }
 
-        void BindTreeViewItem(VisualElement element, ITreeViewItem item)
+        public bool TrySelectSystem(SystemProxy systemProxy)
         {
-            var target = item as SystemTreeViewItem;
+            if (!systemProxy.Valid)
+                return false;
+
+            SystemDescriptor descriptor = null;
+            foreach (var s in m_AllSystemsForSearch)
+            {
+                if (s.Proxy.Equals(systemProxy))
+                {
+                    descriptor = s;
+                    break;
+                }
+            }
+
+            if (descriptor?.Node == null)
+                return false;
+
+            var id = descriptor.Node.Hash;
+            if (MultiColumnTreeViewElement.GetItemDataForId<SystemTreeViewItemData>(id) == null)
+                return false;
+
+            SelectedSystem = systemProxy;
+            // With-notify variant so OnSelectionChangedInternal runs and refreshes arrows,
+            // highlighted dependency rows, and fires systemSelectionChanged for the inspector.
+            MultiColumnTreeViewElement.SetSelectionById(new[] { id });
+            MultiColumnTreeViewElement.ScrollToItemById(id);
+            return true;
+        }
+
+        void BindSystemItem(VisualElement element, int index)
+        {
+            var progressItem = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(index);
             var systemInformationElement = element as SystemInformationVisualElement;
             if (null == systemInformationElement)
                 return;
 
-            systemInformationElement.Target = target;
-            systemInformationElement.Update();
+            systemInformationElement.IndexInTreeView = index;
+            systemInformationElement.Target = progressItem;
         }
 
-        void BindListViewItem(VisualElement element, int itemIndex) => BindTreeViewItem(element[0], (ITreeViewItem)m_SystemListView.itemsSource[itemIndex]);
+        void BindSchedulingCell(VisualElement element, int index)
+        {
+            var progressItem = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(index);
+            if (progressItem == null)
+                return;
+
+            var updateBeforeLabel = element.Q<Label>(k_UpdateBeforeLabel);
+            var updateAfterLabel = element.Q<Label>(k_UpdateAfterLabel);
+            var updateBeforeReverseLabel = element.Q<Label>(k_UpdateBeforeReverseLabel);
+            var updateAfterReverseLabel = element.Q<Label>(k_UpdateAfterReverseLabel);
+
+            var systemProxy = progressItem.SystemProxy;
+            element.AddToClassList(UssClasses.SystemScheduleWindow.Items.SchedulingNameColumn);
+
+            if (!systemProxy.Valid)
+            {
+                SetSchedulingLabel(updateBeforeLabel, false, null);
+                SetSchedulingLabel(updateAfterLabel, false, null);
+                SetSchedulingLabel(updateBeforeReverseLabel, false, null);
+                SetSchedulingLabel(updateAfterReverseLabel, false, null);
+                return;
+            }
+
+            var systemIndex = systemProxy.SystemIndex;
+
+            SetSchedulingLabel(updateBeforeLabel, m_UpdateBeforeHighlightedSystems.Contains(systemIndex), "UpdateBefore");
+            SetSchedulingLabel(updateAfterLabel, m_UpdateAfterHighlightedSystems.Contains(systemIndex), "UpdateAfter");
+            SetSchedulingLabel(updateBeforeReverseLabel, m_UpdateBeforeReverseHighlightedSystems.Contains(systemIndex), "Scheduled before");
+            SetSchedulingLabel(updateAfterReverseLabel, m_UpdateAfterReverseHighlightedSystems.Contains(systemIndex), "Scheduled after");
+        }
+
+        static void SetSchedulingLabel(Label label, bool visible, string text)
+        {
+            label.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            label.text = text;
+        }
+
+        void BuildHighlightedTreeViewIndices()
+        {
+            m_HighlightedTreeViewIndices.Clear();
+
+            if (m_UpdateBeforeHighlightedSystems.Count == 0 &&
+                m_UpdateAfterHighlightedSystems.Count == 0 &&
+                m_UpdateBeforeReverseHighlightedSystems.Count == 0 &&
+                m_UpdateAfterReverseHighlightedSystems.Count == 0)
+                return;
+
+            var totalItems = MultiColumnTreeViewElement.GetTreeCount();
+            for (var i = 0; i < totalItems; i++)
+            {
+                var item = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(i);
+                if (item?.SystemProxy == null || !item.SystemProxy.Valid)
+                    continue;
+
+                var sysIndex = item.SystemProxy.SystemIndex;
+                if (m_UpdateBeforeHighlightedSystems.Contains(sysIndex) ||
+                    m_UpdateAfterHighlightedSystems.Contains(sysIndex) ||
+                    m_UpdateBeforeReverseHighlightedSystems.Contains(sysIndex) ||
+                    m_UpdateAfterReverseHighlightedSystems.Contains(sysIndex))
+                {
+                    m_HighlightedTreeViewIndices.Add(i);
+                }
+            }
+        }
+
+        void UpdateArrowIndicators()
+        {
+            if (m_UpArrowIndicator == null || m_DownArrowIndicator == null)
+                return;
+
+            if (m_HighlightedTreeViewIndices.Count == 0)
+            {
+                m_UpArrowIndicator.style.display = DisplayStyle.None;
+                m_DownArrowIndicator.style.display = DisplayStyle.None;
+                return;
+            }
+
+            var scrollView = MultiColumnTreeViewElement.Q<ScrollView>();
+            if (scrollView == null)
+            {
+                m_UpArrowIndicator.style.display = DisplayStyle.None;
+                m_DownArrowIndicator.style.display = DisplayStyle.None;
+                return;
+            }
+
+            var scrollOffset = scrollView.scrollOffset.y;
+            var viewportHeight = scrollView.contentViewport.layout.height;
+            var itemHeight = MultiColumnTreeViewElement.fixedItemHeight;
+
+            if (itemHeight <= 0 || float.IsNaN(viewportHeight) || viewportHeight <= 0)
+            {
+                m_UpArrowIndicator.style.display = DisplayStyle.None;
+                m_DownArrowIndicator.style.display = DisplayStyle.None;
+                return;
+            }
+
+            var firstVisibleIndex = (int)(scrollOffset / itemHeight);
+            var lastVisibleIndex = (int)((scrollOffset + viewportHeight) / itemHeight);
+
+            var aboveCount = 0;
+            var belowCount = 0;
+            foreach (var idx in m_HighlightedTreeViewIndices)
+            {
+                if (idx < firstVisibleIndex)
+                    aboveCount++;
+                else if (idx > lastVisibleIndex)
+                    belowCount++;
+            }
+
+            if (aboveCount > 0)
+            {
+                m_UpArrowIndicator.style.display = DisplayStyle.Flex;
+                m_UpArrowCount.text = aboveCount > 1 ? $"{aboveCount} dependencies above" : "1 dependency above";
+            }
+            else
+            {
+                m_UpArrowIndicator.style.display = DisplayStyle.None;
+            }
+
+            if (belowCount > 0)
+            {
+                m_DownArrowIndicator.style.display = DisplayStyle.Flex;
+                m_DownArrowCount.text = belowCount > 1 ? $"{belowCount} dependencies below" : "1 dependency below";
+            }
+            else
+            {
+                m_DownArrowIndicator.style.display = DisplayStyle.None;
+            }
+        }
+
+        void ScrollToNextHighlightedSystem(bool up)
+        {
+            if (m_HighlightedTreeViewIndices.Count == 0)
+                return;
+
+            var scrollView = MultiColumnTreeViewElement.Q<ScrollView>();
+            if (scrollView == null)
+                return;
+
+            var scrollOffset = scrollView.scrollOffset.y;
+            var viewportHeight = scrollView.contentViewport.layout.height;
+            var itemHeight = MultiColumnTreeViewElement.fixedItemHeight;
+
+            if (itemHeight <= 0 || float.IsNaN(viewportHeight) || viewportHeight <= 0)
+                return;
+
+            var firstVisibleIndex = (int)(scrollOffset / itemHeight);
+            var lastVisibleIndex = (int)((scrollOffset + viewportHeight) / itemHeight);
+
+            if (up)
+            {
+                for (var i = m_HighlightedTreeViewIndices.Count - 1; i >= 0; i--)
+                {
+                    if (m_HighlightedTreeViewIndices[i] < firstVisibleIndex)
+                    {
+                        MultiColumnTreeViewElement.ScrollToItem(m_HighlightedTreeViewIndices[i]);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var idx in m_HighlightedTreeViewIndices)
+                {
+                    if (idx > lastVisibleIndex)
+                    {
+                        MultiColumnTreeViewElement.ScrollToItem(idx);
+                        return;
+                    }
+                }
+            }
+        }
+
+        void BindNamespaceCell(VisualElement element, int index)
+        {
+            var progressItem = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(index);
+            if (progressItem != null)
+            {
+                Label label = element.Q<Label>("Cell");
+                label.text = progressItem.GetNamespace();
+                element.AddToClassList(UssClasses.SystemScheduleWindow.Items.NamespaceColumn);
+                label.AddToClassList(UssClasses.SystemScheduleWindow.Items.Namespace);
+                if (progressItem.SystemProxy != null && progressItem.SystemProxy.Valid)
+                {
+                    var groupState = progressItem.SystemProxy.Enabled && progressItem.GetParentState();
+                    label.SetEnabled(groupState);
+                }
+            }
+        }
+
+        void BindEntityCountCell(VisualElement element, int index)
+        {
+            var progressItem = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(index);
+            if (progressItem != null)
+            {
+                Label label = element.Q<Label>("Cell");
+                var entityCount = progressItem.GetEntityMatches();
+                label.text = entityCount;
+                element.AddToClassList(UssClasses.SystemScheduleWindow.Items.EntityCountColumn);
+                label.AddToClassList(UssClasses.SystemScheduleWindow.Items.EntityCount);
+                if (progressItem.SystemProxy.Valid)
+                {
+                    var groupState = progressItem.SystemProxy.Enabled && progressItem.GetParentState();
+                    label.SetEnabled(groupState);
+                }
+                if (!Show0sInEntityCountAndTimeColumn && entityCount.Equals("0"))
+                {
+                    label.Hide();
+                }
+                else
+                {
+                    label.Show();
+                }
+            }
+        }
+
+        void BindRunningTimeCell(VisualElement element, int index)
+        {
+            var progressItem = MultiColumnTreeViewElement.GetItemDataForIndex<SystemTreeViewItemData>(index);
+            if (progressItem != null)
+            {
+                Label label = element.Q<Label>("Cell");
+                var runningTime = progressItem.GetRunningTime(ShowMorePrecisionForRunningTime);
+                label.text = runningTime;
+                element.AddToClassList(UssClasses.SystemScheduleWindow.Items.TimeColumn);
+                label.AddToClassList(UssClasses.SystemScheduleWindow.Items.Time);
+                if (progressItem.SystemProxy != null && progressItem.SystemProxy.Valid)
+                {
+                    var groupState = progressItem.SystemProxy.Enabled && progressItem.GetParentState();
+                    label.SetEnabled(groupState);
+                }
+                if (!Show0sInEntityCountAndTimeColumn &&
+                    (runningTime.Equals("0.00") || runningTime.Equals("0.0000")))
+                {
+                    label.Hide();
+                }
+                else
+                {
+                    label.Show();
+                }
+            }
+        }
 
         public void Dispose() => ReleaseAllPooledItems();
 
         void ReleaseAllPooledItems()
         {
-            foreach (var rootItem in m_TreeViewRootItems)
+            foreach (var rootItem in TreeViewRootItems)
             {
-                ((SystemTreeViewItem)rootItem).Release();
+                rootItem.data.Release();
             }
-            m_TreeViewRootItems.Clear();
+            TreeViewRootItems.Clear();
 
             foreach (var filteredItem in m_ListViewFilteredItems)
             {
-                filteredItem.Release();
+                filteredItem.data.Release();
             }
             m_ListViewFilteredItems.Clear();
+            k_CellLabelPool.Clear();
         }
     }
 }

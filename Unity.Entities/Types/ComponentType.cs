@@ -80,6 +80,7 @@ namespace Unity.Entities
         /// <summary>
         /// True if the component type is a managed component
         /// </summary>
+        [Obsolete("Managed component types are deprecated. This helper will be removed once managed components are no longer supported. First deprecated in 6.6.")]
         public bool IsManagedComponent => TypeIndex.IsManagedComponent;
         /// <summary>
         /// True if the component type does not contain actual fields or data

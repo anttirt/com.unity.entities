@@ -21,6 +21,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         }
     }
 
+    public class EntityIdUtils
+    {
+        public static EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
+    }
+
     public class DefaultAuthoringComponent : MonoBehaviour { public int Field; }
     public class Authoring_WithGameObjectField : MonoBehaviour { public GameObject GameObjectField; }
     public class Authoring_AddComponentByComponentType_PrimaryEntity : MonoBehaviour { public int Field; }
@@ -65,7 +70,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     struct GetComponentTest1 : IComponentData
     {
         public int Field;
-        public int GUID;
+        public EntityId GUID;
     }
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
@@ -95,19 +100,20 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         public int Field;
     }
 
-    struct IntElement : IBufferElementData
+    public struct EntityIdElement : IBufferElementData
     {
-        public static implicit operator int(IntElement e)
+        public static implicit operator EntityId(EntityIdElement e)
         {
             return e.Value;
         }
 
-        public static implicit operator IntElement(int e)
+        public static implicit operator EntityIdElement(EntityId e)
         {
-            return new IntElement {Value = e};
+            return new EntityIdElement { Value = e };
         }
 
-        public int Value;
+        public EntityId Value;
+
     }
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
@@ -115,8 +121,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(DefaultAuthoringComponent authoring)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddComponentObject(GetEntity(authoring, TransformUsageFlags.None), new ManagedComponent() { Field = 2});
             AddComponentObject(CreateAdditionalEntity(TransformUsageFlags.None), new ManagedComponent(){Field = 4});
+            #pragma warning restore 0618
         }
     }
 #endif
@@ -135,7 +143,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         public override void Bake(DefaultAuthoringComponent component)
         {
             var manager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddComponentObject(manager.CreateEntity(), new ManagedComponent());
+            #pragma warning restore 0618
         }
     }
 #endif
@@ -303,7 +313,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged<UnmanagedSharedComponent>(entity, new UnmanagedSharedComponent { Field = 1 });
+            #pragma warning restore 0618
         }
     }
 
@@ -315,7 +327,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(Authoring_AddSharedComponentGeneric_SecondaryValidEntity component)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged<UnmanagedSharedComponent>(CreateAdditionalEntity(TransformUsageFlags.None), new UnmanagedSharedComponent { Field = 3 });
+            #pragma warning restore 0618
         }
     }
 
@@ -327,7 +341,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(DefaultAuthoringComponent component)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged<UnmanagedSharedComponent>(Entity.Null, new UnmanagedSharedComponent { Field = 3 });
+            #pragma warning restore 0618
         }
     }
 
@@ -375,10 +391,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
-            AddBuffer<IntElement>(entity);
-            AppendToBuffer(entity, new IntElement{Value = 1});
-            AppendToBuffer(entity, new IntElement{Value = 2});
-            AppendToBuffer(entity, new IntElement{Value = 3});
+            AddBuffer<EntityIdElement>(entity);
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(1)});
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(2)});
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(3)});
         }
     }
 
@@ -391,10 +407,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         public override void Bake(Authoring_AddBufferGeneric_SecondaryValidEntity component)
         {
             var entity = CreateAdditionalEntity(TransformUsageFlags.None);
-            AddBuffer<IntElement>(entity);
-            AppendToBuffer(entity, new IntElement{Value = 1});
-            AppendToBuffer(entity, new IntElement{Value = 2});
-            AppendToBuffer(entity, new IntElement{Value = 3});
+            AddBuffer<EntityIdElement>(entity);
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(1)});
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(2)});
+            AppendToBuffer(entity, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId(3)});
         }
     }
 
@@ -406,9 +422,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(DefaultAuthoringComponent component)
         {
-            AppendToBuffer(Entity.Null, new IntElement{Value = 1});
-            AppendToBuffer(Entity.Null, new IntElement{Value = 2});
-            AppendToBuffer(Entity.Null, new IntElement{Value = 3});
+            AppendToBuffer(Entity.Null, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId((uint)1)});
+            AppendToBuffer(Entity.Null, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId((uint)2)});
+            AppendToBuffer(Entity.Null, new EntityIdElement{Value = EntityIdUtils.CreateTestEntityId((uint)3)});
         }
     }
 
@@ -420,9 +436,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
-            AddBuffer<IntElement>(entity);
-            DynamicBuffer<IntElement> buffer = SetBuffer<IntElement>(entity);
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            AddBuffer<EntityIdElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = SetBuffer<EntityIdElement>(entity);
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -435,9 +451,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         public override void Bake(Authoring_AddBufferGeneric_SecondaryValidEntity component)
         {
             var entity = CreateAdditionalEntity(TransformUsageFlags.None);
-            AddBuffer<IntElement>(entity);
-            DynamicBuffer<IntElement> buffer = SetBuffer<IntElement>(entity);
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            AddBuffer<EntityIdElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = SetBuffer<EntityIdElement>(entity);
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -449,8 +465,8 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(DefaultAuthoringComponent component)
         {
-            DynamicBuffer<IntElement> buffer = SetBuffer<IntElement>(Entity.Null);
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            DynamicBuffer<EntityIdElement> buffer = SetBuffer<EntityIdElement>(Entity.Null);
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -462,8 +478,8 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -475,8 +491,8 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(Authoring_AddBufferGeneric_SecondaryValidEntity component)
         {
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(CreateAdditionalEntity(TransformUsageFlags.None));
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(CreateAdditionalEntity(TransformUsageFlags.None));
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -488,8 +504,8 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     {
         public override void Bake(DefaultAuthoringComponent component)
         {
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(Entity.Null);
-            buffer.CopyFrom(new IntElement[] { 1, 2, 3 });
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(Entity.Null);
+            buffer.CopyFrom(new EntityIdElement[] { EntityIdUtils.CreateTestEntityId(1), EntityIdUtils.CreateTestEntityId(2), EntityIdUtils.CreateTestEntityId(3) });
         }
     }
 
@@ -518,7 +534,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -535,7 +551,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -552,7 +568,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -570,7 +586,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -588,7 +604,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -604,10 +620,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponents<Collider>();
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -623,10 +639,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponents<Collider>(component);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -642,10 +658,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponents<Collider>(component.gameObject);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -662,10 +678,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -682,10 +698,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(component, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -702,10 +718,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(component.gameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -723,10 +739,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(nullGo, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -744,10 +760,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -765,10 +781,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(nullGo, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -786,10 +802,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponents<Collider>(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -806,7 +822,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -823,7 +839,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -840,7 +856,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -858,7 +874,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -876,7 +892,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -892,10 +908,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInParent<Collider>();
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -911,10 +927,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInParent<Collider>(component);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -930,10 +946,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInParent<Collider>(component.gameObject);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -950,10 +966,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInParent<Collider>(nullComponent);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -970,10 +986,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var entity = GetEntity(TransformUsageFlags.None);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -990,10 +1006,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInParent<Collider>(found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1010,10 +1026,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInParent<Collider>(component, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1030,10 +1046,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInParent<Collider>(component.gameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1051,10 +1067,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInParent<Collider>(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1072,10 +1088,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInParent<Collider>(nullGameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1092,7 +1108,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1109,7 +1125,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1126,7 +1142,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1144,7 +1160,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1162,7 +1178,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1178,10 +1194,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInChildren<Collider>();
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1197,10 +1213,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInChildren<Collider>(component.gameObject);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1216,10 +1232,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInChildren<Collider>(component);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1236,10 +1252,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInChildren<Collider>(nullGo);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1256,10 +1272,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetComponentsInChildren<Collider>(nullComponent);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1276,10 +1292,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInChildren<Collider>(found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1296,10 +1312,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInChildren<Collider>(component.gameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1316,10 +1332,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInChildren<Collider>(component, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1337,10 +1353,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInChildren<Collider>(nullGo, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1358,10 +1374,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetComponentsInChildren<Collider>(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1378,7 +1394,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1395,7 +1411,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1412,7 +1428,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1430,7 +1446,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1448,7 +1464,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = (found != null ? 1 : 0),
-                GUID = found != null ? found.GetInstanceID() : 0
+                GUID = found != null ? found.GetEntityId() : EntityId.None
             });
         }
     }
@@ -1464,10 +1480,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetParents();
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1483,10 +1499,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetParents(component);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1502,10 +1518,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetParents(component.gameObject);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1522,10 +1538,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetParents(nullComponent);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1542,10 +1558,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetParents(nullGameObject);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1562,10 +1578,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetParents(found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1582,10 +1598,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetParents(component, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1602,10 +1618,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetParents(component.gameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1623,10 +1639,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetParents(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1644,10 +1660,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetParents(nullGameObject, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1657,6 +1673,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChild_PrimaryEntity : Baker<DefaultAuthoringComponent>
     {
         public static int QueryIndex;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1665,7 +1682,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = count,
-                GUID = count > 0 ? GetChild(QueryIndex).GetInstanceID() : 0
+                GUID = count > 0 ? GetChild(QueryIndex).GetEntityId() : EntityId.None
             });
         }
     }
@@ -1675,6 +1692,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChild_GameObject : Baker<DefaultAuthoringComponent>
     {
         public static int QueryIndex;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1683,7 +1701,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = count,
-                GUID = count > 0 ? GetChild(component.gameObject, QueryIndex).GetInstanceID() : 0
+                GUID = count > 0 ? GetChild(component.gameObject, QueryIndex).GetEntityId() : EntityId.None
             });
         }
     }
@@ -1693,6 +1711,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChild_Component : Baker<DefaultAuthoringComponent>
     {
         public static int QueryIndex;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1701,7 +1720,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = count,
-                GUID = count > 0 ? GetChild(component, QueryIndex).GetInstanceID() : 0
+                GUID = count > 0 ? GetChild(component, QueryIndex).GetEntityId() : EntityId.None
             });
         }
     }
@@ -1718,7 +1737,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = GetChildCount(),
-                GUID = GetChild(nullGo, 0).GetInstanceID()
+                GUID = GetChild(nullGo, 0).GetEntityId()
             });
         }
     }
@@ -1735,7 +1754,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             AddComponent(entity, new GetComponentTest1()
             {
                 Field = GetChildCount(),
-                GUID = GetChild(nullComponent, 0).GetInstanceID()
+                GUID = GetChild(nullComponent, 0).GetEntityId()
             });
         }
     }
@@ -1745,6 +1764,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_PrimaryEntity : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1752,10 +1772,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetChildren(Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1765,6 +1785,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_GameObject : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1772,10 +1793,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetChildren(component.gameObject, Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1785,6 +1806,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_Component : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1792,10 +1814,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetChildren(component, Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1812,10 +1834,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetChildren(nullGo);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1825,6 +1847,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_ComponentNull : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1833,10 +1856,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             var found = GetChildren(nullComponent);
             AddComponent(entity, new ComponentTest1() {Field = found.Length});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1846,6 +1869,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_PrimaryEntity_PassingList : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1854,10 +1878,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetChildren(found, Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1867,6 +1891,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_GameObject_PassingList : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1875,10 +1900,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetChildren(component.gameObject, found, Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1888,6 +1913,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
     public sealed class GetChildren_Component_PassingList : Baker<DefaultAuthoringComponent>
     {
         public static bool Recursive;
+
         public override void Bake(DefaultAuthoringComponent component)
         {
             // This test shouldn't require transform components
@@ -1896,10 +1922,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetChildren(component, found, Recursive);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1917,10 +1943,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetChildren(nullGo, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -1938,10 +1964,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             GetChildren(nullComponent, found);
             AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-            DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+            DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
             foreach (var obj in found)
             {
-                buffer.Add(obj.GetInstanceID());
+                buffer.Add(obj.GetEntityId());
             }
         }
     }
@@ -2063,7 +2089,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         }
     }
 
-    public class BakerTests : BakingSystemFixtureBase
+    public partial class BakerTests : BakingSystemFixtureBase
     {
         private BakingSystem m_BakingSystem;
         private GameObject m_Prefab;
@@ -2130,8 +2156,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 Assert.IsTrue(m_Manager.HasComponent<ManagedComponent>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<ManagedComponent>(entities[1]));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var comp1 = m_Manager.GetComponentData<ManagedComponent>(entities[0]);
                 var comp2 = m_Manager.GetComponentData<ManagedComponent>(entities[1]);
+                #pragma warning restore 0618
 
                 Assert.IsTrue(comp1.Field == 2);
                 Assert.IsTrue(comp2.Field == 4);
@@ -2394,10 +2422,14 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 Assert.IsTrue(m_Manager.HasComponent<UnmanagedSharedComponent>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<UnmanagedSharedComponent>(entities[1]));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 UnmanagedSharedComponent unmanagedSharedComponentPrimary0 = m_Manager.GetSharedComponentManaged<UnmanagedSharedComponent>(entities[0]);
+                #pragma warning restore 0618
                 Assert.IsTrue(unmanagedSharedComponentPrimary0.Field == 1);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 UnmanagedSharedComponent unmanagedSharedComponentPrimary1 = m_Manager.GetSharedComponentManaged<UnmanagedSharedComponent>(entities[1]);
+                #pragma warning restore 0618
                 Assert.IsTrue(unmanagedSharedComponentPrimary1.Field == 3);
             }
         }
@@ -2431,10 +2463,14 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 Assert.IsTrue(m_Manager.HasComponent<UnmanagedSharedComponent>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<UnmanagedSharedComponent>(entities[1]));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 UnmanagedSharedComponent unmanagedSharedComponentPrimary0 = m_Manager.GetSharedComponentManaged<UnmanagedSharedComponent>(entities[0]);
+                #pragma warning restore 0618
                 Assert.IsTrue(unmanagedSharedComponentPrimary0.Field == 1);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 UnmanagedSharedComponent unmanagedSharedComponentPrimary1 = m_Manager.GetSharedComponentManaged<UnmanagedSharedComponent>(entities[1]);
+                #pragma warning restore 0618
                 Assert.IsTrue(unmanagedSharedComponentPrimary1.Field == 3);
             }
         }
@@ -2465,13 +2501,13 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var entities = m_BakingSystem.GetEntitiesForBakers(component1).ToNativeArray(Allocator.Temp);
                 Assert.IsTrue(entities.Length == 2);
 
-                var resultBuffer0 = m_Manager.GetBuffer<IntElement>(entities[0]);
-                var resultBuffer1 = m_Manager.GetBuffer<IntElement>(entities[1]);
+                var resultBuffer0 = m_Manager.GetBuffer<EntityIdElement>(entities[0]);
+                var resultBuffer1 = m_Manager.GetBuffer<EntityIdElement>(entities[1]);
                 Assert.IsTrue(resultBuffer0.Length == resultBuffer1.Length);
                 for (int i=0; i<resultBuffer0.Length; ++i)
                 {
-                    Assert.AreEqual(i + 1, resultBuffer0[i].Value);
-                    Assert.AreEqual(i + 1, resultBuffer1[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1) , resultBuffer0[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1), resultBuffer1[i].Value);
                 }
             }
         }
@@ -2501,13 +2537,13 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var entities = m_BakingSystem.GetEntitiesForBakers(component1).ToNativeArray(Allocator.Temp);
                 Assert.IsTrue(entities.Length == 2);
 
-                var resultBuffer0 = m_Manager.GetBuffer<IntElement>(entities[0]);
-                var resultBuffer1 = m_Manager.GetBuffer<IntElement>(entities[1]);
+                var resultBuffer0 = m_Manager.GetBuffer<EntityIdElement>(entities[0]);
+                var resultBuffer1 = m_Manager.GetBuffer<EntityIdElement>(entities[1]);
                 Assert.IsTrue(resultBuffer0.Length == resultBuffer1.Length);
                 for (int i=0; i<resultBuffer0.Length; ++i)
                 {
-                    Assert.AreEqual(i + 1, resultBuffer0[i].Value);
-                    Assert.AreEqual(i + 1, resultBuffer1[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1), resultBuffer0[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1), resultBuffer1[i].Value);
                 }
             }
         }
@@ -2537,13 +2573,13 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var entities = m_BakingSystem.GetEntitiesForBakers(component1).ToNativeArray(Allocator.Temp);
                 Assert.IsTrue(entities.Length == 2);
 
-                var resultBuffer0 = m_Manager.GetBuffer<IntElement>(entities[0]);
-                var resultBuffer1 = m_Manager.GetBuffer<IntElement>(entities[1]);
+                var resultBuffer0 = m_Manager.GetBuffer<EntityIdElement>(entities[0]);
+                var resultBuffer1 = m_Manager.GetBuffer<EntityIdElement>(entities[1]);
                 Assert.IsTrue(resultBuffer0.Length == resultBuffer1.Length);
                 for (int i=0; i<resultBuffer0.Length; ++i)
                 {
-                    Assert.AreEqual(i + 1, resultBuffer0[i].Value);
-                    Assert.AreEqual(i + 1, resultBuffer1[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1), resultBuffer0[i].Value);
+                    Assert.AreEqual(EntityIdUtils.CreateTestEntityId((uint)i+1), resultBuffer1[i].Value);
                 }
             }
         }
@@ -2783,7 +2819,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 // SetSharedComponent was rejected thus the value continues to be 0
                 var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(SharedComponentTest1)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data = World.EntityManager.GetSharedComponentManaged<SharedComponentTest1>(entities[0]);
+                #pragma warning restore 0618
                 Assert.AreEqual(0, data.Field);
             }
         }
@@ -2810,7 +2848,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
 
                 var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(SharedComponentTest1)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data = World.EntityManager.GetSharedComponentManaged<SharedComponentTest1>(entities[0]);
+                #pragma warning restore 0618
                 Assert.AreEqual(5, data.Field);
             }
         }
@@ -2953,10 +2993,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 // This test shouldn't require transform components
                 var entity = GetEntity(TransformUsageFlags.None);
-                var buffer = SetBuffer<IntElement>(entity);
-                buffer.Add(new IntElement {Value = 4});
-                buffer.Add(new IntElement {Value = 5});
-                buffer.Add(new IntElement {Value = 6});
+                var buffer = SetBuffer<EntityIdElement>(entity);
+                buffer.Add(new EntityIdElement {Value = EntityId.FromULong(4)});
+                buffer.Add(new EntityIdElement {Value = EntityId.FromULong(5)});
+                buffer.Add(new EntityIdElement {Value = EntityId.FromULong(6)});
             }
         }
 
@@ -2968,16 +3008,16 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             using (new BakerDataUtility.OverrideBakers(true, typeof(SetBufferFromSameBakerWorksBaker),
                 typeof(SetBufferFromOtherBakerThrowsBaker)))
             {
-                UnityEngine.TestTools.LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: Baking error: Attempt to set component Unity.Entities.Hybrid.Tests.Baking.IntElement for Baker SetBufferFromOtherBakerThrowsBaker with authoring component DefaultAuthoringComponent but the component was added by a different Baker SetBufferFromSameBakerWorksBaker"));
+                UnityEngine.TestTools.LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: Baking error: Attempt to set component Unity.Entities.Hybrid.Tests.Baking.EntityIdElement for Baker SetBufferFromOtherBakerThrowsBaker with authoring component DefaultAuthoringComponent but the component was added by a different Baker SetBufferFromSameBakerWorksBaker"));
                 BakingUtility.BakeGameObjects(World, new[] {m_Prefab}, m_BakingSystem.BakingSettings);
 
-                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(IntElement)}});
+                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(EntityIdElement)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
-                var data = World.EntityManager.GetBuffer<IntElement>(entities[0]);
+                var data = World.EntityManager.GetBuffer<EntityIdElement>(entities[0]);
                 Assert.AreEqual(3, data.Length);
-                Assert.AreEqual(1, data[0].Value);
-                Assert.AreEqual(2, data[1].Value);
-                Assert.AreEqual(3, data[2].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(1), data[0].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(2), data[1].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(3), data[2].Value);
             }
         }
 
@@ -2988,11 +3028,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 // This test shouldn't require transform components
                 var entity = GetEntity(TransformUsageFlags.None);
-                AddBuffer<IntElement>(entity);
-                var buffer = SetBuffer<IntElement>(entity);
-                buffer.Add(new IntElement {Value = 1});
-                buffer.Add(new IntElement {Value = 2});
-                buffer.Add(new IntElement {Value = 3});
+                AddBuffer<EntityIdElement>(entity);
+                var buffer = SetBuffer<EntityIdElement>(entity);
+                buffer.Add(new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(1)});
+                buffer.Add(new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(2)});
+                buffer.Add(new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(3)});
             }
         }
 
@@ -3005,13 +3045,13 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 BakingUtility.BakeGameObjects(World, new[] {m_Prefab}, m_BakingSystem.BakingSettings);
 
-                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(IntElement)}});
+                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(EntityIdElement)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
-                var data = World.EntityManager.GetBuffer<IntElement>(entities[0]);
+                var data = World.EntityManager.GetBuffer<EntityIdElement>(entities[0]);
                 Assert.AreEqual(3, data.Length);
-                Assert.AreEqual(1, data[0].Value);
-                Assert.AreEqual(2, data[1].Value);
-                Assert.AreEqual(3, data[2].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(1), data[0].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(2), data[1].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(3), data[2].Value);
             }
         }
 
@@ -3022,9 +3062,9 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 // This test shouldn't require transform components
                 var entity = GetEntity(TransformUsageFlags.None);
-                AppendToBuffer(entity, new IntElement {Value = 4});
-                AppendToBuffer(entity, new IntElement {Value = 5});
-                AppendToBuffer(entity, new IntElement {Value = 6});
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(4)});
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(5)});
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(6)});
             }
         }
 
@@ -3036,16 +3076,16 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             using (new BakerDataUtility.OverrideBakers(true, typeof(AppendToBufferFromSameBakerWorksBaker),
                 typeof(AppendToBufferFromOtherBakerThrowsBaker)))
             {
-                UnityEngine.TestTools.LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: Baking error: Attempt to set component Unity.Entities.Hybrid.Tests.Baking.IntElement for Baker AppendToBufferFromOtherBakerThrowsBaker with authoring component DefaultAuthoringComponent but the component was added by a different Baker AppendToBufferFromSameBakerWorksBaker"));
+                UnityEngine.TestTools.LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: Baking error: Attempt to set component Unity.Entities.Hybrid.Tests.Baking.EntityIdElement for Baker AppendToBufferFromOtherBakerThrowsBaker with authoring component DefaultAuthoringComponent but the component was added by a different Baker AppendToBufferFromSameBakerWorksBaker"));
                 BakingUtility.BakeGameObjects(World, new[] {m_Prefab}, m_BakingSystem.BakingSettings);
 
-                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(IntElement)}});
+                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(EntityIdElement)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
-                var data = World.EntityManager.GetBuffer<IntElement>(entities[0]);
+                var data = World.EntityManager.GetBuffer<EntityIdElement>(entities[0]);
                 Assert.AreEqual(3, data.Length);
-                Assert.AreEqual(1, data[0].Value);
-                Assert.AreEqual(2, data[1].Value);
-                Assert.AreEqual(3, data[2].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(1), data[0].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(2), data[1].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(3), data[2].Value);
             }
         }
 
@@ -3056,10 +3096,10 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 // This test shouldn't require transform components
                 var entity = GetEntity(TransformUsageFlags.None);
-                AddBuffer<IntElement>(entity);
-                AppendToBuffer(entity, new IntElement {Value = 1});
-                AppendToBuffer(entity, new IntElement {Value = 2});
-                AppendToBuffer(entity, new IntElement {Value = 3});
+                AddBuffer<EntityIdElement>(entity);
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(1)});
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(2)});
+                AppendToBuffer(entity, new EntityIdElement {Value = EntityIdUtils.CreateTestEntityId(3)});
             }
         }
 
@@ -3072,13 +3112,13 @@ namespace Unity.Entities.Hybrid.Tests.Baking
             {
                 BakingUtility.BakeGameObjects(World, new[] {m_Prefab}, m_BakingSystem.BakingSettings);
 
-                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(IntElement)}});
+                var query = World.EntityManager.CreateEntityQuery(new EntityQueryDesc {All = new ComponentType[]{typeof(EntityIdElement)}});
                 var entities = query.ToEntityArray(Allocator.Temp);
-                var data = World.EntityManager.GetBuffer<IntElement>(entities[0]);
+                var data = World.EntityManager.GetBuffer<EntityIdElement>(entities[0]);
                 Assert.AreEqual(3, data.Length);
-                Assert.AreEqual(1, data[0].Value);
-                Assert.AreEqual(2, data[1].Value);
-                Assert.AreEqual(3, data[2].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(1), data[0].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(2), data[1].Value);
+                Assert.AreEqual(EntityIdUtils.CreateTestEntityId(3), data[2].Value);
             }
         }
 
@@ -3128,7 +3168,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponent = m_Prefab.GetComponentInParent<Collider>();
                 if (foundComponent != null)
                 {
-                    Assert.AreEqual(component1.GUID, foundComponent.GetInstanceID());
+                    Assert.AreEqual(component1.GUID, foundComponent.GetEntityId());
                 }
             }
         }
@@ -3167,11 +3207,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponents = m_Prefab.GetComponents<Collider>();
                 if (foundComponents != null && foundComponents.Length > 0)
                 {
-                    var elements = m_Manager.GetBuffer<IntElement>(primaryEntity);
+                    var elements = m_Manager.GetBuffer<EntityIdElement>(primaryEntity);
                     Assert.AreEqual(foundComponents.Length, elements.Length);
                     for (int index = 0; index < foundComponents.Length; ++index)
                     {
-                        Assert.AreEqual(foundComponents[index].GetInstanceID(), elements[index].Value);
+                        Assert.AreEqual(foundComponents[index].GetEntityId(), elements[index].Value);
                     }
                 }
             }
@@ -3209,7 +3249,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponent = current.GetComponentInParent<Collider>();
                 if (foundComponent != null)
                 {
-                    Assert.AreEqual(component1.GUID, foundComponent.GetInstanceID());
+                    Assert.AreEqual(component1.GUID, foundComponent.GetEntityId());
                 }
             }
         }
@@ -3245,11 +3285,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponents = current.GetComponentsInParent<Collider>();
                 if (foundComponents != null && foundComponents.Length > 0)
                 {
-                    var elements = m_Manager.GetBuffer<IntElement>(primaryEntity);
+                    var elements = m_Manager.GetBuffer<EntityIdElement>(primaryEntity);
                     Assert.AreEqual(foundComponents.Length, elements.Length);
                     for (int index = 0; index < foundComponents.Length; ++index)
                     {
-                        Assert.AreEqual(foundComponents[index].GetInstanceID(), elements[index].Value);
+                        Assert.AreEqual(foundComponents[index].GetEntityId(), elements[index].Value);
                     }
                 }
             }
@@ -3288,7 +3328,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponent = root.GetComponentInChildren<Collider>();
                 if (foundComponent != null)
                 {
-                    Assert.AreEqual(component1.GUID, foundComponent.GetInstanceID());
+                    Assert.AreEqual(component1.GUID, foundComponent.GetEntityId());
                 }
             }
         }
@@ -3324,11 +3364,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponents = root.GetComponentsInChildren<Collider>();
                 if (foundComponents != null && foundComponents.Length > 0)
                 {
-                    var elements = m_Manager.GetBuffer<IntElement>(primaryEntity);
+                    var elements = m_Manager.GetBuffer<EntityIdElement>(primaryEntity);
                     Assert.AreEqual(foundComponents.Length, elements.Length);
                     for (int index = 0; index < foundComponents.Length; ++index)
                     {
-                        Assert.AreEqual(foundComponents[index].GetInstanceID(), elements[index].Value);
+                        Assert.AreEqual(foundComponents[index].GetEntityId(), elements[index].Value);
                     }
                 }
             }
@@ -3365,7 +3405,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var found = current.transform.parent;
                 if (found != null)
                 {
-                    Assert.AreEqual(component1.GUID, found.gameObject.GetInstanceID());
+                    Assert.AreEqual(component1.GUID, found.gameObject.GetEntityId());
                 }
             }
         }
@@ -3401,11 +3441,11 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 var foundComponents = current.GetComponentsInParent<Transform>();
                 if (foundComponents != null && foundComponents.Length > 0)
                 {
-                    var elements = m_Manager.GetBuffer<IntElement>(primaryEntity);
+                    var elements = m_Manager.GetBuffer<EntityIdElement>(primaryEntity);
                     Assert.AreEqual(foundComponents.Length - 1, elements.Length);
                     for (int index = 1; index < foundComponents.Length; ++index)
                     {
-                        Assert.AreEqual(foundComponents[index].gameObject.GetInstanceID(), elements[index - 1].Value);
+                        Assert.AreEqual(foundComponents[index].gameObject.GetEntityId(), elements[index - 1].Value);
                     }
                 }
             }
@@ -3460,7 +3500,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                     var foundComponent = root.transform.GetChild(query);
                     if (foundComponent != null)
                     {
-                        Assert.AreEqual(component1.GUID, foundComponent.gameObject.GetInstanceID());
+                        Assert.AreEqual(component1.GUID, foundComponent.gameObject.GetEntityId());
                     }
                 }
             }
@@ -3529,14 +3569,14 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                 Assert.IsTrue(entities.Count == 1);
                 var primaryEntity = m_BakingSystem.GetPrimaryEntity(componentEntity);
 
-                var elements = m_Manager.GetBuffer<IntElement>(primaryEntity);
+                var elements = m_Manager.GetBuffer<EntityIdElement>(primaryEntity);
                 if (recursive)
                 {
                     var list = root.GetComponentsInChildren<Transform>();
                     Assert.AreEqual(list.Length - 1, elements.Length);
                     for (int listIndex = 1; listIndex < list.Length; ++listIndex)
                     {
-                        Assert.AreEqual(list[listIndex].gameObject.GetInstanceID(), elements[listIndex - 1].Value);
+                        Assert.AreEqual(list[listIndex].gameObject.GetEntityId(), elements[listIndex - 1].Value);
                     }
                 }
                 else
@@ -3544,7 +3584,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
                     int index = 0;
                     foreach (Transform child in root.transform)
                     {
-                        Assert.AreEqual(child.gameObject.GetInstanceID(), elements[index].Value);
+                        Assert.AreEqual(child.gameObject.GetEntityId(), elements[index].Value);
                         ++index;
                     }
                     Assert.AreEqual(index, elements.Length);
@@ -3654,6 +3694,7 @@ namespace Unity.Entities.Hybrid.Tests.Baking
         {
             public static bool CreateBatched = false;
             public static int AdditionalEntityCount = 3;
+
             public override void Bake(GameObject authoring)
             {
                 var entities = new NativeArray<Entity>(AdditionalEntityCount, Allocator.Temp);

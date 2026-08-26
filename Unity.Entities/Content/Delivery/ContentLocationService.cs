@@ -114,17 +114,14 @@ namespace Unity.Entities.Content
     }
 
 
-    [Serializable]
     internal struct RemoteContentCatalogData
     {
-        [Serializable]
         public struct RemoteContentLocationData
         {
             public RemoteContentId identifier;
             public RemoteContentLocation location;
         }
 
-        [Serializable]
         public struct RemoteContentSetData
         {
             public FixedString512Bytes Name;

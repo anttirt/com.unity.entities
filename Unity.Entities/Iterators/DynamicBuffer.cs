@@ -390,6 +390,29 @@ namespace Unity.Entities
         }
 
         /// <summary>
+        /// Adds all the elements from <paramref name="newElems"/> to the end
+        /// of the buffer, resizing as necessary.
+        /// </summary>
+        /// <remarks>The buffer is resized if it has no additional capacity.</remarks>
+        /// <example>
+        /// <code source="../../DocCodeSamples.Tests/DynamicBufferExamples.cs" language="csharp" region="dynamicbuffer.addrange"/>
+        /// </example>
+        /// <param name="newElems">The ReadOnlySpan of elements to insert.</param>
+        public void AddRange(ReadOnlySpan<T> newElems)
+        {
+            CheckWriteAccess();
+            int elemSize = UnsafeUtility.SizeOf<T>();
+            int oldLength = Length;
+            ResizeUninitialized(oldLength + newElems.Length);
+
+            byte* basePtr = BufferHeader.GetElementPointer(m_Buffer);
+            fixed(T* elementPointer = newElems)
+            {
+                UnsafeUtility.MemCpy(basePtr + (long)oldLength * elemSize, elementPointer, (long)elemSize * newElems.Length);
+            }
+        }
+
+        /// <summary>
         /// Removes the specified number of elements, starting with the element at the specified index.
         /// </summary>
         /// <remarks>The buffer capacity remains unchanged.</remarks>

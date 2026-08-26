@@ -5,14 +5,15 @@ using Unity.Editor.Bridge;
 using Unity.Profiling;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Pool;
 using UnityObject = UnityEngine.Object;
 
 namespace Unity.Entities.Editor
 {
     static class InspectorDataModeSupport
     {
-        static readonly DataMode[] k_EditorDataModes =  { DataMode.Authoring, DataMode.Mixed, DataMode.Runtime };
-        static readonly DataMode[] k_RuntimeDataModes = { DataMode.Authoring, DataMode.Mixed, DataMode.Runtime };
+        static readonly DataMode[] k_EditorDataModes =  { DataMode.Runtime };
+        static readonly DataMode[] k_RuntimeDataModes = { DataMode.Runtime };
 
         static readonly ProfilerMarker k_GetEditorMarker = new("GetEditor");
         static readonly ProfilerMarker k_SelectionCompareMarker = new("Compare Selection");
@@ -28,7 +29,6 @@ namespace Unity.Entities.Editor
         [InitializeOnLoadMethod]
         static void Init()
         {
-            SelectionBridge.PostProcessSelectionMetaData += OnPostProcessSelectionMetaData;
             SelectionBridge.DeclareDataModeSupport += OnDeclareDataModeSupport;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             UnityEditor.Editor.finishedDefaultHeaderGUI += OnDisplayMixedDataModeWarning;
@@ -48,65 +48,18 @@ namespace Unity.Entities.Editor
 
         static void OnPlayModeStateChanged(PlayModeStateChange stateChange)
         {
+            if (stateChange is PlayModeStateChange.ExitingPlayMode &&
+                (Selection.activeObject is EntitySelectionProxy || Selection.activeContext is EntitySelectionProxy))
+                Selection.activeObject = null;
+
             if (stateChange is not (PlayModeStateChange.EnteredEditMode or PlayModeStateChange.EnteredPlayMode))
                 return;
-
-            OnPostProcessSelectionMetaData();
-        }
-
-        static void OnPostProcessSelectionMetaData()
-        {
-            if (Selection.activeObject is EntitySelectionProxy ||
-                Selection.activeContext is HierarchySelectionContext or EntitySelectionProxy { Exists : true } ||
-                !IsSelectionTypeSupported())
-                return; // Nothing to patch
-
-            // We are selecting a naked GameObject or a GameObject with an invalid EntitySelectionProxy
-            // It may be because we switched play modes, the selection comes from somewhere else, or any other reason
-            // So we will attempt to patch-in an EntitySelectionProxy, if possible.
-
-            var defaultWorld = World.DefaultGameObjectInjectionWorld;
-            if (defaultWorld is not { IsCreated: true })
-            {
-                // If the default world doesn't exist, we are not in a DOTS context.
-                // Use a DataMode that fits the PlayMode.
-                SelectionBridge.UpdateSelectionMetaData(null, Application.isPlaying ? DataMode.Runtime : DataMode.Authoring);
-                return;
-            }
-
-            // We know we have a GameObject selected at this point
-            var activeGameObject = Selection.activeGameObject;
-            var primaryEntity = defaultWorld.EntityManager.Debug.GetPrimaryEntityForAuthoringObject(activeGameObject);
-
-            // Try to always respect DataModeHint when no context was provided.
-            // The only exception is in PlayMode when the GameObject is not part of a SubScene: we can't save changes to those.
-            var dataModeHint = SelectionBridge.DataModeHint;
-            if (dataModeHint is DataMode.Disabled)
-            {
-                dataModeHint = Application.isPlaying && !activeGameObject.scene.isSubScene
-                    ? DataMode.Runtime
-                    : DataMode.Authoring;
-            }
-
-            if (!defaultWorld.EntityManager.SafeExists(primaryEntity))
-            {
-                // We couldn't find the corresponding Entity in the default World.
-                // It might exist in a World we don't know about, but there's not much we can do in that case.
-                SelectionBridge.UpdateSelectionMetaData(null, dataModeHint);
-                return;
-            }
-
-            if (Undo.isProcessing)
-                return; // Can't create new objects while processing Undo operations.
-
-            // Successfully patched GameObject with missing primary Entity
-            var context = EntitySelectionProxy.CreateInstance(defaultWorld, primaryEntity);
-            SelectionBridge.UpdateSelectionMetaData(context, dataModeHint);
         }
 
         static void OnDeclareDataModeSupport(UnityObject activeSelection, UnityObject activeContext, HashSet<DataMode> supportedModes)
         {
-            if (activeSelection is EntitySelectionProxy || activeContext is EntitySelectionProxy || IsSelectionTypeSupported())
+            // Only claim DOTS inspector support for direct entity selections, not GameObjects
+            if (activeSelection is EntitySelectionProxy || activeContext is EntitySelectionProxy)
                 AddSupportedDataModes(supportedModes);
         }
 
@@ -119,9 +72,6 @@ namespace Unity.Entities.Editor
             }
         }
 
-        static bool IsSelectionTypeSupported()
-            => Selection.activeObject is GameObject go && !PrefabUtility.IsPartOfPrefabAsset(go);
-
         [RootEditor(supportsAddComponent : false), UsedImplicitly]
         public static Type GetEditor(UnityObject[] targets, UnityObject context, DataMode inspectorDataMode)
         {
@@ -132,32 +82,32 @@ namespace Unity.Entities.Editor
                 return typeof(InvalidSelectionEditor);
             }
 
-            using var filteredTargetsPool = PooledList<UnityObject>.Make();
+            using var filteredTargetsPool = ListPool<UnityObject>.Get(out var filteredTargetsList);
 
             // Check if we can use cached editor type based on selection
             using (k_SelectionCompareMarker.Auto())
             {
-                FilterOutRemovedEntitiesFromTargets(targets, filteredTargetsPool.List);
+                FilterOutRemovedEntitiesFromTargets(targets, filteredTargetsList);
 
-                var selectionHash = GetSelectionHash(filteredTargetsPool.List);
+                var selectionHash = GetSelectionHash(filteredTargetsList);
                 var contextHash = context is null or EntitySelectionProxy { Exists: false } ? 0 : context.GetHashCode();
 
                 // If last editor is unsupported game object editor, we want to reevaluate inspector content
                 // even if selection and data mode stay the same.
-                if (s_LastSelectedEditorType != typeof(UnsupportedGameObjectEditor) && filteredTargetsPool.List.Count == s_LastSelectionCount && selectionHash == s_LastSelectionHash &&
+                if (s_LastSelectedEditorType != typeof(UnsupportedGameObjectEditor) && filteredTargetsList.Count == s_LastSelectionCount && selectionHash == s_LastSelectionHash &&
                     contextHash == s_LastActiveContext && inspectorDataMode == s_LastInspectorDataMode)
                 {
                     return s_LastSelectedEditorType;
                 }
 
-                s_LastSelectionCount = filteredTargetsPool.List.Count;
+                s_LastSelectionCount = filteredTargetsList.Count;
                 s_LastSelectionHash = selectionHash;
                 s_LastActiveContext = contextHash;
                 s_LastInspectorDataMode = inspectorDataMode;
             }
 
             // If not, do the whole editor selection process and cache it
-            s_LastSelectedEditorType = SelectEditor(filteredTargetsPool.List, context, inspectorDataMode);
+            s_LastSelectedEditorType = SelectEditor(filteredTargetsList, context, inspectorDataMode);
             return s_LastSelectedEditorType;
 
             static void FilterOutRemovedEntitiesFromTargets(UnityObject[] targets, List<UnityObject> filteredTargets)
@@ -194,9 +144,7 @@ namespace Unity.Entities.Editor
                         // is required to provide an inspector. If the proxy was
                         // invalid, however, we can't handle that so we bail.
                         return proxy.Exists
-                            ? inspectorDataMode == DataMode.Authoring
-                                ? typeof(UnsupportedEntityEditor) // This entity only exists at runtime
-                                : typeof(EntityEditor)
+                            ? typeof(EntityEditor)
                             : null;
                     }
                     case GameObject go:
@@ -240,7 +188,7 @@ namespace Unity.Entities.Editor
 
                 DataMode.Runtime
                     when context is null && (Selection.activeGameObject != null && Selection.activeGameObject.scene != default && Selection.activeGameObject.scene.isSubScene)
-                    => typeof(InvalidEntityEditor),
+                    => null, // Show default GameObject inspector
 
                 // Anything else: show the default inspector.
                 _ => null

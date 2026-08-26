@@ -108,7 +108,7 @@ namespace Unity.Entities.Editor
 
         public void Dispose()
         {
-            using (var array = m_ChunkShadowBySequenceNumber.GetValueArray(Allocator.Temp))
+            using (var array = m_ChunkShadowBySequenceNumber.GetValueArray(Allocator.TempJob))
                 for (var i = 0; i < array.Length; i++)
                     array[i].Dispose();
 

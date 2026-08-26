@@ -1,4 +1,3 @@
-using System;
 using Unity.Entities;
 
 namespace Doc.CodeSamples.Tests
@@ -106,42 +105,17 @@ namespace Doc.CodeSamples.Tests
     #endregion
 
     #region unmanaged
+    // Declare a struct to create an unmanaged component
     public struct ExampleUnmanagedComponent : IComponentData
     {
         public int Value;
     }
     #endregion
 
-#if !UNITY_DISABLE_MANAGED_COMPONENTS
-    #region managed
-    public class ExampleManagedComponent : IComponentData
-    {
-        public int Value;
-    }
-    #endregion
-#endif
-
     #region shared-unmanaged
     public struct ExampleUnmanagedSharedComponent : ISharedComponentData
     {
         public int Value;
-    }
-    #endregion
-
-    #region shared-managed
-    public struct ExampleManagedSharedComponent : ISharedComponentData, IEquatable<ExampleManagedSharedComponent>
-    {
-        public string Value; // A managed field type
-
-        public bool Equals(ExampleManagedSharedComponent other)
-        {
-            return Value.Equals(other.Value);
-        }
-
-        public override int GetHashCode()
-        {
-            return Value.GetHashCode();
-        }
     }
     #endregion
 }

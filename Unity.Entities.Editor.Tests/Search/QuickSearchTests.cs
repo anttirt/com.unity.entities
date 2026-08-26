@@ -105,7 +105,9 @@ namespace Unity.Entities.Editor.Tests
         {
             var startSearchTime = EditorApplication.timeSinceStartup;
             using (var searchContext = SearchService.CreateContext(providerId, query))
+#pragma warning disable 0618 // Type or member is obsolete
             using (var fetchedItems = SearchService.Request(searchContext, SearchFlags.Sorted))
+#pragma warning restore 0618 // Type or member is obsolete
             {
                 yield return WaitForSeconds(() => !fetchedItems.pending, timeoutSeconds, "Cannot fetch items");
                 items.AddRange(fetchedItems);

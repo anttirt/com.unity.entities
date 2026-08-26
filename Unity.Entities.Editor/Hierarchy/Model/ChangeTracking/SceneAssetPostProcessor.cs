@@ -1,9 +1,12 @@
 ﻿using System;
 using System.IO;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Editor.Bridge;
 using Unity.Scenes;
 using UnityEditor;
+using UnityEngine;
+using UnityEngine.Pool;
 using UnityEngine.SceneManagement;
 
 namespace Unity.Entities.Editor
@@ -12,7 +15,7 @@ namespace Unity.Entities.Editor
     {
         static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
         {
-            using var pooledList = PooledList<GameObjectChangeTrackerEvent>.Make();
+            using var _ = ListPool<GameObjectChangeTrackerEvent>.Get(out var pooledList);
             foreach (var asset in movedAssets)
             {
                 if (Path.GetExtension(asset) == ".unity")
@@ -25,17 +28,18 @@ namespace Unity.Entities.Editor
                         {
                             if (subScene.IsLoaded || subScene.SceneGUID != sceneGuid)
                                 continue;
-
-                            pooledList.List.Add(new GameObjectChangeTrackerEvent(subScene.gameObject.GetInstanceID(), GameObjectChangeTrackerEventType.UnloadedSubSceneWasRenamed));
+                            pooledList.Add(new GameObjectChangeTrackerEvent(subScene.gameObject.GetEntityId(), GameObjectChangeTrackerEventType.UnloadedSubSceneWasRenamed));
                             break;
                         }
                     }
                     else
-                        pooledList.List.Add(new GameObjectChangeTrackerEvent(scene.handle, GameObjectChangeTrackerEventType.SceneWasRenamed));
+                    {
+                        pooledList.Add(new GameObjectChangeTrackerEvent(EntityId.FromULong(scene.handle.GetRawData()), GameObjectChangeTrackerEventType.SceneWasRenamed));
+                    }
                 }
             }
 
-            using var events = pooledList.List.ToNativeArray(AllocatorManager.Temp);
+            using var events = pooledList.ToNativeArray(AllocatorManager.Temp);
             GameObjectChangeTrackerBridge.PublishEvents(events);
         }
     }

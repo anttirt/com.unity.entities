@@ -8,7 +8,6 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Core;
-using Unity.Entities.CodeGeneratedJobForEach;
 using Unity.Jobs;
 using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Profiling;
@@ -937,6 +936,41 @@ namespace Unity.Entities
             return EntityManager.GetBufferTypeHandle<T>(isReadOnly);
         }
 
+#if ENABLE_TRANSFORMREF
+        /// <summary>
+        /// Manually gets the run-time type information required to access transforms in a chunk.
+        /// </summary>
+        /// <remarks>Remember to call <see cref="TransformTypeHandle.Update(ref SystemState)"/>.</remarks>
+        /// <param name="isReadOnly">True for read-only access, or false for read/write access.</param>
+        /// <returns>An object representing the type information required to safely access transforms stored in a
+        /// chunk.</returns>
+        /// <remarks>Pass an TransformTypeHandle instance to a job that has access to chunk data, such as an
+        /// <see cref="IJobChunk"/> job, to access transforms inside the job.</remarks>
+        [GenerateTestsForBurstCompatibility]
+        public TransformTypeHandle GetTransformTypeHandle(bool isReadOnly = false)
+        {
+            AddReaderWriter(isReadOnly ? ComponentType.ReadOnly<TransformRef>() : ComponentType.ReadWrite<TransformRef>());
+            return EntityManager.GetTransformTypeHandle(isReadOnly);
+        }
+
+        /// <summary>
+        /// Gets the TransformRef of an entity.
+        /// </summary>
+        /// <param name="entity">The entity.</param>
+        /// <param name="isReadOnly">True for read-only access, or false for read/write access.</param>
+        /// <remarks>
+        /// Using this method registers a read-only or read/write dependency for the system on TransformRef,
+        /// based on the value passed to <paramref name="isReadOnly"/>.
+        /// </remarks>
+        /// <returns>The TransformRef to the entity.</returns>
+        [GenerateTestsForBurstCompatibility]
+        public TransformRef GetTransformRef(Entity entity, bool isReadOnly)
+        {
+            AddReaderWriter(isReadOnly ? ComponentType.ReadOnly<TransformRef>() : ComponentType.ReadWrite<TransformRef>());
+            return EntityManager.GetTransformRef(entity, isReadOnly);
+        }
+#endif
+
         /// <summary>
         /// Manually gets the run-time type information required to access a shared component data in a chunk.
         /// </summary>
@@ -946,6 +980,8 @@ namespace Unity.Entities
         /// chunk.</returns>
         /// <remarks> Prefer using <see cref="SystemAPI.GetSharedComponentTypeHandle{T}"/> in <see cref="SystemAPI"/> as it will cache in OnCreate for you
         /// and call .Update(ref SystemState) at the call-site.</remarks>
+        // NOTE: dual-use method — see ComponentSystemBase.GetSharedComponentTypeHandle for the
+        // reason this is not marked [Obsolete] in step 1.
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleSharedComponentData) })]
         public SharedComponentTypeHandle<T> GetSharedComponentTypeHandle<T>()
             where T : struct, ISharedComponentData
@@ -1061,6 +1097,25 @@ namespace Unity.Entities
         {
             return EntityManager.GetEntityStorageInfoLookup();
         }
+
+#if ENABLE_TRANSFORMREF
+        /// <summary>
+        /// Manually gets a <see cref="TransformLookup"/> object that can access a <see cref="TransformRef"/>.
+        /// </summary>
+        /// <remarks>Remember to call <see cref="TransformLookup.Update(ref SystemState)"/>. </remarks>
+        /// <remarks>Assign the returned object to a field of your Job struct so that you can access the
+        /// contents of the transform in a Job.</remarks>
+        /// <param name="isReadOnly">Whether the transform data is only read or is also written. Access data in
+        /// a read-only fashion whenever possible.</param>
+        /// <returns>An array-like object that provides access to transform data, indexed by <see cref="Entity"/>.</returns>
+        /// <seealso cref="ComponentLookup{T}"/>
+        public TransformLookup GetTransformLookup(bool isReadOnly = false)
+        {
+            AddReaderWriter(isReadOnly ? ComponentType.ReadOnly<TransformRef>() : ComponentType.ReadWrite<TransformRef>());
+            return EntityManager.GetTransformLookup(isReadOnly);
+        }
+#endif
+
         ///<summary> Obsolete. Use <see cref="GetEntityStorageInfoLookup"/> instead.</summary>
         /// <returns>A EntityStorageInfoLookup object.</returns>
         [GenerateTestsForBurstCompatibility]

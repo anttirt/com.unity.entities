@@ -261,8 +261,6 @@ namespace Unity.Entities.SourceGen.Common
             return strBuilder.ToString();
         }
 
-        public static bool IsAspect(this ITypeSymbol typeSymbol) => typeSymbol.InheritsFromInterface("Unity.Entities.IAspect");
-
         static string PrependGlobalIfMissing(this string typeOrNamespaceName) =>
             !typeOrNamespaceName.StartsWith("global::") ? $"global::{typeOrNamespaceName}" : typeOrNamespaceName;
     }

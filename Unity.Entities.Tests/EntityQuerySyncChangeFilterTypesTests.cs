@@ -1,6 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 
@@ -16,20 +16,26 @@ namespace Unity.Entities.Tests
         {
             public EntityQuery EntityQuery;
 
+            [BurstCompile]
+            partial struct Job1 : IJobEntity
+            {
+                void Execute(ref EcsTestData data) { data = new EcsTestData(1); }
+            }
+
             public JobHandle SetEcsTestData1(JobHandle dependency)
             {
-                return
-                    Entities
-                        .ForEach((ref EcsTestData data) => { data = new EcsTestData(1); })
-                        .Schedule(dependency);
+                return new Job1().Schedule(dependency);
+            }
+
+            [BurstCompile]
+            partial struct Job2 : IJobEntity
+            {
+                void Execute(ref EcsTestData2 data) { data = new EcsTestData2(2); }
             }
 
             public JobHandle SetEcsTestData2(JobHandle dependency)
             {
-                return
-                    Entities
-                        .ForEach((ref EcsTestData2 data) => { data = new EcsTestData2(2); })
-                        .Schedule(dependency);
+                return new Job2().Schedule(dependency);
             }
 
             protected override void OnUpdate()
@@ -104,7 +110,7 @@ namespace Unity.Entities.Tests
                 AssertThrowsIfAnyJobNotCompleted(() => cmds.AddComponent(_syncChangeFilterTypesSystem.EntityQuery,
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                     typeof(EcsTestData3), EntityQueryCaptureMode.AtRecord));
-#pragma warning restore
+#pragma warning restore 0618
             }
         }
 
@@ -117,7 +123,7 @@ namespace Unity.Entities.Tests
                 AssertThrowsIfAnyJobNotCompleted(() => cmds.RemoveComponent(_syncChangeFilterTypesSystem.EntityQuery,
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                     typeof(EcsTestData), EntityQueryCaptureMode.AtRecord));
-#pragma warning restore
+#pragma warning restore 0618
             }
         }
 
@@ -129,7 +135,7 @@ namespace Unity.Entities.Tests
             {
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 AssertThrowsIfAnyJobNotCompleted(() => cmds.DestroyEntity(_syncChangeFilterTypesSystem.EntityQuery, EntityQueryCaptureMode.AtRecord));
-#pragma warning restore
+#pragma warning restore 0618
             }
         }
 
@@ -141,7 +147,7 @@ namespace Unity.Entities.Tests
             {
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 AssertThrowsIfAnyJobNotCompleted(() => cmds.AddSharedComponent(_syncChangeFilterTypesSystem.EntityQuery, new EcsTestSharedComp(7), EntityQueryCaptureMode.AtRecord));
-#pragma warning restore
+#pragma warning restore 0618
             }
         }
 
@@ -177,7 +183,9 @@ namespace Unity.Entities.Tests
         [TestRequiresCollectionChecks("Requires Job Safety System")]
         public void EntityManager_AddSharedComponentDataWithEntityQuery_Syncs_ChangeFilterTypes()
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AssertThrowsIfAnyJobNotCompleted(() => m_Manager.AddSharedComponentManaged(_syncChangeFilterTypesSystem.EntityQuery, new EcsTestSharedComp(7)));
+            #pragma warning restore 0618
         }
     }
 }

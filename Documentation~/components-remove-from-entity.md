@@ -2,8 +2,8 @@
 
 To remove components from an entity, use the [`EntityManager`](xref:Unity.Entities.EntityManager) for the [World](concepts-worlds.md) that the entity is in.
 
-> [!IMPORTANT]
-> Removing a component from an entity is a [structural change](concepts-structural-changes.md) which means that the entity moves to a different archetype chunk.
+> [!NOTE]
+> Removing a component from an entity is a [structural change](concepts-structural-changes.md) which means that the entity moves to a different archetype chunk. Fore more information, refer to [Use entity command buffer for structural changes](ecs-workflow-example-ecb.md).
 
 ## From the main thread
 You can directly remove components from an entity from the main thread. The following code sample gets every entity with an attached [`Rotation`](xref:Unity.Entities.TransformAuthoring.Rotation) component and then removes the `Rotation` component.

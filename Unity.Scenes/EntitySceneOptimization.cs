@@ -51,7 +51,7 @@ namespace Unity.Entities.Streaming
         {
             try
             {
-                group.AddSystemToUpdateList(world.GetOrCreateSystemManaged(type));
+                group.AddSystemToUpdateList(world.GetOrCreateSystem(type));
             }
             catch (Exception e)
             {

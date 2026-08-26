@@ -1,4 +1,6 @@
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
@@ -10,6 +12,19 @@ namespace Unity.Entities
 #endif
     static unsafe class AttachToEntityClonerInjection
     {
+        static readonly Dictionary<Type, TypeIndex> s_CompanionComponentTypeIndexByType = new();
+
+        static TypeIndex GetCompanionComponentTypeIndex(Type unityComponentType)
+        {
+            if (!s_CompanionComponentTypeIndexByType.TryGetValue(unityComponentType, out var typeIndex))
+            {
+                var closedType = typeof(CompanionComponent<>).MakeGenericType(unityComponentType);
+                typeIndex = TypeManager.GetTypeIndex(closedType);
+                s_CompanionComponentTypeIndexByType[unityComponentType] = typeIndex;
+            }
+            return typeIndex;
+        }
+
         // Injection is used to keep everything GameObject related outside of Unity.Entities
 
         static AttachToEntityClonerInjection()
@@ -38,7 +53,7 @@ namespace Unity.Entities
         /// <param name="dstArray">Array of destination managed component indices. One per <paramref name="componentCount"/>*<paramref name="instanceCount"/>. All indices for the first component stored first etc.</param>
         /// <param name="instanceCount">Number of instances being created</param>
         /// <param name="managedComponentStore">Managed Store that owns the instances we create</param>
-        static void InstantiateCompanionComponentDelegate(int* srcArray, int componentCount, Entity* dstEntities, int* dstCompanionLinkIndices, int* dstComponentLinkIds, int* dstArray, int instanceCount, ManagedComponentStore managedComponentStore)
+        static void InstantiateCompanionComponentDelegate(int* srcArray, int componentCount, Entity* dstEntities, int* dstCompanionLinkIndices, EntityId* dstComponentLinkIds, int* dstArray, int instanceCount, ManagedComponentStore managedComponentStore, EntityComponentStore* entityComponentStore)
         {
             if (dstCompanionLinkIndices != null)
             {
@@ -46,23 +61,33 @@ namespace Unity.Entities
                 for (int i = 0; i < instanceCount; ++i)
                 {
                     var companionLink = (CompanionReference)managedComponentStore.GetManagedComponent(dstCompanionLinkIndices[i]);
-                    // Update referenced Instance ID
-                    companionLink.Companion.Id.instanceId = dstComponentLinkIds[i];
+                    // Update referenced EntityId ID
+                    companionLink.Companion.Id.entityId = dstComponentLinkIds[i];
                     dstCompanionGameObjects[i] = companionLink.Companion;
                     #if UNITY_EDITOR
                     CompanionGameObjectUtility.SetCompanionName(dstEntities[i], dstCompanionGameObjects[i]);
                     #endif
                 }
 
+                var globalSystemVersion = entityComponentStore->GlobalSystemVersion;
+
                 for (int src = 0; src < componentCount; ++src)
                 {
                     var componentType = managedComponentStore.GetManagedComponent(srcArray[src]).GetType();
+                    var companionComponentTypeIndex = GetCompanionComponentTypeIndex(componentType);
 
                     for (int i = 0; i < instanceCount; i++)
                     {
                         var componentInInstance = dstCompanionGameObjects[i].GetComponent(componentType);
                         var dstIndex = src * instanceCount + i;
                         managedComponentStore.SetManagedComponentValue(dstArray[dstIndex], componentInInstance);
+
+                        // Mirror the managed slot into the unmanaged CompanionComponent<T> slot.
+                        // ReplicateComponents chunk-copied the source entity's stale EntityId into
+                        // the dst slot; repoint it at the freshly bound component so GetCompanion<T>
+                        // resolves to the clone's component, not the source's.
+                        var ptr = (EntityId*)entityComponentStore->GetComponentDataWithTypeRW(dstEntities[i], companionComponentTypeIndex, globalSystemVersion);
+                        *ptr = componentInInstance.GetEntityId();
                     }
                 }
             }
@@ -89,7 +114,9 @@ namespace Unity.Entities
                 var companionGameObject = entityManager.GetComponentData<CompanionLink>(entity).Companion.Value;
 
                 // Add a CompanionReference
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 entityManager.AddComponentObject(entity, new CompanionReference { Companion = companionGameObject });
+                #pragma warning restore 0618
 
                 var archetypeChunk = entityManager.GetChunk(entities[i]);
                 var archetype = archetypeChunk.Archetype.Archetype;
@@ -106,7 +133,17 @@ namespace Unity.Entities
                         continue;
 
                     var companionComponent = companionGameObject.GetComponent(type.Type);
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     entityManager.SetComponentObject(entity, ComponentType.FromTypeIndex(type.TypeIndex), companionComponent);
+                    #pragma warning restore 0618
+
+                    // Mirror the managed slot with the unmanaged CompanionComponent<T>. Chunk-copy
+                    // brought over the source entity's EntityId, which now refers to the wrong
+                    // companion instance; update it to the freshly-bound component.
+                    var companionComponentTypeIndex = GetCompanionComponentTypeIndex(type.Type);
+                    var access = entityManager.GetCheckedEntityDataAccess();
+                    var ptr = (EntityId*)access->GetComponentDataRawRW(entity, companionComponentTypeIndex);
+                    *ptr = companionComponent.GetEntityId();
                 }
             }
 

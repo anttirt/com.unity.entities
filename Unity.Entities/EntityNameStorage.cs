@@ -5,6 +5,7 @@ using Unity.Assertions;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities.LowLevel;
 using Unity.Mathematics;
 
 namespace Unity.Entities
@@ -49,6 +50,8 @@ namespace Unity.Entities
             public int chars; // bytes in buffer allocated so far
             public int entries; // number of strings allocated so far
             public FixedString512Bytes kMaxEntriesMsg;
+            public UnsafeHashMap<int, EntityName> entitiesNameMap;
+            public SpinLock entitiesNameMapLock; // guards all access to entitiesNameMap
         }
         internal static readonly SharedStatic<State> s_State = SharedStatic<State>.GetOrCreate<EntityNameStorage>();
 
@@ -76,6 +79,7 @@ namespace Unity.Entities
             s_State.Data.entry = new UnsafeList<Entry>(kMaxEntries, Allocator.Persistent);
             s_State.Data.entry.Length = s_State.Data.entry.Capacity;
             s_State.Data.hash = new UnsafeParallelMultiHashMap<int, int>(kMaxEntries, Allocator.Persistent);
+            s_State.Data.entitiesNameMap = new UnsafeHashMap<int, EntityName>(1000, Allocator.Persistent);
             Clear();
             s_State.Data.initialized = 1;
             s_State.Data.hasLoggedError = 0;
@@ -90,6 +94,15 @@ namespace Unity.Entities
             s_State.Data.buffer.Dispose();
             s_State.Data.entry.Dispose();
             s_State.Data.hash.Dispose();
+            s_State.Data.entitiesNameMapLock.Acquire();
+            try
+            {
+                s_State.Data.entitiesNameMap.Dispose();
+            }
+            finally
+            {
+                s_State.Data.entitiesNameMapLock.Release();
+            }
             s_State.Data.initialized = 0;
             s_State.Data.hasLoggedError = 0;
         }
@@ -191,6 +204,61 @@ namespace Unity.Entities
             s_State.Data.entry[s_State.Data.entries] = new Entry { offset = o, length = l };
             s_State.Data.hash.Add(h, s_State.Data.entries);
             return s_State.Data.entries++;
+        }
+
+        public static EntityName GetEntityName(Entity entity)
+        {
+            s_State.Data.entitiesNameMapLock.Acquire();
+            try
+            {
+                s_State.Data.entitiesNameMap.TryGetValue(entity.Index, out EntityName name);
+                return name;
+            }
+            finally
+            {
+                s_State.Data.entitiesNameMapLock.Release();
+            }
+        }
+
+        public static void SetEntityName(Entity entity, EntityName name)
+        {
+            if (name.Index != 0)
+            {
+                SetOrAddEntityToNameMap(entity, name);
+            }
+        }
+
+        static void SetOrAddEntityToNameMap(Entity entity, EntityName name)
+        {
+            s_State.Data.entitiesNameMapLock.Acquire();
+            try
+            {
+                if (!s_State.Data.entitiesNameMap.TryAdd(entity.Index, name))
+                {
+                    s_State.Data.entitiesNameMap[entity.Index] = name;
+                }
+            }
+            finally
+            {
+                s_State.Data.entitiesNameMapLock.Release();
+            }
+        }
+
+        public static unsafe void RemoveEntitiesFromNameMap(Entity* entities, int count)
+        {
+
+            s_State.Data.entitiesNameMapLock.Acquire();
+            try
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    s_State.Data.entitiesNameMap.Remove(entities[i].Index);
+                }
+            }
+            finally
+            {
+                s_State.Data.entitiesNameMapLock.Release();
+            }
         }
     }
 

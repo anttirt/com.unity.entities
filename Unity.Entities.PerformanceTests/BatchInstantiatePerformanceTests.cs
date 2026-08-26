@@ -179,26 +179,32 @@ namespace Unity.Entities.PerformanceTests
                 _prefabEntity = EntityManager.CreateEntity(typeof(EcsTestFloatData3), typeof(Prefab));
             }
 
+            [BurstCompile]
+            partial struct BatchInstantiateJob : IJobEntity
+            {
+                public EntityCommandBuffer.ParallelWriter ECBWriter;
+                public Entity Prefab;
+                void Execute(Entity e, [ChunkIndexInQuery] int chunkIndexInQuery, in EcsTestData spawnCount)
+                {
+                    var entities = new NativeArray<Entity>(spawnCount.value, Allocator.Temp);
+                    ECBWriter.Instantiate(chunkIndexInQuery, Prefab, entities);
+                    for (int i = 0; i < entities.Length; ++i)
+                    {
+                        ECBWriter.SetComponent(chunkIndexInQuery, entities[i],
+                            new EcsTestFloatData3 {Value0 = i, Value1 = i, Value2 = i});
+                    }
+                    ECBWriter.DestroyEntity(chunkIndexInQuery, e);
+                }
+            }
+
             protected override void OnUpdate()
             {
                 var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
                 var ecbWriter = ecb.AsParallelWriter();
                 var prefab = _prefabEntity;
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-                Entities
-                    .ForEach((Entity e, int entityInQueryIndex, in EcsTestData spawnCount) =>
-                    {
-                        var entities = new NativeArray<Entity>(spawnCount.value, Allocator.Temp);
-                        ecbWriter.Instantiate(entityInQueryIndex, prefab, entities);
-                        for (int i = 0; i < entities.Length; ++i)
-                        {
-                            ecbWriter.SetComponent(entityInQueryIndex, entities[i],
-                                new EcsTestFloatData3 {Value0 = i, Value1 = i, Value2 = i});
-                        }
-                        entities.Dispose();
-                        ecbWriter.DestroyEntity(entityInQueryIndex, e);
-                    }).ScheduleParallel(Dependency).Complete();
-#pragma warning restore CS0618
+
+                new BatchInstantiateJob { ECBWriter = ecbWriter, Prefab = prefab }.ScheduleParallel(Dependency).Complete();
+
                 ecb.Playback(EntityManager);
                 ecb.Dispose();
             }

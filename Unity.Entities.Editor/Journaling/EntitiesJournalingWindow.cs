@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +8,10 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
+
+#pragma warning disable 0618
 using static Unity.Entities.EntitiesJournaling;
+#pragma warning restore 0618
 
 namespace Unity.Entities.Editor
 {
@@ -134,6 +137,7 @@ namespace Unity.Entities.Editor
         ReadOnlyRecordViewList m_Records;
         SearchableList<MultiColumnListView, RecordView> m_RecordsList;
         int m_NeedPostProcess;
+        bool m_HasShownDeprecationWarning = false;
 
         Toggle m_RecordToggle;
         VisualElement m_MessageContainer;
@@ -141,6 +145,7 @@ namespace Unity.Entities.Editor
         Button m_StopButton;
         TwoPaneSplitView m_SplitPane;
         VisualElement m_ContentContainer;
+        HelpBox m_WarningBox;
         EntitiesJournalingWindowDetails m_Details;
         Label m_SearchResultLabel;
         Label m_RecordCountLabel;
@@ -168,6 +173,7 @@ namespace Unity.Entities.Editor
             m_RecordToggle.tooltip = s_RecordTooltip;
             m_RecordToggle.RegisterValueChangedCallback((e) =>
             {
+                m_HasShownDeprecationWarning = true;
                 Enabled = e.newValue;
                 Preferences.Enabled = e.newValue;
                 Refresh();
@@ -238,7 +244,7 @@ namespace Unity.Entities.Editor
             m_StopButton.SetVisibility(isRecording);
 
             m_ContentContainer = s_ContentTemplate.Clone(window.Q("content"));
-            m_ContentContainer.SetVisibility(!isRecording && m_NeedPostProcess == 0);
+            m_ContentContainer.SetVisibility(!isRecording && m_NeedPostProcess == 0 && m_HasShownDeprecationWarning);
 
             m_SplitPane = m_ContentContainer.Q<TwoPaneSplitView>("split-pane");
             m_SplitPane.RegisterCallback<GeometryChangedEvent>(OnInitialTwoPaneSplitViewGeometryChangedEvent);
@@ -292,6 +298,11 @@ namespace Unity.Entities.Editor
             m_Details = new EntitiesJournalingWindowDetails(this, m_ContentContainer.Q("details"));
             m_Details.SetVisibility(false, true);
 
+            m_WarningBox = window.Q<HelpBox>("warning-box");
+            m_WarningBox.messageType = HelpBoxMessageType.Warning;
+            m_WarningBox.text = "Journaling will be removed in a future version of Unity.";
+            m_WarningBox.SetVisibility(!m_HasShownDeprecationWarning);
+
             var footer = window.Q("footer", "entities-journaling-window__footer");
             var footerLeft = footer.Q("footer-left");
             m_SearchResultLabel = footerLeft.Q<Label>("search-result");
@@ -322,8 +333,9 @@ namespace Unity.Entities.Editor
             m_RecordCountLabel.text = string.Format(s_Records, FormattingUtility.CountToString(RecordCount));
             m_UsedBytesLabel.text = string.Format(s_MemoryUsed, FormattingUtility.BytesToString(UsedBytes), FormattingUtility.BytesToString(AllocatedBytes));
             m_SearchResultLabel.text = m_RecordsList.HasFilter ? string.Format(s_SearchResult, FormattingUtility.CountToString(m_RecordsList.Count)) : string.Empty;
-            m_ContentContainer.SetVisibility(!isRecording && m_NeedPostProcess == 0);
-            m_MessageContainer.SetVisibility(isRecording || m_NeedPostProcess > 0);
+            m_ContentContainer.SetVisibility(!isRecording && m_NeedPostProcess == 0 && m_HasShownDeprecationWarning);
+            m_MessageContainer.SetVisibility(isRecording || m_NeedPostProcess > 0 && m_HasShownDeprecationWarning);
+            m_WarningBox.SetVisibility(!m_HasShownDeprecationWarning);
             m_MessageLabel.text = isRecording ? s_RecordingMessage : m_NeedPostProcess > 0 ? s_PostProcessingMessage : string.Empty;
             m_StopButton.SetVisibility(isRecording);
 
@@ -440,7 +452,9 @@ namespace Unity.Entities.Editor
                 case RecordType.DisableComponent:
                 case RecordType.SetComponentData:
                 case RecordType.SetSharedComponentData:
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 case RecordType.SetComponentObject:
+                #pragma warning restore 0618
                 case RecordType.SetBuffer:
                 case RecordType.GetComponentDataRW:
                 case RecordType.GetComponentObjectRW:

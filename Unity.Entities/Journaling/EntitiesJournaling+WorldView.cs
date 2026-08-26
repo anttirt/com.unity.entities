@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -12,7 +12,7 @@ namespace Unity.Entities
         /// <summary>
         /// World view into journal buffer.
         /// </summary>
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [DebuggerDisplay("{Name}")]
         [StructLayout(LayoutKind.Sequential)]
         public unsafe readonly struct WorldView : IEquatable<WorldView>

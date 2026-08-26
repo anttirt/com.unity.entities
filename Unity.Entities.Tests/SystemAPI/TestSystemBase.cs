@@ -118,13 +118,6 @@ namespace Unity.Entities.Tests.TestSystemAPI
         public void HasSingleton([Values] SingletonVersion singletonVersion) => World.GetExistingSystemManaged<TestSystemBaseSystem>().TestHasSingleton(singletonVersion);
         #endregion
 
-        #region Aspect
-
-        [Test]
-        public void GetAspect([Values] SystemAPIAccess access) => World.GetExistingSystemManaged<TestSystemBaseSystem>().TestGetAspect(access);
-
-        #endregion
-
         #region NoError
         [Test]
         public void Nesting() =>  World.GetExistingSystemManaged<TestSystemBaseSystem>().TestNesting();
@@ -134,7 +127,7 @@ namespace Unity.Entities.Tests.TestSystemAPI
         public void GenericTypeArgument() =>  World.GetExistingSystemManaged<TestSystemBaseSystem>().TestGenericTypeArgument();
         [Test]
         public void GenericSystem() => World.GetExistingSystemManaged<TestSystemBaseSystem.GenericSystem<EcsTestData>>().TestGenericSystem();
-        
+
         [Test]
         public unsafe void GenericISystem()
         {
@@ -760,26 +753,6 @@ namespace Unity.Entities.Tests.TestSystemAPI
 
         #endregion
 
-        #region Aspect
-
-        public void TestGetAspect(SystemAPIAccess access)
-        {
-            var entity = EntityManager.CreateEntity(typeof(EcsTestData));
-            switch (access)
-            {
-                case SystemAPIAccess.SystemAPI:
-                    SystemAPI.GetAspect<EcsTestAspect0RW>(entity ).EcsTestData.ValueRW.value = 5;
-                    break;
-                case SystemAPIAccess.Using:
-                    SystemAPI.GetAspect<EcsTestAspect0RW>(entity).EcsTestData.ValueRW.value = 5;
-                    break;
-            }
-
-            Assert.AreEqual(5, SystemAPI.GetComponent<EcsTestData>(entity).value);
-        }
-
-        #endregion
-
         #region NoError
 
         void NestingSetup()
@@ -863,7 +836,7 @@ namespace Unity.Entities.Tests.TestSystemAPI
                 Assert.True(SystemAPI.HasComponent<T>(e));
             }
         }
-        
+
         public partial struct GenericISystem<T> : ISystem where T : unmanaged, IComponentData {
             public void OnUpdate() {}
 

@@ -1,10 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
-using Unity.Collections;
-using UnityEditor;
 using UnityEditor.Search;
 using UnityEngine;
 
@@ -59,14 +55,16 @@ namespace Unity.Editor.Bridge
                 return false;
 
             value = value.ToLowerInvariant();
-            if (op.type == FilterOperatorType.Equal)
-            {
-                return words.Any(r => r.Equals(value, comp));
-            }
-            else
-            {
-                return words.Any(t => t.IndexOf(value, comp) != -1);
-            }
+            return op.type == FilterOperatorType.Equal ? words.Any(r => r.Equals(value, comp)) : words.Any(t => t.IndexOf(value, comp) != -1);
+        }
+        
+        public static bool CompareWords(QueryFilterOperator op, string value, string word, StringComparison comp = StringComparison.CurrentCultureIgnoreCase)
+        {
+            if (string.IsNullOrEmpty(word) || string.IsNullOrEmpty(value))
+                return false;
+
+            value = value.ToLowerInvariant();
+            return op.type == FilterOperatorType.Equal ? word.Equals(value, comp) : word.IndexOf(value, comp) != -1;
         }
 
         public static ISearchView OpenContextual(string providerId, string searchText, Action<SearchViewState> setup = null)
@@ -92,7 +90,7 @@ namespace Unity.Editor.Bridge
             viewState.ignoreSaveSearches = true;
             if (table != null)
             {
-                viewState.itemSize = (float)DisplayMode.Table;
+                viewState.itemIconSize = (float)DisplayMode.Table;
                 viewState.tableConfig = table;
             }
 
@@ -126,11 +124,7 @@ namespace Unity.Editor.Bridge
 
         public static void RefreshWindowsWithProvider(string providerId)
         {
-#if UNITY_2023_1_OR_NEWER
             var windows = Resources.FindObjectsOfTypeAll<SearchWindow>();
-#else
-            var windows = Resources.FindObjectsOfTypeAll<QuickSearch>();
-#endif
             if (windows == null)
                 return;
             foreach (var win in windows)
@@ -140,15 +134,9 @@ namespace Unity.Editor.Bridge
             }
         }
 
-#if UNITY_2023_1_OR_NEWER
         public static SearchWindow FindWindowWithSingleProvider(string providerId)
         {
             var windows = Resources.FindObjectsOfTypeAll<SearchWindow>();
-#else
-        public static QuickSearch FindWindowWithSingleProvider(string providerId)
-        {
-            var windows = Resources.FindObjectsOfTypeAll<QuickSearch>();
-#endif
             if (windows == null)
                 return null;
             foreach (var win in windows)

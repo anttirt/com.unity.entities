@@ -6,6 +6,7 @@ namespace Unity.Entities.Tests
 {
     public class SharedComponentDataWithUnityEngineObject : ECSTestsFixture
     {
+        #pragma warning disable EA0017 // intentionally managed shared components
         struct CorrectHashCode : ISharedComponentData , IEquatable<CorrectHashCode>
         {
             public UnityEngine.Object Target;
@@ -36,6 +37,7 @@ namespace Unity.Entities.Tests
                 return Target == null ? 0 : Target.GetHashCode();
             }
         }
+        #pragma warning restore EA0017
 
 
         // https://github.com/Unity-Technologies/dots/issues/1813
@@ -44,7 +46,9 @@ namespace Unity.Entities.Tests
         {
             var e = m_Manager.CreateEntity();
             var obj = new TextAsset();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, new CorrectHashCode { Target = obj });
+            #pragma warning restore 0618
             UnityEngine.Object.DestroyImmediate(obj);
             m_Manager.DestroyEntity(e);
         }
@@ -54,7 +58,9 @@ namespace Unity.Entities.Tests
         {
             var e = m_Manager.CreateEntity();
             var obj = new TextAsset();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, new IncorrectHashCode { Target = obj });
+            #pragma warning restore 0618
             UnityEngine.Object.DestroyImmediate(obj);
 
             m_Manager.DestroyEntity(e);
@@ -69,12 +75,16 @@ namespace Unity.Entities.Tests
             var e = m_Manager.CreateEntity();
             var obj = new TextAsset();
             var sharedComponent = new CorrectHashCode {Target = obj};
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, sharedComponent);
+            #pragma warning restore 0618
             UnityEngine.Object.DestroyImmediate(obj);
 
             var query = m_Manager.CreateEntityQuery(typeof(CorrectHashCode));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(sharedComponent);
+            #pragma warning restore 0618
             Assert.AreEqual(0, query.CalculateEntityCount());
         }
 
@@ -84,12 +94,16 @@ namespace Unity.Entities.Tests
             var e = m_Manager.CreateEntity();
             var obj = new TextAsset();
             var sharedComponent = new IncorrectHashCode {Target = obj};
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(e, sharedComponent);
+            #pragma warning restore 0618
             UnityEngine.Object.DestroyImmediate(obj);
 
             var query = m_Manager.CreateEntityQuery(typeof(IncorrectHashCode));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(sharedComponent);
+            #pragma warning restore 0618
             Assert.AreEqual(0, query.CalculateEntityCount());
         }
     }

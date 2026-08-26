@@ -191,7 +191,6 @@ public class SceneLoaderAuthoring : MonoBehaviour
     }
     #endregion
 
-#if !UNITY_DISABLE_MANAGED_COMPONENTS
         public partial struct LoadWithOffsetSystem : ISystem
         {
             public void OnUpdate(ref SystemState state)
@@ -200,29 +199,28 @@ public class SceneLoaderAuthoring : MonoBehaviour
                 float3 sceneOffset = default;
 
 #region sceneloading_instancing1_2
-                var loadParameters = new SceneSystem.LoadParameters()
-                    { Flags = SceneLoadFlags.NewInstance };
-                var sceneEntity = SceneSystem.LoadSceneAsync(state.WorldUnmanaged,
-                    sceneReference, loadParameters);
-
-                var ecb = new EntityCommandBuffer(Allocator.Persistent,
-                    PlaybackPolicy.MultiPlayback);
-                var postLoadEntity = ecb.CreateEntity();
-                var postLoadOffset = new PostLoadOffset
+                // Build a data entity in the main world carrying the per-instance offset.
+                var dataEntity = state.EntityManager.CreateEntity();
+                state.EntityManager.AddComponentData(dataEntity, new PostLoadOffset
                 {
                     Offset = sceneOffset
-                };
-                ecb.AddComponent(postLoadEntity, postLoadOffset);
+                });
 
-                var postLoadCommandBuffer = new PostLoadCommandBuffer()
+                // LoadParameters.ImportEntity directs the streaming system to copy `dataEntity`
+                // (and all its components) into the section's loading world before
+                // ProcessAfterLoadGroup runs, where PostprocessSystem reads PostLoadOffset and
+                // applies it. PostprocessSystem destroys that streaming-world copy so it doesn't
+                // get merged back into the main world after the load. The original `dataEntity`
+                // created above stays in the main world and is yours to destroy once the load
+                // has completed and you no longer need it.
+                var sceneEntity = SceneSystem.LoadSceneAsync(state.WorldUnmanaged, sceneReference, new SceneSystem.LoadParameters
                 {
-                    CommandBuffer = ecb
-                };
-                state.EntityManager.AddComponentData(sceneEntity, postLoadCommandBuffer);
+                    Flags = SceneLoadFlags.NewInstance,
+                    ImportEntity = dataEntity,
+                });
 #endregion
             }
         }
-#endif
 
 #region sceneloading_instancing3
 
@@ -241,7 +239,8 @@ public class SceneLoaderAuthoring : MonoBehaviour
 
         public void OnUpdate(ref SystemState state)
         {
-            // Query the instance information from the entity created in the EntityCommandBuffer.
+            // Query the instance information from the imported entity, copied into this
+            // streaming world by RequestSceneLoaded.ImportEntity.
             var offsets = offsetQuery.ToComponentDataArray<PostLoadOffset>(Allocator.Temp);
             foreach (var offset in offsets)
             {

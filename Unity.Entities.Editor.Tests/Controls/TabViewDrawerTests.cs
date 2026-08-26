@@ -2,7 +2,7 @@
 using JetBrains.Annotations;
 using NUnit.Framework;
 using Unity.Entities.UI;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;

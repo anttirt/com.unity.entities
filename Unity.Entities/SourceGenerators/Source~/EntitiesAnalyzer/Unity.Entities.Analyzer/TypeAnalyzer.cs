@@ -12,6 +12,9 @@ namespace Unity.Entities.Analyzer
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class TypeAnalyzer : DiagnosticAnalyzer
     {
+        const string k_ManagedSharedComponentSilenceDefine = "UNITY_DISABLE_MANAGED_SHARED_COMPONENT_WARNINGS";
+        const string k_ISharedComponentDataFullName = "global::Unity.Entities.ISharedComponentData";
+
         public override void Initialize(AnalysisContext context)
         {
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
@@ -26,13 +29,16 @@ namespace Unity.Entities.Analyzer
             if (typeDeclaration.BaseList == null || typeDeclaration.BaseList.Types.Count == 0)
                 return;
 
-            // Error on missing IJobEntity or IAspect
+            if (typeDeclaration is StructDeclarationSyntax structDeclaration)
+                AnalyzeManagedSharedComponent(context, structDeclaration);
+
+            // Error on missing IJobEntity
             foreach (var type in typeDeclaration.BaseList.Types)
-                if (type.Type is IdentifierNameSyntax { Identifier: { ValueText: "IAspect" or "IJobEntity" } })
+                if (type.Type is IdentifierNameSyntax { Identifier: { ValueText: "IJobEntity" } })
                 {
                     var declaredType = context.SemanticModel.GetTypeInfo(type.Type).Type;
                     var fullName = declaredType.ToFullName();
-                    if (fullName is not ("global::Unity.Entities.IAspect" or "global::Unity.Entities.IJobEntity"))
+                    if (fullName is not ("global::Unity.Entities.IJobEntity"))
                         continue;
 
                     for (var parent = typeDeclaration.Parent; parent is TypeDeclarationSyntax parentType; parent = parent.Parent)
@@ -68,7 +74,49 @@ namespace Unity.Entities.Analyzer
                 context.ReportDiagnostic(Diagnostic.Create(EntitiesDiagnostics.k_Ea0007Descriptor, typeDeclaration.Identifier.GetLocation(), systemType.ToString(), typeSymbol.ToFullName()));
         }
 
+        static void AnalyzeManagedSharedComponent(SyntaxNodeAnalysisContext context, StructDeclarationSyntax structDeclaration)
+        {
+            if (context.Node.SyntaxTree.Options is CSharpParseOptions opts)
+            {
+                foreach (var symbol in opts.PreprocessorSymbolNames)
+                    if (symbol == k_ManagedSharedComponentSilenceDefine)
+                        return;
+            }
+
+            var typeSymbol = context.SemanticModel.GetDeclaredSymbol(structDeclaration);
+            if (typeSymbol == null)
+                return;
+
+            var implementsSharedComponent = false;
+            foreach (var iface in typeSymbol.AllInterfaces)
+            {
+                if (iface.ToFullName() == k_ISharedComponentDataFullName)
+                {
+                    implementsSharedComponent = true;
+                    break;
+                }
+            }
+            if (!implementsSharedComponent)
+                return;
+
+            foreach (var member in typeSymbol.GetMembers())
+            {
+                if (member is IFieldSymbol field
+                    && !field.IsStatic
+                    && !field.IsConst
+                    && !field.Type.IsUnmanagedType)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        EntitiesDiagnostics.k_Ea0017Descriptor,
+                        structDeclaration.Identifier.GetLocation(),
+                        typeSymbol.ToFullName()));
+                    return;
+                }
+            }
+        }
+
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(
-            EntitiesDiagnostics.k_Ea0007Descriptor, EntitiesDiagnostics.k_Ea0008Descriptor);
+            EntitiesDiagnostics.k_Ea0007Descriptor, EntitiesDiagnostics.k_Ea0008Descriptor,
+            EntitiesDiagnostics.k_Ea0017Descriptor);
     }
 }

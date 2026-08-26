@@ -12,7 +12,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Profiling;
-using Unity.Entities.UniversalDelegates;
+using UnityEngine.Assemblies;
 
 namespace Unity.Entities
 {
@@ -254,45 +254,44 @@ namespace Unity.Entities
         static List<Type> s_SystemTypes;
         static Dictionary<Type, SystemTypeIndex> s_ManagedSystemTypeToIndex;
 
-
         /// <summary>
-        /// An enum describing some important kinds of attributes that can be added to systems.
-        /// This is used in order to make some code paths burstable that refer to said attributes.
+        /// Options for the kinds of attributes that can be added to systems.
+        /// These dictate the execution order of their OnCreate and OnUpdate functions.
         /// </summary>
         public enum SystemAttributeKind
         {
             /// <summary>
-            /// <see cref="UpdateBeforeAttribute"/>
+            /// Specifies that the system should update before another system.
             /// </summary>
             UpdateBefore,
 
             /// <summary>
-            /// <see cref="UpdateAfterAttribute"/>
+            /// Specifies that the system should update after another system.
             /// </summary>
             UpdateAfter,
 
             /// <summary>
-            /// <see cref="CreateBeforeAttribute"/>
+            /// Specifies that the system should be created before another system.
             /// </summary>
             CreateBefore,
 
             /// <summary>
-            /// <see cref="CreateAfterAttribute"/>
+            /// Specifies that the system should be created after another system.
             /// </summary>
             CreateAfter,
 
             /// <summary>
-            /// <see cref="DisableAutoCreationAttribute"/>
+            /// Disables automatic creation of the system.
             /// </summary>
             DisableAutoCreation,
 
             /// <summary>
-            /// <see cref="UpdateInGroupAttribute"/>
+            /// Specifies that the system belongs to a specific system group.
             /// </summary>
             UpdateInGroup,
 
             /// <summary>
-            /// <see cref="RequireMatchingQueriesForUpdateAttribute"/>
+            /// Ensures that the system doesn't call OnUpdate if every EntityQuery in the system is empty.
             /// </summary>
             RequireMatchingQueriesForUpdate
         }
@@ -350,8 +349,8 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// A burstable representation of an attribute on a system,
-        /// assuming it's one of the kinds representable by <see cref="SystemAttributeKind"/>
+        /// Information about the System.
+        /// It provides access to the SystemTypeIndex.
         /// </summary>
         public struct SystemAttribute
         {
@@ -360,18 +359,18 @@ namespace Unity.Entities
             internal SystemAttributeKind Kind;
 
             /// <summary>
-            /// The SystemTypeIndex for the target system, if the attribute in question has a target system.
+            /// The SystemTypeIndex for the target system.
             /// </summary>
             public SystemTypeIndex TargetSystemTypeIndex;
             internal int Flags;
 
             /// <summary>
-            /// <see cref="UpdateInGroupAttribute.OrderFirst"/>
+            /// Indicates if the system is ordered first inside its system group.
             /// </summary>
             public bool ShouldOrderFirst => Flags == kOrderFirstFlag;
 
             /// <summary>
-            /// <see cref="UpdateInGroupAttribute.OrderLast"/>
+            /// Indicates if the system is ordered last inside its system group.
             /// </summary>
             public bool ShouldOrderLast => Flags == kOrderLastFlag;
         }
@@ -430,10 +429,29 @@ namespace Unity.Entities
             }
         }
 
-        struct LookupFlags
+        struct LookupFlags : IEquatable<LookupFlags>
         {
+            /// <summary>Optional flags - include systems matching any of these flags (OR logic)</summary>
             public WorldSystemFilterFlags OptionalFlags;
+            /// <summary>Required flags - include only systems matching all of these flags (AND logic)</summary>
             public WorldSystemFilterFlags RequiredFlags;
+            /// <summary>Excluded flags - exclude systems matching any of these flags (NOT logic)</summary>
+            public WorldSystemFilterFlags ExcludedFlags;
+
+            public readonly bool Equals(LookupFlags other) =>
+                OptionalFlags == other.OptionalFlags &&
+                RequiredFlags == other.RequiredFlags &&
+                ExcludedFlags == other.ExcludedFlags;
+
+            public override readonly bool Equals(object obj) => obj is LookupFlags other && Equals(other);
+
+            public override readonly int GetHashCode()
+            {
+                int hashCode = (int)OptionalFlags;
+                hashCode = (hashCode * 397) ^ (int)RequiredFlags;
+                hashCode = (hashCode * 397) ^ (int)ExcludedFlags;
+                return hashCode;
+            }
         }
         static Dictionary<LookupFlags, NativeList<SystemTypeIndex>> s_SystemFilterTypeMap;
         static UnsafeList<UnsafeText> s_SystemTypeNames;
@@ -496,7 +514,7 @@ namespace Unity.Entities
                 {
                     Profiler.BeginSample(nameof(InitializeAllSystemTypes));
                     var isystemTypes = GetTypesDerivedFrom(typeof(ISystem)).ToList();
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    foreach (var asm in CurrentAssemblies.GetLoadedAssemblies())
                     {
                         foreach (var attr in asm.GetCustomAttributes<RegisterGenericSystemTypeAttribute>())
                         {
@@ -505,7 +523,9 @@ namespace Unity.Entities
                     }
 
                     // Used to detect cycles in the UpdateInGroup tree, so we don't recurse infinitely and crash.
-                    var visitedSystemGroupsSet = new HashSet<Type>(32);
+                    // Using a List (as a stack) rather than a HashSet to track only the current path, so we can
+                    // accurately report which types form the cycle.
+                    var visitedSystemGroupsList = new List<Type>(32);
 
                     foreach (var systemType in isystemTypes)
                     {
@@ -522,7 +542,7 @@ namespace Unity.Entities
                         var flags = GetSystemTypeFlags(systemType);
                         if (typeof(ISystem).IsAssignableFrom(systemType) && ((flags & SystemTypeInfo.kIsSystemManagedFlag) != 0))
                             Debug.LogError($"System {systemType} has managed fields, but implements ISystem, which is not allowed. If you need to use managed fields, please inherit from SystemBase.");
-                        var filterFlags = MakeWorldFilterFlags(systemType, ref visitedSystemGroupsSet);
+                        var filterFlags = MakeWorldFilterFlags(systemType, visitedSystemGroupsList);
 
                         AddSystemTypeToTables(systemType, name, size, hash, flags, filterFlags);
                     }
@@ -537,7 +557,7 @@ namespace Unity.Entities
                         var hash = GetHashCode64(systemType);
                         var flags = GetSystemTypeFlags(systemType);
 
-                        var filterFlags = MakeWorldFilterFlags(systemType, ref visitedSystemGroupsSet);
+                        var filterFlags = MakeWorldFilterFlags(systemType, visitedSystemGroupsList);
 
                         AddSystemTypeToTables(systemType, name, size, hash, flags, filterFlags);
                     }
@@ -561,7 +581,7 @@ namespace Unity.Entities
                 }
             }
 #endif
-        } 
+        }
 
         private static void AddSystemAttributesToTable(Type systemType)
         {
@@ -573,7 +593,7 @@ namespace Unity.Entities
 
             foreach (var attributeType in new[]
                      {
-                         typeof(UpdateBeforeAttribute), 
+                         typeof(UpdateBeforeAttribute),
                          typeof(UpdateAfterAttribute),
                          typeof(CreateBeforeAttribute),
                          typeof(CreateAfterAttribute),
@@ -704,7 +724,7 @@ namespace Unity.Entities
         }
 
         private static int GetSystemTypeFlags(Type systemType)
-        { 
+        {
             var flags = 0;
             if (systemType.GetConstructors().Any(c => c.GetParameters().Length == 0))
                 flags |= SystemTypeInfo.kSystemHasDefaultCtor;
@@ -781,12 +801,14 @@ namespace Unity.Entities
         /// Return an array of all System types available to the runtime matching the WorldSystemFilterFlags. By default,
         /// all systems available to the runtime is returned. This version avoids unnecessary reflection.
         /// </summary>
-        /// <param name="filterFlags">Flags the returned systems can have</param>
-        /// <param name="requiredFlags">Flags the returned systems must have</param>
+        /// <param name="filterFlags">Optional flags - include systems that match any of these flags (OR logic). Defaults to All.</param>
+        /// <param name="requiredFlags">Required flags - include only systems that match all of these flags (AND logic). Defaults to none.</param>
+        /// <param name="excludedFlags">Excluded flags - exclude systems that match any of these flags (NOT logic). Defaults to Disabled, hiding [DisableAutoCreation] systems.</param>
         /// <returns>Returns a list of systems meeting the flag requirements provided</returns>
         public static NativeList<SystemTypeIndex> GetSystemTypeIndices(
             WorldSystemFilterFlags filterFlags = WorldSystemFilterFlags.All,
-            WorldSystemFilterFlags requiredFlags = 0)
+            WorldSystemFilterFlags requiredFlags = 0,
+            WorldSystemFilterFlags excludedFlags = WorldSystemFilterFlags.Disabled)
         {
             // Expand default to proper types
             if ((filterFlags & WorldSystemFilterFlags.Default) != 0)
@@ -798,7 +820,7 @@ namespace Unity.Entities
             Assertions.Assert.IsTrue(s_Initialized, "The TypeManager must be initialized before the TypeManager can be used.");
             // By default no flags are required
             requiredFlags &= ~WorldSystemFilterFlags.Default;
-            LookupFlags lookupFlags = new LookupFlags() { OptionalFlags = filterFlags, RequiredFlags = requiredFlags };
+            LookupFlags lookupFlags = new LookupFlags() { OptionalFlags = filterFlags, RequiredFlags = requiredFlags, ExcludedFlags = excludedFlags };
 
             if (s_SystemFilterTypeMap.TryGetValue(lookupFlags, out var systemTypeIndices))
                 return systemTypeIndices;
@@ -1120,7 +1142,14 @@ namespace Unity.Entities
             return index;
         }
 
-        internal static Type GetSystemType(SystemTypeIndex systemTypeIndex)
+
+        /// <summary>
+        /// Gets the <see cref="System.Type"/> for a system from its <see cref="SystemTypeIndex"/>.
+        /// </summary>
+        /// <param name="systemTypeIndex">The index identifying the system type. Obtain one via
+        /// <see cref="GetSystemTypeIndex{T}"/> or related APIs.</param>
+        /// <returns>The <see cref="System.Type"/> registered for <paramref name="systemTypeIndex"/>.</returns>
+        public static Type GetSystemType(SystemTypeIndex systemTypeIndex)
         {
             int typeIndexNoFlags = systemTypeIndex.Index;
             Assertions.Assert.IsTrue(typeIndexNoFlags < s_SystemTypes.Count);
@@ -1162,16 +1191,11 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// Obtains a list containing the SystemAttributes of a specific kind for a system.
-        /// This allows for burstable access to the attributes which were put on the system.
+        /// Obtains a list containing the SystemAttributes for a system.
+        /// This allows for access to the attributes which were put on the system.
         /// </summary>
-        /// <remarks>
-        /// This gets the same information as reflecting to get the attributes on the system
-        /// and filtering for a specific kind, except that it uses pre-generated information
-        /// and is burstable.
-        /// </remarks>
         /// <param name="systemTypeIndex">The SystemTypeIndex for the system.</param>
-        /// <param name="kind">The SystemAttributeKind of attributes to gather.</param>
+        /// <param name="kind">The target SystemAttributeKind.</param>
         /// <param name="allocator">Allocator used to create the returned NativeList.</param>
         /// <returns>A NativeList of SystemAttributes.</returns>
         public static NativeList<SystemAttribute> GetSystemAttributes(
@@ -1300,17 +1324,17 @@ namespace Unity.Entities
                 return false;
             }
 
-            if (attrs.Length > 0)
-                return false;
-
-            if (lookupFlags.OptionalFlags == WorldSystemFilterFlags.All)
+            if (lookupFlags.OptionalFlags == WorldSystemFilterFlags.All && lookupFlags.ExcludedFlags == 0 && lookupFlags.RequiredFlags == 0)
                 return true;
 
+            lookupFlags.OptionalFlags |= lookupFlags.RequiredFlags;
 
             var systemFlags = GetSystemFilterFlags(systemTypeIndex);
+            if (attrs.Length > 0)
+                systemFlags |= WorldSystemFilterFlags.Disabled;
 
-            if ((lookupFlags.RequiredFlags & WorldSystemFilterFlags.Editor) != 0)
-                lookupFlags.OptionalFlags |= WorldSystemFilterFlags.Editor;
+            if ((lookupFlags.ExcludedFlags & systemFlags) != 0)
+                return false;
 
             return (lookupFlags.OptionalFlags & systemFlags) != 0 && (lookupFlags.RequiredFlags & systemFlags) == lookupFlags.RequiredFlags;
         }
@@ -1323,7 +1347,7 @@ namespace Unity.Entities
 #else
 
             var types = new List<Type>();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var assembly in CurrentAssemblies.GetLoadedAssemblies())
             {
                 if (!TypeManager.IsAssemblyReferencingEntities(assembly))
                     continue;
@@ -1345,7 +1369,7 @@ namespace Unity.Entities
                             types.Add(t);
                     }
 
-                    Debug.LogWarning($"DefaultWorldInitialization failed loading assembly: {(assembly.IsDynamic ? assembly.ToString() : assembly.Location)}");
+                    Debug.LogWarning($"DefaultWorldInitialization failed loading assembly: {(assembly.IsDynamic ? assembly.ToString() : assembly.GetLoadedAssemblyPath())}");
                 }
             }
 
@@ -1354,7 +1378,7 @@ namespace Unity.Entities
         }
 #endif
 
-        static WorldSystemFilterFlags GetParentGroupDefaultFilterFlags(Type type, ref HashSet<Type> visitedSystemGroupsSet)
+        static WorldSystemFilterFlags GetParentGroupDefaultFilterFlags(Type type, List<Type> visitedSystemGroupsList)
         {
             if (!Attribute.IsDefined(type, typeof(UpdateInGroupAttribute), true))
             {
@@ -1366,14 +1390,18 @@ namespace Unity.Entities
             foreach (var uig in attrs)
             {
                 var groupType = ((UpdateInGroupAttribute)uig).GroupType;
-                if (!visitedSystemGroupsSet.Add(groupType))
+                if (visitedSystemGroupsList.Contains(groupType))
                 {
                     StringBuilder sb = new StringBuilder();
                     sb.Append("The following systems form a cycle in their UpdateInGroup attributes: ");
-                    foreach (var gt in visitedSystemGroupsSet)
-                        sb.Append($"{gt} ");
+                    // Print only from the cycle start point to the current type
+                    int cycleStart = visitedSystemGroupsList.IndexOf(groupType);
+                    for (int i = cycleStart; i < visitedSystemGroupsList.Count; i++)
+                        sb.Append($"{visitedSystemGroupsList[i]} -> ");
+                    sb.Append($"{groupType}");
                     throw new InvalidOperationException(sb.ToString());
                 }
+                visitedSystemGroupsList.Add(groupType);
                 var groupFlags = WorldSystemFilterFlags.Default;
                 if (Attribute.IsDefined(groupType, typeof(WorldSystemFilterAttribute), true))
                 {
@@ -1382,13 +1410,15 @@ namespace Unity.Entities
                 if ((groupFlags & WorldSystemFilterFlags.Default) != 0)
                 {
                     groupFlags &= ~WorldSystemFilterFlags.Default;
-                    groupFlags |= GetParentGroupDefaultFilterFlags(groupType, ref visitedSystemGroupsSet);
+                    groupFlags |= GetParentGroupDefaultFilterFlags(groupType, visitedSystemGroupsList);
                 }
+                visitedSystemGroupsList.RemoveAt(visitedSystemGroupsList.Count - 1);
                 systemFlags |= groupFlags;
             }
             return systemFlags;
         }
-        static WorldSystemFilterFlags MakeWorldFilterFlags(Type type, ref HashSet<Type> visitedSystemGroupsSet)
+#if DISABLE_TYPEMANAGER_ILPP
+        static WorldSystemFilterFlags MakeWorldFilterFlags(Type type, List<Type> visitedSystemGroupsList)
         {
             // IMPORTANT: keep this logic in sync with SystemTypeGen.cs for DOTS Runtime
             WorldSystemFilterFlags systemFlags = WorldSystemFilterFlags.Default;
@@ -1399,8 +1429,8 @@ namespace Unity.Entities
             if ((systemFlags & WorldSystemFilterFlags.Default) != 0)
             {
                 systemFlags &= ~WorldSystemFilterFlags.Default;
-                visitedSystemGroupsSet.Clear();
-                systemFlags |= GetParentGroupDefaultFilterFlags(type, ref visitedSystemGroupsSet);
+                visitedSystemGroupsList.Clear();
+                systemFlags |= GetParentGroupDefaultFilterFlags(type, visitedSystemGroupsList);
             }
 
             if (Attribute.IsDefined(type, typeof(ExecuteInEditMode)))
@@ -1420,12 +1450,13 @@ namespace Unity.Entities
 
             return systemFlags;
         }
+#endif
 
         internal static void RegisterAssemblySystemTypes(TypeRegistry[] typeRegistries)
         {
             /*
              * what we need to do is
-             * 1) go through all the registries for everybody building up the 
+             * 1) go through all the registries for everybody building up the
              * managed system type -> system type index mapping, and gathering all the stuff
              * that doesn't involve cross-referencing system type indices
              * 2) go through again and fix up all the system attributes to point to the correct
@@ -1433,7 +1464,7 @@ namespace Unity.Entities
              */
 
             var overallStartingTypeIndex = s_SystemTypes.Count;
-            for (int i = 0; i < typeRegistries.Length; i++) 
+            for (int i = 0; i < typeRegistries.Length; i++)
             {
                 var registry = typeRegistries[i];
                 var startingTypeIndexOffset = s_SystemTypes.Count;
@@ -1483,7 +1514,7 @@ namespace Unity.Entities
 
                     /*
                      * if we have assembly-wide disableautocreation,
-                     * we are adding an attribute into the array for every system in this assembly, 
+                     * we are adding an attribute into the array for every system in this assembly,
                      * so bump the starting index for everything after this
                      */
                     if (registry.HasAssemblyWideDisableAutoCreation)
@@ -1520,7 +1551,7 @@ namespace Unity.Entities
                         else
                         {
                             sourceAttr = registry.SystemAttributes[attributesSoFarInThisRegistry++];
-                        } 
+                        }
 
                         targetAttr.Kind = sourceAttr.Kind;
                         if (sourceAttr.TargetSystemType != null && s_ManagedSystemTypeToIndex.TryGetValue(sourceAttr.TargetSystemType, out var index))

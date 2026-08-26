@@ -15,7 +15,7 @@ The query uses [`EntityQueryBuilder.WithAllRW<T>`](xref:Unity.Entities.EntityQue
 Queries only match archetypes that contain the components you specify. You can specify components with the following [`EntityQueryBuilder`](xref:Unity.Entities.EntityQueryBuilder) methods: 
 
 * `WithAll<T>()`: To match the query, an entity's archetype must contain all the query's required components, and these components must be enabled on that entity.
-* `WithAny<T>()`: To match the query, an entity's archetype must contain at least one of the query's optional components, and these components must be enabled on that entity.
+* `WithAny<T>()`: To match the query, an entity's archetype must contain at least one of the query's optional components, and this component must be enabled on that entity.
 * `WithNone<T>()`: To match the query, either an entity's archetype must not contain any of the query's excluded components, or the components must be present but disabled on that entity.
 * `WithDisabled<T>()`: To match the query, an entity's archetype must contain this component, and the component must be disabled on that entity.
 * `WithAbsent<T>()`: To match the query, an entity's archetype must not contain the specified components.

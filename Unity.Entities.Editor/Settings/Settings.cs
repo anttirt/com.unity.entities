@@ -63,7 +63,7 @@ namespace Unity.Entities.Editor
                 return;
             }
 
-            var userSettingsType = typeof(Unity.Serialization.Editor.UserSettings<>);
+            var userSettingsType = typeof(Unity.Entities.Editor.Serialization.UserSettings<>);
 
             foreach (var type in UnityEditor.TypeCache.GetTypesWithAttribute<T>())
             {

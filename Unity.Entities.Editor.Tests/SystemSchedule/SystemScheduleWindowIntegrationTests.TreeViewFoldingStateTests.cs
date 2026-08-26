@@ -30,9 +30,9 @@ namespace Unity.Entities.Editor.Tests
 
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             var systemTreeViewPlayMode = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
-            foreach(var item in systemTreeViewPlayMode.m_TreeViewRootItems)
+            foreach(var item in systemTreeViewPlayMode.TreeViewRootItems)
             {
-                SystemScheduleTestUtilities.ExpandAllGroupNodes(systemTreeViewPlayMode, item);
+                SystemScheduleTestUtilities.ExpandAllGroupNodes(systemTreeViewPlayMode, item.data);
             }
 
             // Editor mode
@@ -43,9 +43,9 @@ namespace Unity.Entities.Editor.Tests
 
             var systemTreeViewEditorMode = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
             var resultList = new List<string>();
-            foreach(var item in systemTreeViewPlayMode.m_TreeViewRootItems)
+            foreach(var item in systemTreeViewPlayMode.TreeViewRootItems)
             {
-                SystemScheduleTestUtilities.CollectExpandedGroupNodeNames(systemTreeViewEditorMode, item, resultList);
+                SystemScheduleTestUtilities.CollectExpandedGroupNodeNames(systemTreeViewEditorMode, item.data, resultList);
             }
             Assert.That(resultList.Count, Is.GreaterThanOrEqualTo(m_ExpandedNodeNamesToTest.Count));
             Assert.That(m_ExpandedNodeNamesToTest, Is.SubsetOf(resultList));
@@ -57,9 +57,9 @@ namespace Unity.Entities.Editor.Tests
             // Editor mode
             yield return new SystemScheduleTestUtilities.UpdateSystemGraph(typeof(SystemScheduleTestGroup));
             var systemTreeViewEditorMode = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
-            foreach(var item in systemTreeViewEditorMode.m_TreeViewRootItems)
+            foreach(var item in systemTreeViewEditorMode.TreeViewRootItems)
             {
-                SystemScheduleTestUtilities.ExpandAllGroupNodes(systemTreeViewEditorMode, item);
+                SystemScheduleTestUtilities.ExpandAllGroupNodes(systemTreeViewEditorMode, item.data);
             }
 
             // Play mode
@@ -75,9 +75,9 @@ namespace Unity.Entities.Editor.Tests
             var systemTreeViewPlayMode = m_SystemScheduleWindow.rootVisualElement.Q<SystemTreeView>();
             var resultList = new List<string>();
 
-            foreach(var item in systemTreeViewPlayMode.m_TreeViewRootItems)
+            foreach(var item in systemTreeViewPlayMode.TreeViewRootItems)
             {
-                SystemScheduleTestUtilities.CollectExpandedGroupNodeNames(systemTreeViewPlayMode, item, resultList);
+                SystemScheduleTestUtilities.CollectExpandedGroupNodeNames(systemTreeViewPlayMode, item.data, resultList);
             }
 
             Assert.That(resultList.Count, Is.GreaterThanOrEqualTo(m_ExpandedNodeNamesToTest.Count));

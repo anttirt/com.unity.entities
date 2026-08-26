@@ -29,7 +29,6 @@ namespace Unity.Entities
 
         /// <summary>
         /// Constructor for writable enable reference to enableable component.
-        /// This is typically used by generated code inside of Aspects.
         /// </summary>
         /// <param name="ptr">Pointer to single bit and safety handle</param>
         /// <param name="ptrChunkDisabledCount"></param>

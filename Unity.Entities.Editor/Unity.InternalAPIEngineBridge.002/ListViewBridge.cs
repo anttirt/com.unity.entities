@@ -106,7 +106,10 @@ namespace Unity.Editor.Bridge
         {
             var args = new UnityEngine.UIElements.StartDragArgs(m_Title, m_UserData);
             if (m_UnityObjectReference != null)
-                args.SetUnityObjectReferences(new[] { m_UnityObjectReference });
+            {
+                List<EntityId> list = new List<EntityId> { m_UnityObjectReference.GetEntityId() };
+                args.SetEntityIds(list);
+            }
 
             return args;
         }

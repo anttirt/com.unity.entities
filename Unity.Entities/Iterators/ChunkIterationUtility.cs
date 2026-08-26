@@ -1135,7 +1135,8 @@ namespace Unity.Entities
             var length = chunk.Count;
             int stride = archetype->SizeOfs[typeIndexInArchetype];
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             if (Hint.Unlikely(archetype->EntityComponentStore->m_RecordToJournal != 0) && isWriting)
             {
                 EntitiesJournaling.AddRecord(
@@ -1147,6 +1148,7 @@ namespace Unity.Entities
                     types: &archetype->Types[typeIndexInArchetype].TypeIndex,
                     typeCount: 1);
             }
+#pragma warning restore 0618
 #endif
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -1188,6 +1190,7 @@ namespace Unity.Entities
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [IgnoreWarning(1305)] // Suppresses warning about intrinsic use when compiled with FloatMode=FloatMode.Deterministic
         internal static void GetEnabledMask(int chunkIndexInArchetype, int chunkEntityCount, in EnabledMaskMatchingArchetypeState archetypeState, out v128 enabledMask)
         {
             var matchingArchetype = archetypeState.MatchingArchetype;

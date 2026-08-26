@@ -1,57 +1,80 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Unity.Entities.Editor
 {
-    class WorldProxyManager
+    internal class WorldProxyManager : IDisposable
     {
-        readonly Dictionary<World, WorldProxy> m_WorldProxyForLocalWorldsDict = new Dictionary<World, WorldProxy>();
-        readonly Dictionary<WorldProxy, IWorldProxyUpdater> m_WorldProxyUpdaterDict = new Dictionary<WorldProxy, IWorldProxyUpdater>();
+        readonly Dictionary<World, WorldProxyUpdater> m_Updaters = new();
+        readonly List<World> m_WorldsToRemove = new();
+
+        bool m_UpdateAllWorlds;
+
+        public void SetUpdateAllWorlds(bool value)
+        {
+            if (m_UpdateAllWorlds == value)
+                return;
+            m_UpdateAllWorlds = value;
+            ApplyActiveState();
+        }
+
+        WorldProxy m_SelectedWorldProxy;
 
         public WorldProxy GetWorldProxyForGivenWorld(World world)
         {
             if (world == null || !world.IsCreated)
                 throw new ArgumentNullException(nameof(world));
 
-            if (m_WorldProxyForLocalWorldsDict.TryGetValue(world, out var worldProxy))
-            {
-                return worldProxy;
-            }
+            if (m_Updaters.TryGetValue(world, out var updater))
+                return updater.Proxy;
 
             throw new ArgumentException($"WorldProxy for given world {world.Name} does not exist or is null");
         }
 
-        public List<IWorldProxyUpdater> GetAllWorldProxyUpdaters()
+        public bool TryGetWorldProxy(World world, out WorldProxy proxy)
         {
-            return m_WorldProxyUpdaterDict.Values.ToList();
-        }
+            proxy = null;
+            if (world == null || !world.IsCreated)
+                return false;
 
-        WorldProxy m_SelectedWorldProxy;
-
-        public WorldProxy SelectedWorldProxy
-        {
-            get => m_SelectedWorldProxy;
-            set
+            if (m_Updaters.TryGetValue(world, out var updater))
             {
-                if (m_SelectedWorldProxy != null && m_SelectedWorldProxy.Equals(value))
-                    return;
-
-                m_SelectedWorldProxy = value;
-                SetActiveUpdater();
+                proxy = updater.Proxy;
+                return true;
             }
+            return false;
         }
 
-        public bool IsFullPlayerLoop { get; set; }
+        public IEnumerable<WorldProxyUpdater> GetAllWorldProxyUpdaters() => m_Updaters.Values;
+
+        public void SetSelectedWorldProxy(WorldProxy proxy)
+        {
+            if (m_SelectedWorldProxy != null && m_SelectedWorldProxy.Equals(proxy))
+                return;
+
+            m_SelectedWorldProxy = proxy;
+            ApplyActiveState();
+        }
+
+        void ApplyActiveState()
+        {
+            foreach (var updater in m_Updaters.Values)
+            {
+                if (m_UpdateAllWorlds || (m_SelectedWorldProxy != null && updater.Proxy.Equals(m_SelectedWorldProxy)))
+                    updater.EnableUpdater();
+                else
+                    updater.DisableUpdater();
+            }
+        }        
 
         public void CreateWorldProxiesForAllWorlds()
         {
             foreach (var world in World.All)
             {
-                if (m_WorldProxyForLocalWorldsDict.Keys.Contains(world))
+                if (m_Updaters.ContainsKey(world))
                     continue;
 
-                GetOrCreateNewWorldProxyForGivenWorld(world);
+                CreateWorldProxy(world);
             }
 
             CleanUpWorldProxyDictionary();
@@ -59,93 +82,59 @@ namespace Unity.Entities.Editor
 
         public void RebuildWorldProxyForGivenWorld(World world)
         {
-            var worldProxy = GetOrCreateNewWorldProxyForGivenWorld(world);
-            if (m_WorldProxyUpdaterDict.TryGetValue(worldProxy, out var localWorldProxyUpdater))
-                localWorldProxyUpdater.ResetWorldProxy();
+            CleanUpWorldProxyDictionary();
+
+            if (m_Updaters.TryGetValue(world, out var updater))
+                updater.ResetWorldProxy();
+            else
+                CreateWorldProxy(world);
         }
 
-        WorldProxy GetOrCreateNewWorldProxyForGivenWorld(World world)
+        void CreateWorldProxy(World world)
         {
             if (world == null || !world.IsCreated)
                 throw new ArgumentNullException(nameof(world));
 
-            CleanUpWorldProxyDictionary();
+            var mainFlag = WorldCategoryHelper.GetMainFlag(world);
+            if (mainFlag == WorldFlags.None || !Enum.IsDefined(typeof(HierarchyWorldFilter), (int)mainFlag))
+                return;
 
-            if (m_WorldProxyForLocalWorldsDict.TryGetValue(world, out var worldProxy))
-                return worldProxy;
+            if (m_Updaters.ContainsKey(world))
+                return;
 
-            worldProxy = new WorldProxy(world.SequenceNumber);
-            var updater = new LocalWorldProxyUpdater(world, worldProxy);
+            var worldProxy = new WorldProxy(world.SequenceNumber);
+            var updater = new WorldProxyUpdater(world, worldProxy);
             updater.PopulateWorldProxy();
-            if (IsFullPlayerLoop)
+            if (m_UpdateAllWorlds)
                 updater.EnableUpdater();
 
-            m_WorldProxyForLocalWorldsDict.Add(world, worldProxy);
-            m_WorldProxyUpdaterDict.Add(worldProxy, updater);
-
-            return worldProxy;
+            m_Updaters.Add(world, updater);
         }
 
         void CleanUpWorldProxyDictionary()
         {
-            foreach (var world in m_WorldProxyForLocalWorldsDict.Keys.ToList())
+            m_WorldsToRemove.Clear();
+
+            foreach (var (world, updater) in m_Updaters)
             {
-                if (world.IsCreated || !m_WorldProxyForLocalWorldsDict.TryGetValue(world, out var worldProxy))
-                    continue;
-
-                RemoveInvalidWorldProxy(world, worldProxy);
+                if (!world.IsCreated)
+                {
+                    updater.DisableUpdater();
+                    m_WorldsToRemove.Add(world);
+                }
             }
-        }
 
-        void RemoveInvalidWorldProxy(World world, WorldProxy worldProxy)
-        {
-            m_WorldProxyUpdaterDict.TryGetValue(worldProxy, out var updater);
-            updater.DisableUpdater();
-            m_WorldProxyUpdaterDict.Remove(worldProxy);
-            m_WorldProxyForLocalWorldsDict.Remove(world);
-        }
+            foreach (var world in m_WorldsToRemove)
+                m_Updaters.Remove(world);
 
-        void EnableAllUpdaters()
-        {
-            foreach (var updater in m_WorldProxyUpdaterDict.Values)
-            {
-                updater.EnableUpdater();
-            }
+            m_WorldsToRemove.Clear();
         }
 
         public void Dispose()
         {
-            foreach (var updater in m_WorldProxyUpdaterDict.Values)
-            {
+            foreach (var updater in m_Updaters.Values)
                 updater.DisableUpdater();
-            }
-        }
-
-        void SetActiveUpdater()
-        {
-            if (m_SelectedWorldProxy == null)
-                return;
-
-            if (IsFullPlayerLoop)
-            {
-                EnableAllUpdaters();
-                return;
-            }
-
-            foreach (var kvp in m_WorldProxyUpdaterDict)
-            {
-                var worldProxy = kvp.Key;
-                var updater = kvp.Value;
-
-                if (worldProxy.Equals(m_SelectedWorldProxy))
-                {
-                    updater.EnableUpdater();
-                }
-                else
-                {
-                    updater.DisableUpdater();
-                }
-            }
+            m_Updaters.Clear();
         }
     }
 }

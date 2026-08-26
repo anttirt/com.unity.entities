@@ -51,3 +51,7 @@ HierarchyListViewItem.hierarchy-item__subscene-node.unity-list-view__item--selec
     background-color: var(--prefab-override-indent-color);
 }
 
+.hierarchy-explicit-filter-block .search-query-open-arrow {
+    display: none;
+}
+

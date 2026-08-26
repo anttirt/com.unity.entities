@@ -56,18 +56,18 @@ namespace Unity.Entities
     unsafe struct BakedEntityData : IDisposable
     {
         /// <summary>
-        /// The InstanceID of the authoring component or GameObject mapped to the BakerState.
+        /// The EntityId of the authoring component or GameObject mapped to the BakerState.
         /// </summary>
-        UnsafeParallelHashMap<int, BakerState>                       _AuthoringIDToBakerState;
+        UnsafeParallelHashMap<EntityId, BakerState>                  _AuthoringIDToBakerState;
         UnsafeParallelHashMap<Entity, TransformUsageFlagCounters>    _ReferencedEntities;
-        bool                                                 _IsReferencedEntitiesDirty;
-        UnsafeParallelHashMap<int, int>                              _ComponentToAdditionalEntityCounter;
-        UnsafeParallelHashSet<int>                                   _AdditionalGameObjectsToBake;
-        UnsafeParallelHashMap<int, PrefabState>                      _PrefabStates;
+        bool                                                         _IsReferencedEntitiesDirty;
+        UnsafeParallelHashMap<EntityId, int>                         _ComponentToAdditionalEntityCounter;
+        UnsafeParallelHashSet<EntityId>                              _AdditionalGameObjectsToBake;
+        UnsafeParallelHashMap<EntityId, PrefabState>                 _PrefabStates;
         BakerDebugState                                              _BakerDebugState;
 
         // GameObject => Entity
-        internal UnsafeParallelHashMap<int, Entity>                  _GameObjectToEntity;
+        internal UnsafeParallelHashMap<EntityId, Entity>     _GameObjectToEntity;
         internal EntityManager                               _EntityManager;
         internal EntityArchetype                             _DefaultArchetype;
         internal EntityArchetype                             _DefaultArchetypeAdditionalEntity;
@@ -130,11 +130,11 @@ namespace Unity.Entities
 
         public BakedEntityData(EntityManager manager)
         {
-            _AuthoringIDToBakerState = new UnsafeParallelHashMap<int, BakerState>(10, Allocator.Persistent);
-            _ComponentToAdditionalEntityCounter = new UnsafeParallelHashMap<int, int>(10, Allocator.Persistent);
-            _AdditionalGameObjectsToBake = new UnsafeParallelHashSet<int>(10, Allocator.Persistent);
-            _PrefabStates = new UnsafeParallelHashMap<int, PrefabState>(10, Allocator.Persistent);
-            _GameObjectToEntity = new UnsafeParallelHashMap<int, Entity>(10, Allocator.Persistent);
+            _AuthoringIDToBakerState = new UnsafeParallelHashMap<EntityId, BakerState>(10, Allocator.Persistent);
+            _ComponentToAdditionalEntityCounter = new UnsafeParallelHashMap<EntityId, int>(10, Allocator.Persistent);
+            _AdditionalGameObjectsToBake = new UnsafeParallelHashSet<EntityId>(10, Allocator.Persistent);
+            _PrefabStates = new UnsafeParallelHashMap<EntityId, PrefabState>(10, Allocator.Persistent);
+            _GameObjectToEntity = new UnsafeParallelHashMap<EntityId, Entity>(10, Allocator.Persistent);
             _ReferencedEntities = new UnsafeParallelHashMap<Entity, TransformUsageFlagCounters>(10, Allocator.Persistent);
             _BakerDebugState = new BakerDebugState(Allocator.Persistent);
             _EntityManager = manager;
@@ -235,7 +235,7 @@ namespace Unity.Entities
             ConfigureDefaultArchetype(types, count, DefaultArchetype.Default);
             ConfigureDefaultArchetype(types, count, DefaultArchetype.Prefab);
 
-            _EntityGUIDNameSpaceID = settings.NamespaceID ^ (uint) scene.handle;
+            _EntityGUIDNameSpaceID = settings.NamespaceID ^ (uint) scene.handle.GetRawData();
             _AssignEntityGUID =
                 (settings.BakingFlags & BakingUtility.BakingFlags.AddEntityGUID) != 0;
             _SceneGUID = settings.SceneGUID;
@@ -304,7 +304,7 @@ namespace Unity.Entities
             ConfigureEntityBehaviourDefaultArchetype(types, count, DefaultArchetype.Default);
             ConfigureEntityBehaviourDefaultArchetype(types, count, DefaultArchetype.Prefab);
 
-            _EntityGUIDNameSpaceID = settings.NamespaceID ^ (uint) scene.handle;
+            _EntityGUIDNameSpaceID = settings.NamespaceID ^ (uint) scene.handle.GetRawData();
             _AssignEntityGUID =
                 (settings.BakingFlags & BakingUtility.BakingFlags.AddEntityGUID) != 0;
             _SceneGUID = settings.SceneGUID;
@@ -346,9 +346,9 @@ namespace Unity.Entities
             }
         }
 
-        public NativeList<int> RemoveInvalidEntities(Allocator allocator)
+        public NativeList<EntityId> RemoveInvalidEntities(Allocator allocator)
         {
-            NativeList<int> gameObjectsNoEntity = new NativeList<int>(100, allocator);
+            NativeList<EntityId> gameObjectsNoEntity = new NativeList<EntityId>(100, allocator);
 
             using var query = new EntityQueryBuilder(Allocator.Temp)
                 .WithAll<EntityGuid>()
@@ -378,12 +378,12 @@ namespace Unity.Entities
         [BurstCompile]
         struct FindDeletedEntitiesJob : IJob
         {
-            [ReadOnly] public UnsafeParallelHashMap<int, Entity> GameObjectEntities;
+            [ReadOnly] public UnsafeParallelHashMap<EntityId, Entity> GameObjectEntities;
 
             [ReadOnly] public EntityQueryMask Mask;
 
             [NativeDisableParallelForRestriction]
-            public NativeList<int> DeletedList;
+            public NativeList<EntityId> DeletedList;
 
             public void Execute()
             {
@@ -404,7 +404,7 @@ namespace Unity.Entities
         {
             foreach (var kvp in _PrefabStates)
             {
-                var instanceId = kvp.Key;
+                var EntityId = kvp.Key;
                 var prefabState = kvp.Value;
                 var newHash = (Hash128)UnityEditor.AssetDatabase.GetAssetDependencyHash(prefabState.GUID);
 
@@ -413,12 +413,12 @@ namespace Unity.Entities
                     if (newHash == default)
                     {
                         // Prefab was deleted, so mark for delete
-                        changeTracker.MarkRemoved(instanceId);
+                        changeTracker.MarkRemoved(EntityId);
                     }
                     else
                     {
                         // Prefab was changed, so force rebake
-                        changeTracker.MarkForceBakeHierarchy(instanceId);
+                        changeTracker.MarkForceBakeHierarchy(EntityId);
                     }
                 }
             }
@@ -441,10 +441,11 @@ namespace Unity.Entities
                 {
                     if (_AuthoringIDToBakerState.TryGetValue(component, out var bakerState))
                     {
+                        var componentEntityId = component;
                         ResetComponentAdditionalEntityCount(component, bakerState.GetPrimaryEntity());
 
                         using (s_RevertDependencies.Auto())
-                            BakeDependencies.ResetBakerDependencies(component, ref dependencies, ref bakerState.Dependencies);
+                            BakeDependencies.ResetBakerDependencies(ref componentEntityId, ref dependencies, ref bakerState.Dependencies);
 
                         using (s_RevertComponents.Auto())
                         {
@@ -464,7 +465,7 @@ namespace Unity.Entities
             {
                 foreach (var gameObject in instructions.PotentiallyRenamedGameObjects)
                 {
-                    if (_GameObjectToEntity.TryGetValue(gameObject.GetInstanceID(), out var entity))
+                    if (_GameObjectToEntity.TryGetValue(gameObject.GetEntityId(), out var entity))
                     {
                         // Debug.Log($"ApplyInstruction - Possible Rename: {component}");
                         _EntityManager.SetName(entity, gameObject.name);
@@ -481,12 +482,12 @@ namespace Unity.Entities
                 {
                     var gameObject = instructions.CreatedGameObjects[index];
                     var entity = entities[index];
-                    CreateEntityForGameObject(gameObject, entity, 0);
+                    CreateEntityForGameObject(gameObject, entity, EntityId.None);
 
-                    var didAdd = _GameObjectToEntity.TryAdd(gameObject.GetInstanceID(), entity);
+                    var didAdd = _GameObjectToEntity.TryAdd(gameObject.GetEntityId(), entity);
                     if (!didAdd)
                         Debug.LogError("Internally inconsistent _GameObjectToEntity table");
-                    // Debug.Log($"ApplyInstruction - CreateEntity: {entity} GameObject: {gameObject.GetInstanceID()} ({gameObject.name})");
+                    // Debug.Log($"ApplyInstruction - CreateEntity: {entity} GameObject: {gameObject.GetEntityId()} ({gameObject.name})");
                 }
             }
 
@@ -506,8 +507,9 @@ namespace Unity.Entities
 
                     if (_AuthoringIDToBakerState.TryGetValue(gameObject, out var bakerState))
                     {
+                        var gameObjectEntityId = gameObject;
                         using (s_RevertDependencies.Auto())
-                            BakeDependencies.ResetBakerDependencies(gameObject, ref dependencies, ref bakerState.Dependencies);
+                            BakeDependencies.ResetBakerDependencies(ref gameObjectEntityId, ref dependencies, ref bakerState.Dependencies);
                     }
                 }
             }
@@ -534,46 +536,53 @@ namespace Unity.Entities
 
                 using (s_Bake.Auto())
                 {
+                    var sortedBakeComponents = new IncrementalBakingContext.IncrementalBakeInstructions.BakeComponent[instructions.BakeComponents.Count];
+                    instructions.BakeComponents.CopyTo(sortedBakeComponents);
+#if UNITY_EDITOR
+                    // Stable iteration order required for reproducible artifact hashes
+                    SortBakeComponentsDeterministically(sortedBakeComponents);
+#endif
+
                     // Revert as a single pass all the component bakers that are going to rebake
-                    foreach (var component in instructions.BakeComponents)
+                    foreach (var component in sortedBakeComponents)
                     {
-                        var instanceID = component.ComponentID;
-                        if (_AuthoringIDToBakerState.TryGetValue(instanceID, out var bakerState))
+                        var entityId = component.ComponentID;
+                        if (_AuthoringIDToBakerState.TryGetValue(entityId, out var bakerState))
                         {
-                            if (!_GameObjectToEntity.TryGetValue(component.GameObjectInstanceID, out var entity) ||
+                            if (!_GameObjectToEntity.TryGetValue(component.GameObjectEntityId, out var entity) ||
                                 !_EntityManager.Exists(entity))
                             {
                                 Debug.LogError(
-                                    $"Baking entity that doesn't exist: {entity} GameObject: {component.GameObjectInstanceID} Component: {component}",
-                                    (GameObject) Resources.InstanceIDToObject(component.GameObjectInstanceID));
+                                    $"Baking entity that doesn't exist: {entity} GameObject: {component.GameObjectEntityId} Component: {component}",
+                                    (GameObject) Resources.EntityIdToObject(component.GameObjectEntityId));
                                 continue;
                             }
 
-                            ResetComponentAdditionalEntityCount(instanceID, entity);
+                            ResetComponentAdditionalEntityCount(entityId, entity);
                             bakerState.Revert(revertEcb, entity, ref _ReferencedEntities, blobAssetStore,
                                 ref _BakerDebugState, ref _IsReferencedEntitiesDirty, ref this);
-                            _AuthoringIDToBakerState[instanceID] = bakerState;
+                            _AuthoringIDToBakerState[entityId] = bakerState;
                         }
                     }
 
                     // Revert as a single pass all the GameObject bakers that are going to rebake
                     foreach (var gameObject in instructions.BakeGameObjects)
                     {
-                        var instanceID = gameObject.GetInstanceID();
-                        if (_AuthoringIDToBakerState.TryGetValue(instanceID, out var bakerState))
+                        var entityId = gameObject.GetEntityId();
+                        if (_AuthoringIDToBakerState.TryGetValue(entityId, out var bakerState))
                         {
-                            if (!_GameObjectToEntity.TryGetValue(instanceID, out var entity) ||
+                            if (!_GameObjectToEntity.TryGetValue(entityId, out var entity) ||
                                 !_EntityManager.Exists(entity))
                             {
-                                Debug.LogError($"Baking entity that doesn't exist: {entity} GameObject: {instanceID}",
+                                Debug.LogError($"Baking entity that doesn't exist: {entity} GameObject: {entityId}",
                                     gameObject);
                                 continue;
                             }
 
-                            ResetComponentAdditionalEntityCount(instanceID, entity);
+                            ResetComponentAdditionalEntityCount(entityId, entity);
                             bakerState.Revert(revertEcb, entity, ref _ReferencedEntities, blobAssetStore,
                                 ref _BakerDebugState, ref _IsReferencedEntitiesDirty, ref this);
-                            _AuthoringIDToBakerState[instanceID] = bakerState;
+                            _AuthoringIDToBakerState[entityId] = bakerState;
                         }
                     }
 
@@ -591,18 +600,18 @@ namespace Unity.Entities
                         // bake the GameObject properties
                         foreach (var gameObject in instructions.BakeGameObjects)
                         {
-                            var instanceID = gameObject.GetInstanceID();
-                            if (!_GameObjectToEntity.TryGetValue(instanceID, out var entity) ||
+                            var entityId = gameObject.GetEntityId();
+                            if (!_GameObjectToEntity.TryGetValue(entityId, out var entity) ||
                                 !_EntityManager.Exists(entity))
                             {
-                                Debug.LogError($"Baking entity that doesn't exist: {entity} GameObject: {instanceID}",
+                                Debug.LogError($"Baking entity that doesn't exist: {entity} GameObject: {entityId}",
                                     gameObject);
                                 continue;
                             }
 
                             entitiesBaked.Add(entity);
 
-                            var didExist = _AuthoringIDToBakerState.TryGetValue(instanceID, out var bakerState);
+                            var didExist = _AuthoringIDToBakerState.TryGetValue(entityId, out var bakerState);
                             try
                             {
                                 // Need full revert / rebake
@@ -630,7 +639,7 @@ namespace Unity.Entities
                                                 state.BakerState = &bakerState;
                                                 state.AuthoringSource = null;
                                                 state.AuthoringObject = gameObject;
-                                                state.AuthoringId = gameObject.GetInstanceID();
+                                                state.AuthoringId = gameObject.GetEntityId();
                                                 state.PrimaryEntity = entity;
 
                                                 // baker.Baker.BakeInternal(ref tempDependencies, ref tempUsage, ref bakerState, ref _BakerDebugState, i, ref this, ref ecb, component.Component, blobAssetStore);
@@ -645,7 +654,7 @@ namespace Unity.Entities
 
                                     using (s_RegisterDependencies.Auto())
                                     {
-                                        UpdateDependencies(ref dependencies, instanceID, ref bakerState, ref tempDependencies, ref tempUsage, out var revertTransforms);
+                                        UpdateDependencies(ref dependencies, entityId, ref bakerState, ref tempDependencies, ref tempUsage, out var revertTransforms);
                                         if (revertTransforms)
                                         {
                                             revertTransformsList.Add(tempUsage.PrimaryEntity);
@@ -678,7 +687,7 @@ namespace Unity.Entities
                                                 state.BakerState = &bakerState;
                                                 state.AuthoringSource = null;
                                                 state.AuthoringObject = gameObject;
-                                                state.AuthoringId = gameObject.GetInstanceID();
+                                                state.AuthoringId = gameObject.GetEntityId();
                                                 state.PrimaryEntity = entity;
 
                                                 // baker.Baker.BakeInternal(ref tempDependencies, ref tempUsage, ref bakerState, ref _BakerDebugState, i, ref this, ref ecb, component.Component, blobAssetStore);
@@ -696,7 +705,7 @@ namespace Unity.Entities
                                     {
                                         using (s_RegisterDependencies.Auto())
                                         {
-                                            AddDependencies(ref dependencies, instanceID, ref bakerState, out var revertTransforms);
+                                            AddDependencies(ref dependencies, entityId, ref bakerState, out var revertTransforms);
                                             if (revertTransforms)
                                             {
                                                 revertTransformsList.Add(bakerState.PrimaryEntity);
@@ -707,7 +716,7 @@ namespace Unity.Entities
                             }
                             finally
                             {
-                                _AuthoringIDToBakerState[instanceID] = bakerState;
+                                _AuthoringIDToBakerState[entityId] = bakerState;
                             }
                         }
                     }
@@ -724,15 +733,15 @@ namespace Unity.Entities
 #endif
 
                     // bake new and changed components
-                    foreach (var component in instructions.BakeComponents)
+                    foreach (var component in sortedBakeComponents)
                     {
-                        var instanceID = component.ComponentID;
+                        var entityId = component.ComponentID;
 
-                        _GameObjectToEntity.TryGetValue(component.GameObjectInstanceID, out var entity);
+                        _GameObjectToEntity.TryGetValue(component.GameObjectEntityId, out var entity);
                         if (!_EntityManager.Exists(entity))
                             Debug.LogError(
-                                $"Baking entity that doesn't exist: {entity} GameObject: {component.GameObjectInstanceID} Component: {component}",
-                                (GameObject) Resources.InstanceIDToObject(component.GameObjectInstanceID));
+                                $"Baking entity that doesn't exist: {entity} GameObject: {component.GameObjectEntityId} Component: {component}",
+                                (GameObject) Resources.EntityIdToObject(component.GameObjectEntityId));
 
                         var bakeTypeIndex = TypeManager.GetTypeIndex(component.Component.GetType());
                         var bakers = BakerDataUtility.GetBakers(bakeTypeIndex);
@@ -745,7 +754,7 @@ namespace Unity.Entities
 #endif
 #endif
                         entitiesBaked.Add(entity);
-                        var didExist = _AuthoringIDToBakerState.TryGetValue(instanceID, out var bakerState);
+                        var didExist = _AuthoringIDToBakerState.TryGetValue(entityId, out var bakerState);
                         try
                         {
                             // Need full revert / rebake
@@ -777,7 +786,7 @@ namespace Unity.Entities
                                             state.BakerState = &bakerState;
                                             state.AuthoringSource = component.Component;
                                             state.AuthoringObject = component.Component.gameObject;
-                                            state.AuthoringId = component.Component.GetInstanceID();
+                                            state.AuthoringId = component.Component.GetEntityId();
                                             state.PrimaryEntity = entity;
 
                                             // baker.Baker.BakeInternal(ref tempDependencies, ref tempUsage, ref bakerState, ref _BakerDebugState, i, ref this, ref ecb, component.Component, blobAssetStore);
@@ -793,7 +802,7 @@ namespace Unity.Entities
                                 // We need to update the dependencies even if the component is disabled
                                 using (s_RegisterDependencies.Auto())
                                 {
-                                    UpdateDependencies(ref dependencies, instanceID, ref bakerState, ref tempDependencies, ref tempUsage, out var revertTransforms);
+                                    UpdateDependencies(ref dependencies, entityId, ref bakerState, ref tempDependencies, ref tempUsage, out var revertTransforms);
                                     if (revertTransforms)
                                     {
                                         revertTransformsList.Add(tempUsage.PrimaryEntity);
@@ -832,7 +841,7 @@ namespace Unity.Entities
                                             state.BakerState = &bakerState;
                                             state.AuthoringSource = component.Component;
                                             state.AuthoringObject = component.Component.gameObject;
-                                            state.AuthoringId = component.Component.GetInstanceID();
+                                            state.AuthoringId = component.Component.GetEntityId();
                                             state.PrimaryEntity = entity;
 
                                             baker.Baker.InvokeBake(state);
@@ -849,7 +858,7 @@ namespace Unity.Entities
                                 {
                                     using (s_RegisterDependencies.Auto())
                                     {
-                                        AddDependencies(ref dependencies, instanceID, ref bakerState,
+                                        AddDependencies(ref dependencies, entityId, ref bakerState,
                                             out var revertTransforms);
                                         if (revertTransforms)
                                         {
@@ -863,10 +872,10 @@ namespace Unity.Entities
                         {
                             // NOTE: Have to copy back to the baking context since BakerState is copied by value
                             // Would be better to keep a ref to the bakerState (Should come into master soon)
-                            _AuthoringIDToBakerState[instanceID] = bakerState;
+                            _AuthoringIDToBakerState[entityId] = bakerState;
                         }
 
-                        //Debug.Log($"ApplyInstruction - Bake: {entity} GameObject: {component.GameObjectInstanceID} ({Resources.InstanceIDToObject(component.GameObjectInstanceID)}) Component: {component.Component.GetInstanceID()} ({component.Component})");
+                        //Debug.Log($"ApplyInstruction - Bake: {entity} GameObject: {component.GameObjectEntityId} ({Resources.InstanceIDToObject(component.GameObjectEntityId)}) Component: {component.Component.GetEntityId()} ({component.Component})");
                     }
                 }
             }
@@ -909,9 +918,9 @@ namespace Unity.Entities
             }
         }
 
-        void AddDependencies(ref BakeDependencies dependencies, int instanceID, ref BakerState bakerState, out bool revertTransformComponents)
+        void AddDependencies(ref BakeDependencies dependencies, EntityId entityId, ref BakerState bakerState, out bool revertTransformComponents)
         {
-            BakeDependencies.AddDependencies(ref dependencies, instanceID, ref bakerState.Dependencies);
+            BakeDependencies.AddDependencies(ref dependencies, ref entityId, ref bakerState.Dependencies);
 
             revertTransformComponents = false;
             if (!bakerState.Usage.PrimaryEntityFlags.IsUnused && bakerState.Usage.PrimaryEntityFlags.HasManualOverrideFlag())
@@ -920,19 +929,19 @@ namespace Unity.Entities
                     revertTransformComponents = !oldFlags.HasManualOverrideFlag();
             }
 
-            bakerState.Usage.AddTransformUsage(ref _ReferencedEntities, ref _IsReferencedEntitiesDirty, instanceID);
+            bakerState.Usage.AddTransformUsage(ref _ReferencedEntities, ref _IsReferencedEntitiesDirty, entityId);
         }
 
-        void UpdateDependencies(ref BakeDependencies dependencies, int instanceID, ref BakerState bakerState, ref BakeDependencies.RecordedDependencies tempDependencies, ref BakerEntityUsage tempUsage, out bool revertTransformComponents)
+        void UpdateDependencies(ref BakeDependencies dependencies, EntityId entityId, ref BakerState bakerState, ref BakeDependencies.RecordedDependencies tempDependencies, ref BakerEntityUsage tempUsage, out bool revertTransformComponents)
         {
-            if (BakeDependencies.UpdateDependencies(ref dependencies, instanceID, ref bakerState.Dependencies, ref tempDependencies))
+            if (BakeDependencies.UpdateDependencies(ref dependencies, ref entityId, ref bakerState.Dependencies, ref tempDependencies))
             {
-                //Debug.Log($"Updating dependencies for: '{Resources.InstanceIDToObject(component.GameObjectInstanceID).name}' {component.Component.GetType().Name}");
+                //Debug.Log($"Updating dependencies for: '{Resources.InstanceIDToObject(component.GameObjectEntityId).name}' {component.Component.GetType().Name}");
             }
 
-            if (BakerEntityUsage.Update(ref _ReferencedEntities, ref _IsReferencedEntitiesDirty, ref bakerState.Usage, ref tempUsage, instanceID, out revertTransformComponents))
+            if (BakerEntityUsage.Update(ref _ReferencedEntities, ref _IsReferencedEntitiesDirty, ref bakerState.Usage, ref tempUsage, entityId, out revertTransformComponents))
             {
-                //Debug.Log($"Updating usage for: '{Resources.InstanceIDToObject(component.GameObjectInstanceID).name}' {component.Component.GetType().Name}");
+                //Debug.Log($"Updating usage for: '{Resources.InstanceIDToObject(component.GameObjectEntityId).name}' {component.Component.GetType().Name}");
             }
         }
 
@@ -998,14 +1007,14 @@ namespace Unity.Entities
             job.Add.Dispose();
         }
 
-        internal Entity CreateEntityForGameObject(GameObject gameObject, int authoringInstanceId, EntityArchetype archetype, int serial = 0, string entityName = "")
+        internal Entity CreateEntityForGameObject(GameObject gameObject, EntityId authoringEntityId, EntityArchetype archetype, int serial = 0, string entityName = "")
         {
             if (gameObject == null)
                 throw new ArgumentNullException(nameof(gameObject),
                     $"{nameof(CreateEntityForGameObject)} must be called with a valid UnityEngine.Object");
 
             var entity = _EntityManager.CreateEntity(archetype);
-            CreateEntityForGameObject(gameObject, entity, authoringInstanceId, serial, entityName);
+            CreateEntityForGameObject(gameObject, entity, authoringEntityId, serial, entityName);
             return entity;
         }
 
@@ -1016,7 +1025,7 @@ namespace Unity.Entities
             return new SceneSection { SceneGUID = _SceneGUID, Section = sectionIndex };
         }
 
-        Entity CreateEntityForGameObject(GameObject gameObject, Entity entity, int authoringInstanceId, int serial = 0, string entityName = "")
+        Entity CreateEntityForGameObject(GameObject gameObject, Entity entity, EntityId authoringEntityId, int serial = 0, string entityName = "")
         {
             if (gameObject == null)
                 throw new ArgumentNullException(nameof(gameObject),
@@ -1024,7 +1033,7 @@ namespace Unity.Entities
 
             if (_AssignEntityGUID)
             {
-                var entityGuid = new EntityGuid(gameObject.GetInstanceID(), authoringInstanceId, _EntityGUIDNameSpaceID, (uint)serial);
+                var entityGuid = new EntityGuid(gameObject.GetEntityId(), authoringEntityId, _EntityGUIDNameSpaceID, (uint)serial);
                 _EntityManager.SetComponentData(entity, entityGuid);
             }
 
@@ -1050,16 +1059,16 @@ namespace Unity.Entities
         }
 
         // Batched version of CreateEntityForGameObject
-        void SetupEntitiesForGameObject(NativeArray<Entity> entities, GameObject gameObject, int authoringInstanceId, int serial)
+        void SetupEntitiesForGameObject(NativeArray<Entity> entities, GameObject gameObject, EntityId authoringEntityId, int serial)
         {
             Assert.IsTrue(gameObject != null);
 
             if (_AssignEntityGUID)
             {
-                var goInstanceID = gameObject.GetInstanceID();
+                var goInstanceID = gameObject.GetEntityId();
                 for (int i = 0; i < entities.Length; ++i)
                 {
-                    var entityGuid = new EntityGuid(goInstanceID, authoringInstanceId, _EntityGUIDNameSpaceID, (uint)(serial + i));
+                    var entityGuid = new EntityGuid(goInstanceID, authoringEntityId, _EntityGUIDNameSpaceID, (uint)(serial + i));
                     _EntityManager.SetComponentData(entities[i], entityGuid);
                 }
             }
@@ -1091,29 +1100,29 @@ namespace Unity.Entities
             return _CheckRevertPrefabs;
         }
 
-        public NativeArray<int> GetAndClearAdditionalObjectsToBake(Allocator allocator)
+        public NativeArray<EntityId> GetAndClearAdditionalObjectsToBake(Allocator allocator)
         {
             var additionalObjectsToBakeArray = _AdditionalGameObjectsToBake.ToNativeArray(allocator);
             _AdditionalGameObjectsToBake.Clear();
             return additionalObjectsToBakeArray;
         }
 
-        public NativeArray<int> GetAndClearPrefabObjectsToDestroy(ref IncrementalHierarchy hierarchy, Allocator allocator)
+        public NativeArray<EntityId> GetAndClearPrefabObjectsToDestroy(ref IncrementalHierarchy hierarchy, Allocator allocator)
         {
             if (!_CheckRevertPrefabs)
-                return new NativeArray<int>();
+                return new NativeArray<EntityId>();
 
-            var destroyedPrefabs = new NativeList<int>(0, Allocator.Temp);
+            var destroyedPrefabs = new NativeList<EntityId>(0, Allocator.Temp);
             foreach (var kvp in _PrefabStates)
             {
                 if(kvp.Value.RefCount == 0)
                 {
                     destroyedPrefabs.Add(kvp.Key);
-                    if (hierarchy.IndexByInstanceId.TryGetValue(kvp.Key, out var parentIndex))
+                    if (hierarchy.IndexByEntityId.TryGetValue(kvp.Key, out var parentIndex))
                     {
                         var children = IncrementalHierarchyFunctions.GetChildrenRecursively(hierarchy, parentIndex);
                         foreach (var childIndex in children)
-                            destroyedPrefabs.Add(hierarchy.InstanceId[childIndex]);
+                            destroyedPrefabs.Add(hierarchy.EntityId[childIndex]);
                     }
                 }
             }
@@ -1125,11 +1134,11 @@ namespace Unity.Entities
         }
 
 #if UNITY_EDITOR
-        public void AddPrefabRef(int instanceId)
+        public void AddPrefabRef(EntityId EntityId)
         {
-            if(!_PrefabStates.TryGetValue(instanceId, out var prefabState))
+            if(!_PrefabStates.TryGetValue(EntityId, out var prefabState))
             {
-                var prefabGUID = UnityEditor.GlobalObjectId.GetGlobalObjectIdSlow(instanceId).assetGUID;
+                var prefabGUID = UnityEditor.GlobalObjectId.GetGlobalObjectIdSlow(EntityId).assetGUID;
                 if (prefabGUID != default)
                 {
                     //@TODO: DOTS-5441
@@ -1139,14 +1148,14 @@ namespace Unity.Entities
                 }
             }
             prefabState.RefCount++;
-            _PrefabStates[instanceId] = prefabState;
+            _PrefabStates[EntityId] = prefabState;
         }
 
-        public void RemovePrefabRef(int instanceId)
+        public void RemovePrefabRef(EntityId EntityId)
         {
-            _PrefabStates.TryGetValue(instanceId, out var prefabState);
+            _PrefabStates.TryGetValue(EntityId, out var prefabState);
             prefabState.RefCount--;
-            _PrefabStates[instanceId] = prefabState;
+            _PrefabStates[EntityId] = prefabState;
             _CheckRevertPrefabs = true;
         }
 #endif
@@ -1157,10 +1166,10 @@ namespace Unity.Entities
             var count = allTransforms.Length;
             var entities = _EntityManager.CreateEntity(_DefaultArchetypePrefab, count, Allocator.Temp);
 
-            var instanceId = prefab.GetInstanceID();
+            var EntityId = prefab.GetEntityId();
             var entity = entities[0];
-            CreateEntityForGameObject(prefab, entity, 0, 0);
-            _GameObjectToEntity[instanceId] = entity;
+            CreateEntityForGameObject(prefab, entity, EntityId.None, 0);
+            _GameObjectToEntity[EntityId] = entity;
 
             // Make sure prefab root is dynamic
             var counters = new TransformUsageFlagCounters();
@@ -1168,7 +1177,7 @@ namespace Unity.Entities
             _ReferencedEntities.Add(entity, counters);
 
             // Now register the Prefab for lazy baking
-            _AdditionalGameObjectsToBake.Add(instanceId);
+            _AdditionalGameObjectsToBake.Add(EntityId);
 
             // Add all children
             var linkedEntityGroupArray = new NativeArray<LinkedEntityGroupBakingData>(count, Allocator.Temp);
@@ -1179,9 +1188,9 @@ namespace Unity.Entities
             {
                 var childGameObject = allTransforms[i].gameObject;
                 var childEntity = entities[i];
-                CreateEntityForGameObject(childGameObject, childEntity, 0, 0);
+                CreateEntityForGameObject(childGameObject, childEntity, EntityId.None, 0);
 
-                _GameObjectToEntity[childGameObject.GetInstanceID()] = childEntity;
+                _GameObjectToEntity[childGameObject.GetEntityId()] = childEntity;
 
                 linkedEntityGroupArray[i] = new LinkedEntityGroupBakingData {Value = childEntity};
             }
@@ -1198,7 +1207,7 @@ namespace Unity.Entities
             if (gameObject == null)
                 return Entity.Null;
 
-            var gameObjectId = gameObject.GetInstanceID();
+            var gameObjectId = gameObject.GetEntityId();
 
             // If it already exists, just give back the reference
             if (!_GameObjectToEntity.TryGetValue(gameObjectId, out var entity))
@@ -1226,68 +1235,68 @@ namespace Unity.Entities
                 return bakingOnlyEntity ? _DefaultArchetypeAdditionalEntityBakeOnly : _DefaultArchetypeAdditionalEntity;
         }
 
-        public Entity CreateAdditionalEntity(GameObject gameObject, int authoringInstanceId, bool bakingOnlyEntity, string entityName = "")
+        public Entity CreateAdditionalEntity(GameObject gameObject, EntityId authoringEntityId, bool bakingOnlyEntity, string entityName = "")
         {
-            var instanceId = gameObject.GetInstanceID();
-            var primaryEntity = _GameObjectToEntity[instanceId];
+            var EntityId = gameObject.GetEntityId();
+            var primaryEntity = _GameObjectToEntity[EntityId];
 
-            _ComponentToAdditionalEntityCounter.TryGetValue(authoringInstanceId, out var counter);
+            _ComponentToAdditionalEntityCounter.TryGetValue(authoringEntityId, out var counter);
             counter += 1;
 
-            _ComponentToAdditionalEntityCounter[authoringInstanceId] = counter;
+            _ComponentToAdditionalEntityCounter[authoringEntityId] = counter;
 
             var entityArchetype = GetAdditionalEntityArchetype(gameObject, bakingOnlyEntity);
-            var entity = CreateEntityForGameObject(gameObject, authoringInstanceId, entityArchetype, counter, entityName);
+            var entity = CreateEntityForGameObject(gameObject, authoringEntityId, entityArchetype, counter, entityName);
 
-            _EntityManager.SetComponentData(entity, new AdditionalEntityParent { Parent = primaryEntity, ParentInstanceID = instanceId });
+            _EntityManager.SetComponentData(entity, new AdditionalEntityParent { Parent = primaryEntity, ParentEntityId = EntityId });
             var buffer = _EntityManager.GetBuffer<AdditionalEntitiesBakingData>(primaryEntity);
             buffer.Add(new AdditionalEntitiesBakingData
             {
                 Value = entity,
-                AuthoringComponentID = authoringInstanceId
+                AuthoringComponentID = authoringEntityId
             });
 
             return entity;
         }
 
-        public void CreateAdditionalEntities(NativeArray<Entity> outputEntities, GameObject gameObject, int authoringInstanceId, bool bakingOnlyEntity)
+        public void CreateAdditionalEntities(NativeArray<Entity> outputEntities, GameObject gameObject, EntityId authoringEntityId, bool bakingOnlyEntity)
         {
             if (!outputEntities.IsCreated || outputEntities.Length == 0)
                 return;
 
-            var instanceId = gameObject.GetInstanceID();
-            var primaryEntity = _GameObjectToEntity[instanceId];
+            var EntityId = gameObject.GetEntityId();
+            var primaryEntity = _GameObjectToEntity[EntityId];
 
-            _ComponentToAdditionalEntityCounter.TryGetValue(authoringInstanceId, out var counter);
-            _ComponentToAdditionalEntityCounter[authoringInstanceId] = counter + outputEntities.Length;
+            _ComponentToAdditionalEntityCounter.TryGetValue(authoringEntityId, out var counter);
+            _ComponentToAdditionalEntityCounter[authoringEntityId] = counter + outputEntities.Length;
 
             var entityArchetype = GetAdditionalEntityArchetype(gameObject, bakingOnlyEntity);
             _EntityManager.CreateEntity(entityArchetype, outputEntities);
-            SetupEntitiesForGameObject(outputEntities, gameObject, authoringInstanceId, counter + 1);
+            SetupEntitiesForGameObject(outputEntities, gameObject, authoringEntityId, counter + 1);
 
             var buffer = _EntityManager.GetBuffer<AdditionalEntitiesBakingData>(primaryEntity);
             int bufferWritePos = buffer.Length;
             buffer.ResizeUninitialized(bufferWritePos + outputEntities.Length);
             foreach (var e in outputEntities)
             {
-                _EntityManager.SetComponentData(e, new AdditionalEntityParent { Parent = primaryEntity, ParentInstanceID = instanceId });
+                _EntityManager.SetComponentData(e, new AdditionalEntityParent { Parent = primaryEntity, ParentEntityId = EntityId });
                 buffer[bufferWritePos++] = new AdditionalEntitiesBakingData
                 {
                     Value = e,
-                    AuthoringComponentID = authoringInstanceId
+                    AuthoringComponentID = authoringEntityId
                 };
             }
         }
 
         public UnsafeHashSet<Entity> GetEntitiesForBakers(Component component)
         {
-            var builder = _AuthoringIDToBakerState[component.GetInstanceID()];
+            var builder = _AuthoringIDToBakerState[component.GetEntityId()];
             return builder.GetEntities();
         }
 
         public Entity GetPrimaryEntity(Component component)
         {
-            var builder = _AuthoringIDToBakerState[component.GetInstanceID()];
+            var builder = _AuthoringIDToBakerState[component.GetEntityId()];
             return builder.GetPrimaryEntity();
         }
 
@@ -1296,9 +1305,9 @@ namespace Unity.Entities
             transformAuthoringBaking.UpdateTransforms(_GameObjectToEntity, _ReferencedEntities, ref _IsReferencedEntitiesDirty);
         }
 
-        internal void ResetComponentAdditionalEntityCount(int authoringInstanceId, Entity entity)
+        internal void ResetComponentAdditionalEntityCount(EntityId authoringEntityId, Entity entity)
         {
-            _ComponentToAdditionalEntityCounter[authoringInstanceId] = 0;
+            _ComponentToAdditionalEntityCounter[authoringEntityId] = 0;
             if (entity != Entity.Null && _EntityManager.HasBuffer<AdditionalEntitiesBakingData>(entity))
             {
                 var buffer = _EntityManager.GetBuffer<AdditionalEntitiesBakingData>(entity);
@@ -1306,7 +1315,7 @@ namespace Unity.Entities
                 // Find the additional entities relative to the authoringID and remove them
                 for (int index = buffer.Length - 1; index >= 0; --index)
                 {
-                    if (buffer[index].AuthoringComponentID == authoringInstanceId)
+                    if (buffer[index].AuthoringComponentID == authoringEntityId)
                     {
                         buffer.RemoveAt(index);
                     }
@@ -1341,6 +1350,41 @@ namespace Unity.Entities
 
             ecb.Playback(_EntityManager);
         }
+
+#if UNITY_EDITOR
+        static void SortBakeComponentsDeterministically(IncrementalBakingContext.IncrementalBakeInstructions.BakeComponent[] components)
+        {
+            if (components.Length == 0)
+                return;
+
+            var globalIds = new UnityEditor.GlobalObjectId[components.Length];
+            var entityIds = new EntityId[components.Length];
+            for (var i = 0; i < components.Length; i++)
+                entityIds[i] = components[i].Component.GetEntityId();
+
+            UnityEditor.GlobalObjectId.GetGlobalObjectIdsSlow(entityIds, globalIds);
+
+            var sortKeys = new (UnityEditor.GlobalObjectId gid, int index)[components.Length];
+            for (var i = 0; i < components.Length; i++)
+                sortKeys[i] = (globalIds[i], i);
+
+            Array.Sort(sortKeys, (a, b) =>
+            {
+                var guidCmp = a.gid.assetGUID.CompareTo(b.gid.assetGUID);
+                if (guidCmp != 0) return guidCmp;
+
+                var objIdCmp = a.gid.targetObjectId.CompareTo(b.gid.targetObjectId);
+                return objIdCmp != 0 ? objIdCmp : a.gid.targetPrefabId.CompareTo(b.gid.targetPrefabId);
+            });
+
+            var sorted = new IncrementalBakingContext.IncrementalBakeInstructions.BakeComponent[components.Length];
+            for (var i = 0; i < components.Length; i++)
+            {
+                sorted[i] = components[sortKeys[i].index];
+            }
+            Array.Copy(sorted, components, components.Length);
+        }
+#endif
 
         [BurstCompile]
         struct ApplyActiveStaticStateJob : IJobParallelFor

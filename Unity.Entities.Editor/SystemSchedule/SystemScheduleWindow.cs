@@ -1,50 +1,79 @@
 using System;
+using System.Collections.Generic;
 using Unity.Profiling;
 using Unity.Properties;
 using Unity.Entities.UI;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
+using UnityEditor.Search;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
 {
-    class SystemScheduleWindow : DOTSEditorWindow, IHasCustomMenu
+    internal class SystemScheduleWindow : DOTSEditorWindow, IHasCustomMenu
     {
-        static readonly ProfilerMarker k_OnUpdateMarker =
-            new ProfilerMarker($"{nameof(SystemScheduleWindow)}.{nameof(OnUpdate)}");
+        internal static class Contents
+        {
+            public static readonly string WindowName = L10n.Tr("Systems");
+            public static readonly string ShowPlayerLoopString = L10n.Tr("Show Player Loop");
+            public static readonly string ShowAllWorldsString = L10n.Tr("Show All Worlds");
+            public static readonly string AllWorldsLabel = L10n.Tr("All Worlds");
+            public static readonly string System = L10n.Tr("System");
+            public static readonly string Scheduling = L10n.Tr("Scheduling");
+            public static readonly string SchedulingTooltip = L10n.Tr("Shows systems that have an [UpdateBefore] or [UpdateAfter] relationship with the currently selected system.");
+            public static readonly string UpdateBeforeSchedulingTooltip = L10n.Tr("The selected system declares an [UpdateBefore] attribute targeting this system.");
+            public static readonly string UpdateAfterSchedulingTooltip = L10n.Tr("The selected system declares an [UpdateAfter] attribute targeting this system.");
+            public static readonly string UpdateBeforeReverseSchedulingTooltip =
+                L10n.Tr("This system declares an [UpdateBefore] attribute targeting the selected system.");
+            public static readonly string UpdateAfterReverseSchedulingTooltip =
+                L10n.Tr("This system declares an [UpdateAfter] attribute targeting the selected system.");
+            public static readonly string SystemTooltip = L10n.Tr("System name.");
+            public static readonly string Namespace = L10n.Tr("Namespace");
+            public static readonly string NamespaceTooltip = L10n.Tr("Namespace to which this system belongs.");
+            public static readonly string EntityCount = L10n.Tr("Entity Count");
+            public static readonly string EntityCountTooltip = L10n.Tr("The number of entities that match the queries at the end of the frame.");
+            public static readonly string Time = L10n.Tr("Time (ms)");
+            public static readonly string TimeTooltip = L10n.Tr("System running time");
+            public static readonly string EntitiesPreferencesString = L10n.Tr("Entities Preferences");
+            public static readonly string EntitiesPreferencesPath = "Preferences/Entities";
+            public static readonly string ViewOption = L10n.Tr("View Options");
+            public static readonly string Setting = L10n.Tr("Setting");
+            public static readonly string NoSystemSelectedMessage = L10n.Tr("Select a system on the left to see details.");
+            public static readonly string ToggleDetailViewTooltip = L10n.Tr("Show or hide the system detail view.");
+            public static readonly string BackButtonTooltip = L10n.Tr("Go back in selection history");
+            public static readonly string ForwardButtonTooltip = L10n.Tr("Go forward in selection history");
+            public static readonly string ShowUnityNamespaceSystemsString = L10n.Tr("Show Unity-Namespaced Systems");
+        }
 
-        readonly Cooldown m_Cooldown = new Cooldown(TimeSpan.FromMilliseconds(Constants.Inspector.CoolDownTime));
-
-        static readonly string k_WindowName = L10n.Tr("Systems");
-        static readonly string k_SystemContentName = L10n.Tr("System");
-        static readonly string k_ShowFullPlayerLoopString = L10n.Tr("Show Full Player Loop");
-        static readonly string k_WorldOptionString = L10n.Tr("World");
-        static readonly string k_NamespaceOptionString = L10n.Tr("Namespace");
-        static readonly string k_EntityCountOptionString = L10n.Tr("Entity Count");
-        static readonly string k_TimeOptionString = L10n.Tr("Time (ms)");
-        static readonly string k_EntitiesPreferencesString = L10n.Tr("Entities Preferences");
-        static readonly string k_EntitiesPreferencesPath = "Preferences/Entities";
-        static readonly string k_ViewOption = L10n.Tr("View Options");
-        static readonly string k_ColumnOption = L10n.Tr("Column Options");
-        static readonly string k_Setting = L10n.Tr("Setting");
-        static readonly string k_FilterComponentType = L10n.Tr("Component type");
-        static readonly string k_FilterComponentTypeTooltip = L10n.Tr("Filter systems that have the specified component type in queries");
-        static readonly string k_FilterSystemDependencies = L10n.Tr("System dependencies");
-        static readonly string k_FilterSystemDependenciesTooltip = L10n.Tr("Filter systems by their direct dependencies");
+        static readonly ProfilerMarker k_OnUpdateMarker = new ($"{nameof(SystemScheduleWindow)}.{nameof(OnUpdate)}");
 
         VisualElement m_Root;
         CenteredMessageElement m_NoWorld;
         SystemTreeView m_SystemTreeView;
+        PropertyElement m_SystemInspectorView;
+        ScrollView m_SystemInspectorScrollView;
+        CenteredMessageElement m_NoSystemSelected;
+        TwoPaneSplitView m_BodyView;
+        bool m_HasSelectedSystem;
         VisualElement m_WorldSelector;
         VisualElement m_EmptySelectorWhenShowingFullPlayerLoop;
-        SearchElement m_SearchElement;
+        // internal for tests.
+        internal Button m_BackButton;
+        internal Button m_ForwardButton;
+        internal const int k_NavigationHistoryCapacity = 10;
+        internal readonly List<SystemProxy> m_NavigationHistory = new();
+        internal int m_NavigationIndex = -1;
+        bool m_NavigatingHistory;
         internal WorldProxyManager WorldProxyManager; // internal for tests.
         PlayerLoopSystemGraph m_LocalSystemGraph;
         int m_LastWorldVersion;
         bool m_ViewChange;
         bool m_GraphChange;
+
+        public SystemSearchView SystemSearchView { get; private set; }
+        SearchFieldElement m_SearchField;
 
         WorldProxy m_SelectedWorldProxy;
 
@@ -56,21 +85,14 @@ namespace Unity.Entities.Editor
         {
             [CreateProperty] public bool Show0sInEntityCountAndTimeColumn = false;
             [CreateProperty] public bool ShowMorePrecisionForRunningTime = false;
-            public bool ShowWorldColumn = true;
-            public bool ShowNamespaceColumn = true;
-            public bool ShowEntityCountColumn = true;
-            public bool ShowTimeColumn = true;
-            public bool ShowFullPlayerLoop;
+            public bool ShowPlayerLoop;
+            public bool ShowAllWorlds;
+            public bool ShowDetailView = true;
+            public bool ShowUnityNamespaceSystems = true;
         }
 
         // Internal for tests.
         internal SystemsWindowConfiguration m_Configuration;
-
-        Label m_SystemHeaderLabel;
-        Label m_WorldHeaderLabel;
-        Label m_NamespaceHeaderLabel;
-        Label m_EntityHeaderLabel;
-        Label m_TimeHeaderLabel;
 
         [MenuItem(Constants.MenuItems.SystemScheduleWindow, false, Constants.MenuItems.SystemScheduleWindowPriority)]
         static void OpenWindow()
@@ -79,8 +101,7 @@ namespace Unity.Entities.Editor
             window.Show();
         }
 
-        public SystemScheduleWindow() : base(Analytics.Window.Systems)
-        { }
+        public SystemScheduleWindow() : base(Analytics.Window.Systems) { }
 
         /// <summary>
         /// Build the GUI for the system window.
@@ -88,8 +109,9 @@ namespace Unity.Entities.Editor
         protected override void OnCreate()
         {
             Resources.AddCommonVariables(rootVisualElement);
+            UnityEditor.Search.SearchElement.AppendStyleSheets(rootVisualElement);
 
-            titleContent = EditorGUIUtility.TrTextContent(k_WindowName, EditorIcons.System);
+            titleContent = EditorGUIUtility.TrTextContent(Contents.WindowName, EditorIcons.System);
             minSize = Constants.MinWindowSize;
 
             m_Root = new VisualElement();
@@ -113,11 +135,18 @@ namespace Unity.Entities.Editor
             WorldProxyManager.CreateWorldProxiesForAllWorlds();
 
             CreateToolBar(m_Root);
-            CreateTreeViewHeader(m_Root);
-            CreateTreeView(m_Root);
 
-            if (!string.IsNullOrEmpty(SearchFilter))
-                m_SearchElement.Search(SearchFilter);
+            m_BodyView = new TwoPaneSplitView()
+            {
+                name = "BodySplitView",
+                viewDataKey = nameof(SystemScheduleWindow) + "_BodySplitView",
+                orientation = TwoPaneSplitViewOrientation.Horizontal,
+                fixedPaneInitialDimension = 1024f
+            };
+
+            m_Root.Add(m_BodyView);
+            m_BodyView.Add(CreateTreeView());
+            m_BodyView.Add(CreateInspectorView());
 
             Selection.selectionChanged += OnGlobalSelectionChanged;
         }
@@ -133,16 +162,42 @@ namespace Unity.Entities.Editor
         void CreateToolBar(VisualElement root)
         {
             var toolbar = new VisualElement();
+            toolbar.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.Wrapper);
             Resources.Templates.SystemScheduleToolbar.Clone(toolbar);
             var leftSide = toolbar.Q(className: UssClasses.SystemScheduleWindow.Toolbar.LeftSide);
             var rightSide = toolbar.Q(className: UssClasses.SystemScheduleWindow.Toolbar.RightSide);
 
             m_WorldSelector = CreateWorldSelector();
-            m_EmptySelectorWhenShowingFullPlayerLoop = new ToolbarMenu { text = k_ShowFullPlayerLoopString };
+            m_EmptySelectorWhenShowingFullPlayerLoop = new Label(Contents.AllWorldsLabel);
+            m_EmptySelectorWhenShowingFullPlayerLoop.AddToClassList("unity-toolbar-menu");
             leftSide.Add(m_WorldSelector);
             leftSide.Add(m_EmptySelectorWhenShowingFullPlayerLoop);
 
-            AddSearchIcon(rightSide, UssClasses.DotsEditorCommon.SearchIcon);
+            m_BackButton = new Button(() => NavigateHistory(-1)) { tooltip = Contents.BackButtonTooltip };
+            m_BackButton.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.NavigationButton);
+            m_BackButton.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.BackButton);
+            rightSide.Add(m_BackButton);
+
+            rightSide.Add(CreateToolbarSeparator());
+
+            m_ForwardButton = new Button(() => NavigateHistory(+1)) { tooltip = Contents.ForwardButtonTooltip };
+            m_ForwardButton.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.NavigationButton);
+            m_ForwardButton.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.ForwardButton);
+            rightSide.Add(m_ForwardButton);
+
+            rightSide.Add(CreateToolbarSeparator());
+
+            UpdateNavigationButtons();
+
+            var detailViewToggle = new Button(ToggleDetailView)
+            {
+                tooltip = Contents.ToggleDetailViewTooltip,
+                style = { backgroundImage = EditorGUIUtility.IconContent("UnityEditor.InspectorWindow").image as Texture2D }
+            };
+            detailViewToggle.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.DetailViewToggle);
+            rightSide.Add(detailViewToggle);
+
+            rightSide.Add(CreateToolbarSeparator());
 
             var dropdownSettings = InspectorUtility.CreateDropdownSettings(UssClasses.DotsEditorCommon.SettingsIcon);
             AppendOptionMenu(dropdownSettings.menu);
@@ -151,119 +206,66 @@ namespace Unity.Entities.Editor
             rightSide.Add(dropdownSettings);
 
             root.Add(toolbar);
-            AddSearchElement(root);
-            m_SearchElement.parent.Add(SearchUtils.CreateJumpButton(() => SystemSearchProvider.OpenProvider(m_SearchElement.value, SelectedWorld)));
+            AddSearchField(toolbar);
         }
 
         void AppendOptionMenu(DropdownMenu menu)
         {
-            // Full player loop
-            menu.AppendAction(k_ViewOption, null, DropdownMenuAction.Status.Disabled);
-            menu.AppendAction(k_ShowFullPlayerLoopString, a =>
-            {
-                m_Configuration.ShowFullPlayerLoop = !m_Configuration.ShowFullPlayerLoop;
-                WorldProxyManager.IsFullPlayerLoop = m_Configuration.ShowFullPlayerLoop;
+            menu.AppendAction(Contents.ViewOption, null, DropdownMenuAction.Status.Disabled);
 
-                UpdateWorldSelectorDisplay();
+            menu.AppendAction(Contents.ShowPlayerLoopString, a =>
+            {
+                m_Configuration.ShowPlayerLoop = !m_Configuration.ShowPlayerLoop;
+                m_SystemTreeView.ShowPlayerLoop = m_Configuration.ShowPlayerLoop;
 
                 if (World.All.Count > 0)
                     RebuildTreeView();
-            }, a=> m_Configuration.ShowFullPlayerLoop ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            }, a => m_Configuration.ShowPlayerLoop ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
 
-            menu.AppendSeparator();
-
-            // Column options
-            menu.AppendAction(k_ColumnOption, null, DropdownMenuAction.Status.Disabled);
-            menu.AppendAction(k_WorldOptionString, a =>
+            menu.AppendAction(Contents.ShowAllWorldsString, a =>
             {
-                m_Configuration.ShowWorldColumn = !m_Configuration.ShowWorldColumn;
-                m_WorldHeaderLabel.SetVisibility(m_Configuration.ShowWorldColumn);
-                UpdateConfigurations();
-                AdjustSystemHeaderLabelWidth();
-            }, a=> m_Configuration.ShowWorldColumn ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+                m_Configuration.ShowAllWorlds = !m_Configuration.ShowAllWorlds;
 
-            menu.AppendAction(k_NamespaceOptionString, a =>
-            {
-                m_Configuration.ShowNamespaceColumn = !m_Configuration.ShowNamespaceColumn;
-                m_NamespaceHeaderLabel.SetVisibility(m_Configuration.ShowNamespaceColumn);
-                UpdateConfigurations();
-                AdjustSystemHeaderLabelWidth();
-            }, a=> m_Configuration.ShowNamespaceColumn ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+                UpdateWorldSelectorDisplay();
+                SyncWorldProxy();
 
-            menu.AppendAction(k_EntityCountOptionString, a =>
-            {
-                m_Configuration.ShowEntityCountColumn = !m_Configuration.ShowEntityCountColumn;
-                m_EntityHeaderLabel.SetVisibility(m_Configuration.ShowEntityCountColumn);
-                UpdateConfigurations();
-                AdjustSystemHeaderLabelWidth();
-            }, a=> m_Configuration.ShowEntityCountColumn ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+                if (World.All.Count > 0)
+                    RebuildTreeView();
+            }, a => m_Configuration.ShowAllWorlds ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
 
-            menu.AppendAction(k_TimeOptionString, a =>
+            menu.AppendAction(Contents.ShowUnityNamespaceSystemsString, a =>
             {
-                m_Configuration.ShowTimeColumn = !m_Configuration.ShowTimeColumn;
-                m_TimeHeaderLabel.SetVisibility(m_Configuration.ShowTimeColumn);
-                UpdateConfigurations();
-                AdjustSystemHeaderLabelWidth();
-            }, a=> m_Configuration.ShowTimeColumn ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+                m_Configuration.ShowUnityNamespaceSystems = !m_Configuration.ShowUnityNamespaceSystems;
+                m_SystemTreeView.ShowUnityNamespaceSystems = m_Configuration.ShowUnityNamespaceSystems;
+
+                if (World.All.Count > 0)
+                    RebuildTreeView();
+            }, a => m_Configuration.ShowUnityNamespaceSystems ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
 
             menu.AppendSeparator();
 
             // Setting
-            menu.AppendAction(k_Setting, null, DropdownMenuAction.AlwaysDisabled);
-            menu.AppendAction(k_EntitiesPreferencesString, a =>
+            menu.AppendAction(Contents.Setting, null, DropdownMenuAction.AlwaysDisabled);
+            menu.AppendAction(Contents.EntitiesPreferencesString, a =>
             {
-                SettingsService.OpenUserPreferences(k_EntitiesPreferencesPath);
+                SettingsService.OpenUserPreferences(Contents.EntitiesPreferencesPath);
             });
         }
 
-        void AddSearchElement(VisualElement root)
+        void AddSearchField(VisualElement root)
         {
-            m_SearchElement = AddSearchElement<SystemForSearch>(root, UssClasses.DotsEditorCommon.SearchFieldContainer);
-            m_SearchElement.RegisterSearchQueryHandler<SystemForSearch>(query =>
-            {
-                var parseResult = SearchQueryParser.ParseSearchQuery(query);
-                m_SystemTreeView.SetFilter(query, parseResult);
-            });
-
-            m_SearchElement.AddSearchFilterPopupItem(Constants.ComponentSearch.Token, k_FilterComponentType, k_FilterComponentTypeTooltip, Constants.ComponentSearch.Op);
-            m_SearchElement.AddSearchFilterPopupItem(Constants.SystemSchedule.k_SystemDependencyToken.Substring(0, 2), k_FilterSystemDependencies, k_FilterSystemDependenciesTooltip);
-
-            m_SearchElement.AddSearchDataProperty(new PropertyPath(nameof(SystemForSearch.SystemName)));
-            m_SearchElement.AddSearchFilterProperty(Constants.ComponentSearch.Token, new PropertyPath(nameof(SystemForSearch.ComponentNamesInQuery)));
-            m_SearchElement.AddSearchFilterProperty(Constants.SystemSchedule.k_SystemDependencyToken.Substring(0, 2), new PropertyPath(nameof(SystemForSearch.SystemDependency)));
-            m_SearchElement.EnableAutoComplete(ComponentTypeAutoComplete.Instance);
+            SystemSearchView = new SystemSearchView(this);
+            m_SearchField = new SearchFieldElement("SystemSearch", SystemSearchView, SearchQueryBuilderViewFlags.Default);
+            root.Add(m_SearchField);
         }
 
         void UpdateWorldSelectorDisplay()
         {
-            m_WorldSelector.SetVisibility(!m_Configuration.ShowFullPlayerLoop);
-            m_EmptySelectorWhenShowingFullPlayerLoop.SetVisibility(m_Configuration.ShowFullPlayerLoop);
+            m_WorldSelector.SetVisibility(!m_Configuration.ShowAllWorlds);
+            m_EmptySelectorWhenShowingFullPlayerLoop.SetVisibility(m_Configuration.ShowAllWorlds);
         }
 
-        /// <summary>
-        ///  Manually create header for the tree view.
-        /// </summary>
-        /// <param name="root"></param>
-        void CreateTreeViewHeader(VisualElement root)
-        {
-            var headerRoot = new VisualElement();
-            Resources.Templates.SystemScheduleTreeViewHeader.Clone(headerRoot);
-
-            m_SystemHeaderLabel = headerRoot.Q<Label>(className: UssClasses.SystemScheduleWindow.TreeViewHeader.System);
-            m_WorldHeaderLabel = headerRoot.Q<Label>(className: UssClasses.SystemScheduleWindow.TreeViewHeader.World);
-            m_NamespaceHeaderLabel = headerRoot.Q<Label>(className: UssClasses.SystemScheduleWindow.TreeViewHeader.Namespace);
-            m_EntityHeaderLabel = headerRoot.Q<Label>(className: UssClasses.SystemScheduleWindow.TreeViewHeader.EntityCount);
-            m_TimeHeaderLabel = headerRoot.Q<Label>(className: UssClasses.SystemScheduleWindow.TreeViewHeader.Time);
-
-            m_WorldHeaderLabel.SetVisibility(m_Configuration.ShowWorldColumn);
-            m_NamespaceHeaderLabel.SetVisibility(m_Configuration.ShowNamespaceColumn);
-            m_EntityHeaderLabel.SetVisibility(m_Configuration.ShowEntityCountColumn);
-            m_TimeHeaderLabel.SetVisibility(m_Configuration.ShowTimeColumn);
-
-            root.Add(headerRoot);
-        }
-
-        void CreateTreeView(VisualElement root)
+        VisualElement CreateTreeView()
         {
             m_SystemTreeView = new SystemTreeView
             {
@@ -272,17 +274,158 @@ namespace Unity.Entities.Editor
                 LocalSystemGraph = m_LocalSystemGraph
             };
             UpdateConfigurations();
-            root.Add(m_SystemTreeView);
+            m_SystemTreeView.SetSelection();
+            m_SystemTreeView.RebuildColumns();
+            m_SystemTreeView.systemSelectionChanged += UpdateSelectedSystem;
+            return m_SystemTreeView;
+        }
+
+        internal void UpdateSelectedSystem(SystemProxy systemProxy)
+        {
+            if (systemProxy.World != null && systemProxy.World.IsCreated)
+            {
+                var content = new SystemContent(systemProxy.World, systemProxy);
+                m_SystemInspectorView.SetTarget(new SystemContentDisplay(content));
+                m_HasSelectedSystem = true;
+                PushNavigationHistory(systemProxy);
+            }
+            else
+            {
+                m_SystemInspectorView.SetTarget(default(SystemContentDisplay));
+                m_HasSelectedSystem = false;
+            }
+            UpdateInspectorVisibility();
+            m_SystemInspectorView.ForceReload();
+        }
+
+        void PushNavigationHistory(SystemProxy systemProxy)
+        {
+            if (m_NavigatingHistory)
+                return;
+
+            if (m_NavigationIndex >= 0 && m_NavigationHistory[m_NavigationIndex].Equals(systemProxy))
+                return;
+
+            if (m_NavigationIndex < m_NavigationHistory.Count - 1)
+                m_NavigationHistory.RemoveRange(m_NavigationIndex + 1, m_NavigationHistory.Count - m_NavigationIndex - 1);
+
+            m_NavigationHistory.Add(systemProxy);
+
+            while (m_NavigationHistory.Count > k_NavigationHistoryCapacity)
+                m_NavigationHistory.RemoveAt(0);
+
+            m_NavigationIndex = m_NavigationHistory.Count - 1;
+            UpdateNavigationButtons();
+        }
+
+        internal void NavigateHistory(int delta)
+        {
+            var target = m_NavigationIndex + delta;
+            while (target >= 0 && target < m_NavigationHistory.Count && !m_NavigationHistory[target].Valid)
+            {
+                m_NavigationHistory.RemoveAt(target);
+                if (delta < 0)
+                {
+                    target--;
+                    m_NavigationIndex--; // entry was before current position; shift to keep pointing at the same item
+                }
+            }
+
+            if (target < 0 || target >= m_NavigationHistory.Count)
+            {
+                UpdateNavigationButtons();
+                return;
+            }
+
+            m_NavigationIndex = target;
+            var systemProxy = m_NavigationHistory[target];
+
+            m_NavigatingHistory = true;
+            try
+            {
+                if (!m_SystemTreeView.TrySelectSystem(systemProxy))
+                {
+                    // Item not present in the current tree (filtered out, world changed, etc.).
+                    // Still update the inspector so the user gets feedback.
+                    SystemTreeView.SelectedSystem = systemProxy;
+                    UpdateSelectedSystem(systemProxy);
+                }
+            }
+            finally
+            {
+                m_NavigatingHistory = false;
+            }
+
+            UpdateNavigationButtons();
+        }
+
+        void UpdateNavigationButtons()
+        {
+            if (m_BackButton == null || m_ForwardButton == null)
+                return;
+
+            m_BackButton.SetEnabled(m_NavigationIndex > 0);
+            m_ForwardButton.SetEnabled(m_NavigationIndex < m_NavigationHistory.Count - 1);
+        }
+
+        internal void ClearNavigationHistory()
+        {
+            m_NavigationHistory.Clear();
+            m_NavigationIndex = -1;
+            UpdateNavigationButtons();
+        }
+
+        static VisualElement CreateToolbarSeparator()
+        {
+            var separator = new VisualElement();
+            separator.AddToClassList(UssClasses.SystemScheduleWindow.Toolbar.ToolbarSeparator);
+            return separator;
         }
 
         void UpdateConfigurations()
         {
-            m_SystemTreeView.ShowWorldColumn = m_Configuration.ShowWorldColumn;
-            m_SystemTreeView.ShowNamespaceColumn = m_Configuration.ShowNamespaceColumn;
-            m_SystemTreeView.ShowEntityCountColumn = m_Configuration.ShowEntityCountColumn;
-            m_SystemTreeView.ShowTimeColumn = m_Configuration.ShowTimeColumn;
             m_SystemTreeView.ShowMorePrecisionForRunningTime = m_Configuration.ShowMorePrecisionForRunningTime;
             m_SystemTreeView.Show0sInEntityCountAndTimeColumn = m_Configuration.Show0sInEntityCountAndTimeColumn;
+            m_SystemTreeView.ShowUnityNamespaceSystems = m_Configuration.ShowUnityNamespaceSystems;
+            m_SystemTreeView.ShowPlayerLoop = m_Configuration.ShowPlayerLoop;
+        }
+
+        VisualElement CreateInspectorView()
+        {
+            var container = new VisualElement { style = { flexGrow = 1 } };
+
+            m_SystemInspectorScrollView = new ScrollView(ScrollViewMode.Vertical) { style = { flexGrow = 1 } };
+            m_SystemInspectorView = new PropertyElement();
+            Resources.AddCommonVariables(m_SystemInspectorView);
+
+            Resources.Templates.ContentProvider.System.AddStyles(m_SystemInspectorView);
+            m_SystemInspectorView.AddToClassList(UssClasses.Content.SystemInspector.SystemContainer);
+
+            m_SystemInspectorScrollView.Add(m_SystemInspectorView);
+            container.Add(m_SystemInspectorScrollView);
+
+            m_NoSystemSelected = new CenteredMessageElement { Message = Contents.NoSystemSelectedMessage };
+            container.Add(m_NoSystemSelected);
+
+            UpdateInspectorVisibility();
+            return container;
+        }
+
+        void ToggleDetailView()
+        {
+            m_Configuration.ShowDetailView = !m_Configuration.ShowDetailView;
+            UpdateInspectorVisibility();
+        }
+
+        void UpdateInspectorVisibility()
+        {
+            m_SystemInspectorScrollView.SetVisibility(m_HasSelectedSystem);
+            m_NoSystemSelected.SetVisibility(!m_HasSelectedSystem);
+
+            if (m_Configuration.ShowDetailView)
+                m_BodyView.UnCollapse();
+            else
+                m_BodyView.CollapseChild(1);
         }
 
         void UpdatePreferences()
@@ -294,31 +437,58 @@ namespace Unity.Entities.Editor
                 m_SystemTreeView.Show0sInEntityCountAndTimeColumn = m_Configuration.Show0sInEntityCountAndTimeColumn;
         }
 
+        public void StopSearch() => m_SystemTreeView.StopSearch();
+        public void SetResults(IList<SearchItem> results) => m_SystemTreeView.SetResults(results);
+
         // internal for test.
         internal void RebuildTreeView()
         {
-            m_SystemTreeView.Refresh(m_Configuration.ShowFullPlayerLoop ? null : m_SelectedWorldProxy);
+            m_SystemTreeView.Refresh(m_Configuration.ShowAllWorlds ? null : m_SelectedWorldProxy);
+        }
+
+        internal void ForceUpdate()
+        {
+            if (m_SystemTreeView == null || WorldProxyManager == null)
+                return;
+
+            UpdatePreferences();
+
+            // Force all active updaters to rebuild their proxies
+            foreach (var updater in WorldProxyManager.GetAllWorldProxyUpdaters())
+            {
+                if (!updater.IsActive())
+                    continue;
+
+                updater.ResetWorldProxy();
+            }
+
+            // Rebuild graph and tree view
+            m_LocalSystemGraph.BuildCurrentGraph();
+            RebuildTreeView();
+
+            m_GraphChange = false;
+            m_ViewChange = false;
         }
 
         protected override void OnUpdate()
         {
             using (k_OnUpdateMarker.Auto())
             {
-                if (!m_Cooldown.Update(DateTime.Now))
-                    return;
-
                 if (m_SystemTreeView == null || WorldProxyManager == null)
                     return;
 
                 UpdatePreferences();
 
+                if (SystemSearchView != null)
+                    SystemSearchView.position = position;
+
                 foreach (var updater in WorldProxyManager.GetAllWorldProxyUpdaters())
                 {
-                    if (!updater.IsActive() || !updater.IsDirty())
-                        continue;
-
-                    m_GraphChange = true;
-                    updater.SetClean();
+                    if (updater.IsActive() && updater.IsDirty())
+                    {
+                        m_GraphChange = true;
+                        updater.SetClean();
+                    }
                 }
 
                 if (m_GraphChange)
@@ -332,13 +502,22 @@ namespace Unity.Entities.Editor
             }
         }
 
-        void AdjustSystemHeaderLabelWidth()
+        void SyncWorldProxy()
         {
-            m_SystemHeaderLabel.style.width = 200f
-                                              + (m_Configuration.ShowWorldColumn ? 0f : 100f)
-                                              + (m_Configuration.ShowNamespaceColumn ? 0f : 120f)
-                                              + (m_Configuration.ShowEntityCountColumn ? 0f : 75f)
-                                              + (m_Configuration.ShowTimeColumn ? 0f : 75f);
+            WorldProxyManager.SetUpdateAllWorlds(m_Configuration.ShowAllWorlds);
+
+            World searchWorld = null;
+            if (!m_Configuration.ShowAllWorlds && SelectedWorld != null && SelectedWorld.IsCreated)
+            {
+                if (WorldProxyManager.TryGetWorldProxy(SelectedWorld, out var proxy))
+                {
+                    m_SelectedWorldProxy = proxy;
+                    WorldProxyManager.SetSelectedWorldProxy(m_SelectedWorldProxy);
+                    searchWorld = SelectedWorld;
+                }
+            }
+
+            SystemSearchView?.SetWorld(searchWorld);
         }
 
         protected override void OnWorldsChanged(bool containsAnyWorld)
@@ -349,16 +528,10 @@ namespace Unity.Entities.Editor
             if (m_SystemTreeView == null)
                 return;
 
-            WorldProxyManager.IsFullPlayerLoop = m_Configuration.ShowFullPlayerLoop;
             WorldProxyManager.CreateWorldProxiesForAllWorlds();
+            SyncWorldProxy();
 
-            if (SelectedWorld != null && SelectedWorld.IsCreated)
-            {
-                m_SelectedWorldProxy = WorldProxyManager.GetWorldProxyForGivenWorld(SelectedWorld);
-                WorldProxyManager.SelectedWorldProxy = m_SelectedWorldProxy;
-            }
-
-            if (m_Configuration.ShowFullPlayerLoop)
+            if (m_Configuration.ShowAllWorlds)
                 m_GraphChange = true;
         }
 
@@ -367,11 +540,11 @@ namespace Unity.Entities.Editor
             if (world == null || !world.IsCreated)
                 return;
 
-            if (m_Configuration.ShowFullPlayerLoop)
+            if (m_Configuration.ShowAllWorlds)
                 return;
 
-            m_SelectedWorldProxy = WorldProxyManager.GetWorldProxyForGivenWorld(world);
-            WorldProxyManager.SelectedWorldProxy = m_SelectedWorldProxy;
+            SyncWorldProxy();
+            ClearNavigationHistory();
 
             m_ViewChange = true;
         }
@@ -381,7 +554,11 @@ namespace Unity.Entities.Editor
             SystemTreeView.SelectedSystem = systemProxy;
 
             if (HasOpenInstances<SystemScheduleWindow>())
-                GetWindow<SystemScheduleWindow>().m_SystemTreeView.SetSelection();
+            {
+                var systemWindow = GetWindow<SystemScheduleWindow>();
+                systemWindow.m_SystemTreeView.SetSelection();
+                systemWindow.UpdateSelectedSystem(SystemTreeView.SelectedSystem);
+            }
         }
 
         public void AddItemsToMenu(GenericMenu menu)
@@ -395,12 +572,11 @@ namespace Unity.Entities.Editor
 
         void OnGlobalSelectionChanged()
         {
-            if (Selection.activeObject is InspectorContent content && content.Content.Name.Equals(k_SystemContentName))
+            if (Selection.activeObject is InspectorContent content && content.Content.Name.Equals(Contents.System))
                 return;
 
             SystemTreeView.SelectedSystem = default;
-            m_SystemTreeView.m_SystemTreeView.ClearSelection();
-            m_SystemTreeView.m_SystemListView.ClearSelection();
+            m_SystemTreeView.MultiColumnTreeViewElement.ClearSelection();
         }
     }
 }

@@ -12,7 +12,10 @@ Note that `IJobEntity` works identically with SystemBase and ISystem.
 
 To create an `IJobEntity` job, write a struct that uses the `IJobEntity` interface, and implement your own custom `Execute` method. 
 
-Use the `partial` keyword because source generation creates a struct that implements `IJobChunk` in a separate file in `project/Temp/GeneratedCode/....`.
+Use the `partial` keyword because source generation creates an implementation of `IJobChunk` for the struct as part of the compilation.
+
+> [!IMPORTANT]
+> You can define an `IJobEntity` struct outside of a system, but you must schedule or run the job from inside a system (`SystemBase` or `ISystem`). Scheduling outside of a system bypasses source generation and results in a runtime exception.
 
 The following example adds one to every SampleComponent every frame.
 [!code-cs[SimpleSample](../DocCodeSamples.Tests/JobEntityExamples.cs#SimpleSample)]

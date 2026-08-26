@@ -46,14 +46,6 @@ public readonly struct QueriesAndHandles
         return description.GeneratedFieldName;
     }
 
-    public string GetOrCreateAspectLookup(ITypeSymbol entityTypeLookup, bool isReadOnly)
-    {
-        var entityTypeLookupField = new AspectLookupFieldDescription(entityTypeLookup, isReadOnly);
-        TypeHandleStructNestedFields.Add(entityTypeLookupField);
-
-        return entityTypeLookupField.GeneratedFieldName;
-    }
-
     public string GetOrCreateEntityTypeHandleField()
     {
         var entityTypeHandleFieldDescription = new EntityTypeHandleFieldDescription();

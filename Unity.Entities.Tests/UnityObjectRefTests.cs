@@ -43,6 +43,7 @@ namespace Unity.Entities.Tests
             public UnityObjectRef<UnityEngine.Object> UnityObjectRef;
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         struct SharedComponentManagedWithUnityObjectRef : ISharedComponentData, IEquatable<SharedComponentManagedWithUnityObjectRef>
         {
             public UnityObjectRef<UnityEngine.Object> UnityObjectRef;
@@ -63,6 +64,7 @@ namespace Unity.Entities.Tests
                 return HashCode.Combine(UnityObjectRef, DummyManagedField);
             }
         }
+        #pragma warning restore EA0017
 #endif // !UNITY_DISABLE_MANAGED_COMPONENTS
 
         struct SharedComponentWithUnityObjectRef : ISharedComponentData
@@ -76,16 +78,17 @@ namespace Unity.Entities.Tests
             public UnityObjectRef<UnityEngine.Object> UnityObjectRef;
         }
 
-#if (UNITY_2022_3 && UNITY_2022_3_43F1_OR_NEWER) || (UNITY_6000 && UNITY_6000_0_16F1_OR_NEWER)
         [UnityTest]
         public IEnumerator AssetGC_StructWithUnityObjectRefOverride_AssetReleased()
         {
             var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(TempAssetPath);
-            var instanceID = textAsset.GetInstanceID();
+            var entityId = textAsset.GetEntityId();
 
             using var world = new World("TestWorld");
             var entity = world.EntityManager.CreateEntity(new ComponentType(typeof(StructWithUnityObjectRefOverride)));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.SetComponentData(entity, new StructWithUnityObjectRefOverride{UnityObjectRef = textAsset});
+            #pragma warning restore 0618
 
             Assert.IsTrue(AssetDatabase.IsMainAssetAtPathLoaded(TempAssetPath));
 
@@ -100,11 +103,13 @@ namespace Unity.Entities.Tests
         public IEnumerator AssetGC_StructComponent_AssetNotReleased()
         {
             var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(TempAssetPath);
-            var instanceID = textAsset.GetInstanceID();
+            var entityId = textAsset.GetEntityId();
 
             using var world = new World("TestWorld");
             var entity = world.EntityManager.CreateEntity(new ComponentType(typeof(StructWithUnityObjectRef)));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.SetComponentData(entity, new StructWithUnityObjectRef{UnityObjectRef = textAsset});
+            #pragma warning restore 0618
 
             Assert.IsTrue(AssetDatabase.IsMainAssetAtPathLoaded(TempAssetPath));
 
@@ -120,11 +125,13 @@ namespace Unity.Entities.Tests
         public IEnumerator AssetGC_ClassComponent_AssetNotReleased()
         {
             var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(TempAssetPath);
-            var instanceID = textAsset.GetInstanceID();
+            var entityId = textAsset.GetEntityId();
 
             using var world = new World("TestWorld");
             var entity = world.EntityManager.CreateEntity(new ComponentType(typeof(ClassWithUnityObjectRef)));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.SetComponentData(entity, new ClassWithUnityObjectRef{UnityObjectRef = textAsset});
+            #pragma warning restore 0618
 
             Assert.IsTrue(AssetDatabase.IsMainAssetAtPathLoaded(TempAssetPath));
 
@@ -139,11 +146,13 @@ namespace Unity.Entities.Tests
         public IEnumerator AssetGC_SharedComponentManaged_AssetNotReleased()
         {
             var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(TempAssetPath);
-            var instanceID = textAsset.GetInstanceID();
+            var entityId = textAsset.GetEntityId();
 
             using var world = new World("TestWorld");
             var entity = world.EntityManager.CreateEntity(new ComponentType(typeof(SharedComponentManagedWithUnityObjectRef)));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             world.EntityManager.SetSharedComponentManaged(entity, new SharedComponentManagedWithUnityObjectRef{UnityObjectRef = textAsset});
+            #pragma warning restore 0618
 
             Assert.IsTrue(AssetDatabase.IsMainAssetAtPathLoaded(TempAssetPath));
 
@@ -159,7 +168,7 @@ namespace Unity.Entities.Tests
         public IEnumerator AssetGC_SharedComponent_AssetNotReleased()
         {
             var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(TempAssetPath);
-            var instanceID = textAsset.GetInstanceID();
+            var entityId = textAsset.GetEntityId();
 
             using var world = new World("TestWorld");
             var entity = world.EntityManager.CreateEntity(new ComponentType(typeof(SharedComponentWithUnityObjectRef)));
@@ -173,7 +182,6 @@ namespace Unity.Entities.Tests
 
             Assert.IsTrue(AssetDatabase.IsMainAssetAtPathLoaded(TempAssetPath));
         }
-#endif // (UNITY_2022_3 && UNITY_2022_3_43F1_OR_NEWER) || (UNITY_6000 && UNITY_6000_0_16F1_OR_NEWER)
     }
 }
 #endif

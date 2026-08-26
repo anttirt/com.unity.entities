@@ -198,7 +198,9 @@ namespace Unity.Entities
                     var subArrayOffset = archetype->Offsets[typeIndexInArchetype];
                     var componentArrayStart = chunkBuffer + subArrayOffset;
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     if (componentTypeInArchetype.IsManagedComponent)
+                    #pragma warning restore 0618
                     {
                         var componentSize = archetype->SizeOfs[typeIndexInArchetype];
                         var end = componentArrayStart + componentSize * entityCount;

@@ -172,7 +172,7 @@ namespace Unity.Entities
         }
 
         /// <summary>
-        /// Create an instance with five component types
+        /// Create an instance with four component types
         /// </summary>
         /// <param name="a">A component type</param>
         /// <param name="b">A component type</param>

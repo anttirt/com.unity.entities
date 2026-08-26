@@ -3,13 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Unity.Collections;
-using Unity.Entities;
 using Unity.Entities.Serialization;
 using UnityEditor;
+using UnityEngine;
+using Hash128 = Unity.Entities.Hash128;
 
 namespace Unity.Scenes
 {
-    struct SceneWithBuildConfigurationGUIDs
+    partial struct SceneWithBuildConfigurationGUIDs
     {
         public Hash128 SceneGUID;
         public Hash128 BuildConfiguration;
@@ -28,6 +29,13 @@ namespace Unity.Scenes
         private static ulong s_AssetRefreshCounter = 0;
 
         internal const string k_SceneDependencyCachePath = "Assets/SceneDependencyCache";
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            s_BuildConfigurationCreated.Clear();
+            s_AssetRefreshCounter = 0;
+        }
 
         internal static void ClearBuildSettingsCache()
         {
@@ -89,6 +97,9 @@ namespace Unity.Scenes
             Directory.CreateDirectory(k_SceneDependencyCachePath);
             using (var writer = new StreamBinaryWriter(path))
             {
+#if UNITY_EDITOR && UNITY_DOTS_IMHEX
+                writer.ImHexPattern.WriteTypeWithPosition<SceneWithBuildConfigurationGUIDs>("sceneWithBuildConfigurationGUIDs", writer.Position);
+#endif
                 writer.WriteBytes(&sceneWithBuildConfigurationGUIDs, sizeof(SceneWithBuildConfigurationGUIDs));
             }
             File.WriteAllText(path + ".meta",

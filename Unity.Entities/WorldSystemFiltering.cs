@@ -57,7 +57,7 @@ namespace Unity.Entities
         /// </summary>
         Default                         = 1 << 0,
         /// <summary>
-        /// Systems explicitly disabled via the [DisableAutoCreation] attribute are by default placed in this world.
+        /// Systems explicitly disabled via the [DisableAutoCreation] attribute are marked with this flag.
         /// </summary>
         Disabled = 1 << 1,
         /// <summary>
@@ -110,7 +110,7 @@ namespace Unity.Entities
         /// </summary>
         EntityProxyPreview                     = 1 << 15,
         /// <summary>
-        /// Flag to include all system groups defined above as well as systems decorated with [DisableAutoCreation].
+        /// Flag to include all system groups defined above, including systems decorated with [DisableAutoCreation].
         /// </summary>
         All                             = ~0u
     }

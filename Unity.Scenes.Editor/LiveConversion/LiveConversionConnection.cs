@@ -20,9 +20,18 @@ namespace Unity.Scenes.Editor
     // A connection to a Player or Editor with a specific build configuration.
     // Each destination world in each player/editor, has it's own LiveConversionConnection so we can generate different data for different worlds.
     // For example server world vs client world.
-    class LiveConversionConnection
+    partial class LiveConversionConnection
     {
         static int                                 GlobalDirtyID = 0;
+
+        static readonly List<LiveConversionConnection>   k_AllConnections = new List<LiveConversionConnection>();
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            GlobalDirtyID = 0;
+            k_AllConnections.Clear();
+        }
 
         HashSet<Hash128>                           _LoadedScenes = new HashSet<Hash128>();
         HashSet<Hash128>                           _SentLoadScenes = new HashSet<Hash128>();
@@ -34,8 +43,6 @@ namespace Unity.Scenes.Editor
         internal readonly Hash128                  _ConfigurationGUID;
         IEntitiesPlayerSettings                    _SettingAsset;
         UnityEngine.Hash128                        _BuildConfigurationArtifactHash;
-
-        static readonly List<LiveConversionConnection>   k_AllConnections = new List<LiveConversionConnection>();
 
         public LiveConversionConnection(Hash128 configGuid)
         {
@@ -116,19 +123,19 @@ namespace Unity.Scenes.Editor
                     case ObjectChangeKind.CreateGameObjectHierarchy:
                     {
                         stream.GetCreateGameObjectHierarchyEvent(i, out var evt);
-                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkBakeHierarchy(evt.instanceId);
+                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkBakeHierarchy(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.ChangeGameObjectStructureHierarchy:
                     {
                         stream.GetChangeGameObjectStructureHierarchyEvent(i, out var evt);
-                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkBakeHierarchy(evt.instanceId);
+                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkBakeHierarchy(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.ChangeGameObjectStructure:
                     {
                         stream.GetChangeGameObjectStructureEvent(i, out var evt);
-                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkChanged(evt.instanceId);
+                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkChanged(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.ChangeGameObjectParent:
@@ -136,51 +143,51 @@ namespace Unity.Scenes.Editor
                         stream.GetChangeGameObjectParentEvent(i, out var evt);
                         if (evt.newScene != evt.previousScene)
                         {
-                            GetLiveConversion(evt.newScene)?.ChangeTracker.MarkBakeHierarchy(evt.instanceId);
-                            GetLiveConversion(evt.previousScene)?.ChangeTracker.MarkRemoved(evt.instanceId);
+                            GetLiveConversion(evt.newScene)?.ChangeTracker.MarkBakeHierarchy(evt.entityId);
+                            GetLiveConversion(evt.previousScene)?.ChangeTracker.MarkRemoved(evt.entityId);
                         }
                         else
-                            GetLiveConversion(evt.newScene)?.ChangeTracker.MarkParentChanged(evt.instanceId, evt.newParentInstanceId);
+                            GetLiveConversion(evt.newScene)?.ChangeTracker.MarkParentChanged(evt.entityId, evt.newParentEntityId);
                         break;
                     }
                     case ObjectChangeKind.ChangeChildrenOrder:
                     {
                         stream.GetChangeChildrenOrderEvent(i, out var evt);
-                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkChildrenOrderChange(evt.instanceId);
+                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkChildrenOrderChange(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.ChangeGameObjectOrComponentProperties:
                     {
                         stream.GetChangeGameObjectOrComponentPropertiesEvent(i, out var evt);
-                        var target = EditorUtility.InstanceIDToObject(evt.instanceId);
+                        var target = EditorUtility.EntityIdToObject(evt.entityId);
                         if (target is Component c)
                             GetLiveConversion(evt.scene)?.ChangeTracker.MarkComponentChanged(c);
                         else
-                            GetLiveConversion(evt.scene)?.ChangeTracker.MarkChanged(evt.instanceId);
+                            GetLiveConversion(evt.scene)?.ChangeTracker.MarkChanged(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.DestroyGameObjectHierarchy:
                     {
                         stream.GetDestroyGameObjectHierarchyEvent(i, out var evt);
-                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkRemoved(evt.instanceId);
+                        GetLiveConversion(evt.scene)?.ChangeTracker.MarkRemoved(evt.entityId);
                         break;
                     }
                     case ObjectChangeKind.CreateAssetObject:
                     {
                         stream.GetCreateAssetObjectEvent(i, out var evt);
-                        MarkAssetChanged(evt.instanceId, evt.scene);
+                        MarkAssetChanged(evt.entityId, evt.scene);
                         break;
                     }
                     case ObjectChangeKind.DestroyAssetObject:
                     {
                         stream.GetDestroyAssetObjectEvent(i, out var evt);
-                        MarkAssetChanged(evt.instanceId, evt.scene);
+                        MarkAssetChanged(evt.entityId, evt.scene);
                         break;
                     }
                     case ObjectChangeKind.ChangeAssetObjectProperties:
                     {
                         stream.GetChangeAssetObjectPropertiesEvent(i, out var evt);
-                        MarkAssetChanged(evt.instanceId, evt.scene);
+                        MarkAssetChanged(evt.entityId, evt.scene);
                         break;
                     }
                     case ObjectChangeKind.UpdatePrefabInstances:
@@ -189,31 +196,27 @@ namespace Unity.Scenes.Editor
                         var diffGenerator = GetLiveConversion(evt.scene);
                         if (diffGenerator != null)
                         {
-                            for (int k = 0; k < evt.instanceIds.Length; k++)
-                                diffGenerator.ChangeTracker.MarkForceBakeHierarchy(evt.instanceIds[k]);
+                            for (int k = 0; k < evt.entityIds.Length; k++)
+                                diffGenerator.ChangeTracker.MarkForceBakeHierarchy(evt.entityIds[k]);
                         }
                         break;
                     }
                     default:
-#if UNITY_2023_3_OR_NEWER
                         // Adding a new enum to the next editor. Temporarily disable this throw for now until it lands.
                         break;
-#else
-                        throw new ArgumentOutOfRangeException();
-#endif
                 }
             }
             EditorUpdateUtility.EditModeQueuePlayerLoopUpdate();
         }
 
-        void MarkAssetChanged(int assetInstanceId, Scene scene)
+        void MarkAssetChanged(EntityId assetEntityId, Scene scene)
         {
             if (scene.IsValid())
-                GetLiveConversion(scene)?.ChangeTracker.MarkAssetChanged(assetInstanceId);
+                GetLiveConversion(scene)?.ChangeTracker.MarkAssetChanged(assetEntityId);
             else
             {
                 foreach (var diffGenerator in _SceneGUIDToLiveConversion.Values)
-                    diffGenerator.ChangeTracker.MarkAssetChanged(assetInstanceId);
+                    diffGenerator.ChangeTracker.MarkAssetChanged(assetEntityId);
             }
         }
 

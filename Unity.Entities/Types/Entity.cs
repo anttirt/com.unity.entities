@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using UnityEngine;
 
 namespace Unity.Entities
 {
@@ -112,6 +114,12 @@ namespace Unity.Entities
         public bool Equals(Entity entity)
         {
             return entity.Index == Index && entity.Version == Version;
+        }
+
+
+        public static implicit operator EntityId(Entity entity)
+        {
+            return UnsafeUtility.As<Entity, EntityId>(ref entity);
         }
 
         /// <summary>

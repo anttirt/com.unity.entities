@@ -1,8 +1,9 @@
 using JetBrains.Annotations;
 using Unity.Properties;
 using Unity.Entities.UI;
-using Unity.Serialization;
+using Unity.Entities.Serialization;
 using UnityEditor;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
@@ -37,7 +38,7 @@ namespace Unity.Entities.Editor
             }
         }
 
-        [CreateProperty, UsedImplicitly, DontSerialize] public int InstanceId => EntityGuid.OriginatingId;
+        [CreateProperty, UsedImplicitly, DontSerialize] public EntityId EntityId => EntityGuid.OriginatingEntityId;
         [CreateProperty, UsedImplicitly, DontSerialize] public int Index => Entity.Index;
         [CreateProperty, UsedImplicitly, DontSerialize] public int ComponentCount => World.EntityManager.GetComponentCount(Entity);
 

@@ -1,6 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Assert = FastAssert;
@@ -130,348 +130,327 @@ namespace Unity.Entities.Tests
             entities.Dispose();
         }
 
-        public partial class ProcessSystem : SystemBase
+                public partial class ProcessSystem : SystemBase
         {
+            [BurstCompile]
+            partial struct Process2Job : IJobEntity
+            {
+                void Execute(ref EcsTestData2 writeHere, in EcsTestData readHere)
+                {
+                    writeHere.value1 = readHere.value;
+                }
+            }
+
             public JobHandle Process2_Schedule()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = readHere.value;
-                    }).Schedule(default);
+                return new Process2Job().Schedule(new JobHandle());
             }
 
             public JobHandle Process2_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = readHere.value;
-                    }).ScheduleParallel(default);
+                return new Process2Job().ScheduleParallel(new JobHandle());
             }
 
             public void Process2_Run()
             {
-                Entities.ForEach((ref EcsTestData2 writeHere, in EcsTestData readHere) =>
+                new Process2Job().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process3Job : IJobEntity
+            {
+                void Execute(ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, in EcsTestData readHere)
                 {
-                    writeHere.value1 = readHere.value;
-                }).Run();
+                    writeHere.value1 = writeHereToo.value2 = readHere.value;
+                }
             }
 
             public JobHandle Process3_Schedule()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = writeHereToo.value2 = readHere.value;
-                    }).Schedule(default);
+                return new Process3Job().Schedule(new JobHandle());
             }
 
             public JobHandle Process3_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = writeHereToo.value2 = readHere.value;
-                    }).ScheduleParallel(default);
+                return new Process3Job().ScheduleParallel(new JobHandle());
             }
 
             public void Process3_Run()
             {
-                Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, in EcsTestData readHere) =>
+                new Process3Job().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process4Job : IJobEntity
+            {
+                void Execute(ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, ref EcsTestData4 andWriteHere, in EcsTestData readHere)
                 {
-                    writeHere.value1 = writeHereToo.value2 = readHere.value;
-                }).Run();
+                    writeHere.value1 = writeHereToo.value2 = andWriteHere.value3 = readHere.value;
+                }
             }
 
             public JobHandle Process4_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, ref EcsTestData4 andWriteHere, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = writeHereToo.value2 = andWriteHere.value3 = readHere.value;
-                    }).ScheduleParallel(default);
+                return new Process4Job().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process4_Schedule()
             {
-                return
-                    Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, ref EcsTestData4 andWriteHere, in EcsTestData readHere) =>
-                    {
-                        writeHere.value1 = writeHereToo.value2 = andWriteHere.value3 = readHere.value;
-                    }).Schedule(default);
+                return new Process4Job().Schedule(new JobHandle());
             }
 
             public void Process4_Run()
             {
-                Entities.ForEach((ref EcsTestData2 writeHere, ref EcsTestData3 writeHereToo, ref EcsTestData4 andWriteHere, in EcsTestData readHere) =>
+                new Process4Job().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process1Entity : IJobEntity
+            {
+                void Execute(Entity entity, [EntityIndexInQuery] int entityInQueryIndex, ref EcsTestData writeTo)
                 {
-                    writeHere.value1 = writeHereToo.value2 = andWriteHere.value3 = readHere.value;
-                }).Run();
+                    writeTo.value += entity.Index + entityInQueryIndex;
+                }
             }
 
             public JobHandle Process1Entity_ScheduleParallel()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData writeTo) =>
-                {
-                    writeTo.value += entity.Index + entityInQueryIndex;
-                }).ScheduleParallel(default);
+                return new Process1Entity().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process1Entity_Schedule()
             {
-                return Entities.ForEach((Entity entity,int entityInQueryIndex, ref EcsTestData writeTo) =>
-                {
-                    writeTo.value += entity.Index + entityInQueryIndex;
-                }).Schedule(default);
+                return new Process1Entity().Schedule(new JobHandle());
             }
 
             public void Process1Entity_Run()
             {
-                Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData writeTo) =>
+                new Process1Entity().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process2Entity : IJobEntity
+            {
+                void Execute(Entity entity, [EntityIndexInQuery] int entityInQueryIndex, ref EcsTestData2 writeTo, in EcsTestData readFrom)
                 {
-                    writeTo.value += entity.Index + entityInQueryIndex;
-                }).Run();
+                    writeTo.value1 = entity.Index + entityInQueryIndex + readFrom.value;
+                }
             }
 
             public JobHandle Process2Entity_ScheduleParallel()
             {
-                return Entities.ForEach((Entity entity,int entityInQueryIndex, ref EcsTestData2 writeTo, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).ScheduleParallel(default);
+                return new Process2Entity().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process2Entity_Schedule()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Schedule(default);
+                return new Process2Entity().Schedule(new JobHandle());
             }
 
             public void Process2Entity_Run()
             {
-                Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, in EcsTestData readFrom) =>
+                new Process2Entity().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process3Entity : IJobEntity
+            {
+                void Execute(Entity entity, [EntityIndexInQuery] int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, in EcsTestData readFrom)
                 {
-                    writeTo.value1 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Run();
+                    writeTo.value1 = writeHereToo.value2 = entity.Index + entityInQueryIndex + readFrom.value;
+                }
             }
 
             public JobHandle Process3Entity_ScheduleParallel()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = writeHereToo.value2 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).ScheduleParallel(default);
+                return new Process3Entity().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process3Entity_Schedule()
             {
-                return Entities.ForEach((Entity entity,int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = writeHereToo.value2 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Schedule(default);
+                return new Process3Entity().Schedule(new JobHandle());
             }
 
             public void Process3Entity_Run()
             {
-                Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = writeHereToo.value2 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Run();
+                new Process3Entity().Run();
             }
-            public JobHandle Process4Entity_ScheduleParallel()
+
+            [BurstCompile]
+            partial struct Process4Entity : IJobEntity
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, ref EcsTestData4 writeHereAsWell, in EcsTestData readFrom) =>
+                void Execute(Entity entity, [EntityIndexInQuery] int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, ref EcsTestData4 writeHereAsWell, in EcsTestData readFrom)
                 {
                     writeTo.value1 = writeHereToo.value2 = writeHereAsWell.value3 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).ScheduleParallel(default);
+                }
+            }
+
+            public JobHandle Process4Entity_ScheduleParallel()
+            {
+                return new Process4Entity().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process4Entity_Schedule()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, ref EcsTestData4 writeHereAsWell, in EcsTestData readFrom) =>
-                {
-                    writeTo.value1 = writeHereToo.value2 = writeHereAsWell.value3 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Schedule(default);
+                return new Process4Entity().Schedule(new JobHandle());
             }
 
             public void Process4Entity_Run()
             {
-                Entities.ForEach((Entity entity, int entityInQueryIndex, ref EcsTestData2 writeTo, ref EcsTestData3 writeHereToo, ref EcsTestData4 writeHereAsWell, in EcsTestData readFrom) =>
+                new Process4Entity().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process1Buffer : IJobEntity
+            {
+                void Execute(ref DynamicBuffer<EcsIntElement> buffer)
                 {
-                    writeTo.value1 = writeHereToo.value2 = writeHereAsWell.value3 = entity.Index + entityInQueryIndex + readFrom.value;
-                }).Run();
+                    buffer.Add(new EcsIntElement { Value = 1 });
+                }
             }
 
             public JobHandle Process1Buffer_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer) =>
-                    {
-                        buffer.Add(new EcsIntElement { Value = 1 });
-                    }).ScheduleParallel(default);
+                return new Process1Buffer().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process1Buffer_Schedule()
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer) =>
-                    {
-                        buffer.Add(new EcsIntElement { Value = 1 });
-                    }).Schedule(default);
+                return new Process1Buffer().Schedule(new JobHandle());
             }
 
             public void Process1Buffer_Run()
             {
-                Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer) =>
+                new Process1Buffer().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process2Buffer : IJobEntity
+            {
+                void Execute(ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2)
                 {
-                    buffer.Add(new EcsIntElement { Value = 1 });
-                }).Run();
+                    buffer1.Add(new EcsIntElement { Value = 1 });
+                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
+                }
             }
 
             public JobHandle Process2Buffer_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                    }).ScheduleParallel(default);
+                return new Process2Buffer().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process2Buffer_Schedule()
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                    }).Schedule(default);
+                return new Process2Buffer().Schedule(new JobHandle());
             }
 
             public void Process2Buffer_Run()
             {
-                Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2) =>
-                {
-                    buffer1.Add(new EcsIntElement { Value = 1 });
-                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                }).Run();
-            }
-            public JobHandle Process3Buffer_ScheduleParallel()
-            {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                        buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                    }).ScheduleParallel(default);
+                new Process2Buffer().Run();
             }
 
-            public JobHandle Process3Buffer_Schedule()
+            [BurstCompile]
+            partial struct Process3Buffer : IJobEntity
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                        buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                    }).Schedule(default);
-            }
-
-            public void Process3Buffer_Run()
-            {
-                Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3) =>
+                void Execute(ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3)
                 {
                     buffer1.Add(new EcsIntElement { Value = 1 });
                     buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
                     buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                }).Run();
-            }
-            public JobHandle Process4Buffer_ScheduleParallel()
-            {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref DynamicBuffer<EcsIntElement4> buffer4) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                        buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                        buffer4.Add(new EcsIntElement4 { Value0 = 1, Value1 = 1, Value2 = 1, Value3 = 1});
-                    }).ScheduleParallel(default);
+                }
             }
 
-            public JobHandle Process4Buffer_Schedule()
+            public JobHandle Process3Buffer_ScheduleParallel()
             {
-                return
-                    Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref DynamicBuffer<EcsIntElement4> buffer4) =>
-                    {
-                        buffer1.Add(new EcsIntElement { Value = 1 });
-                        buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                        buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                        buffer4.Add(new EcsIntElement4 { Value0 = 1, Value1 = 1, Value2 = 1, Value3 = 1});
-                    }).Schedule(default);
+                return new Process3Buffer().ScheduleParallel(new JobHandle());
             }
 
-            public void Process4Buffer_Run()
+            public JobHandle Process3Buffer_Schedule()
             {
-                Entities.ForEach((ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref DynamicBuffer<EcsIntElement4> buffer4) =>
+                return new Process3Buffer().Schedule(new JobHandle());
+            }
+
+            public void Process3Buffer_Run()
+            {
+                new Process3Buffer().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process4Buffer : IJobEntity
+            {
+                void Execute(ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref DynamicBuffer<EcsIntElement4> buffer4)
                 {
                     buffer1.Add(new EcsIntElement { Value = 1 });
                     buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
                     buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
                     buffer4.Add(new EcsIntElement4 { Value0 = 1, Value1 = 1, Value2 = 1, Value3 = 1});
-                }).Run();
+                }
+            }
+
+            public JobHandle Process4Buffer_ScheduleParallel()
+            {
+                return new Process4Buffer().ScheduleParallel(new JobHandle());
+            }
+
+            public JobHandle Process4Buffer_Schedule()
+            {
+                return new Process4Buffer().Schedule(new JobHandle());
+            }
+
+            public void Process4Buffer_Run()
+            {
+                new Process4Buffer().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process6Mixed : IJobEntity
+            {
+                void Execute(Entity entity, [EntityIndexInQuery] int entityInQueryIndex, ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref EcsTestData ecsTestData, ref EcsTestData2 ecsTestData2, ref EcsTestData3 ecsTestData3)
+                {
+                    buffer1.Add(new EcsIntElement { Value = 1 });
+                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
+                    buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
+                    ecsTestData.value = ecsTestData2.value1 = ecsTestData3.value2 = entityInQueryIndex + entity.Index;
+                }
             }
 
             public JobHandle Process6Mixed_ScheduleParallel()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref EcsTestData ecsTestData, ref EcsTestData2 ecsTestData2, ref EcsTestData3 ecsTestData3) =>
-                {
-                    buffer1.Add(new EcsIntElement { Value = 1 });
-                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                    buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                    ecsTestData.value = ecsTestData2.value1 = ecsTestData3.value2 = entityInQueryIndex + entity.Index;
-                }).ScheduleParallel(default);
+                return new Process6Mixed().ScheduleParallel(new JobHandle());
             }
 
             public JobHandle Process6Mixed_Schedule()
             {
-                return Entities.ForEach((Entity entity, int entityInQueryIndex, ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref EcsTestData ecsTestData, ref EcsTestData2 ecsTestData2, ref EcsTestData3 ecsTestData3) =>
-                {
-                    buffer1.Add(new EcsIntElement { Value = 1 });
-                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                    buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                    ecsTestData.value = ecsTestData2.value1 = ecsTestData3.value2 = entityInQueryIndex + entity.Index;
-                }).Schedule(default);
+                return new Process6Mixed().Schedule(new JobHandle());
             }
 
             public void Process6Mixed_Run()
             {
-                Entities.ForEach((Entity entity, int entityInQueryIndex, ref DynamicBuffer<EcsIntElement> buffer1, ref DynamicBuffer<EcsIntElement2> buffer2, ref DynamicBuffer<EcsIntElement3> buffer3, ref EcsTestData ecsTestData, ref EcsTestData2 ecsTestData2, ref EcsTestData3 ecsTestData3) =>
+                new Process6Mixed().Run();
+            }
+
+            [BurstCompile]
+            partial struct Process1Mixed : IJobEntity
+            {
+                void Execute(ref EcsTestData data)
                 {
-                    buffer1.Add(new EcsIntElement { Value = 1 });
-                    buffer2.Add(new EcsIntElement2 { Value0 = 1, Value1 = 1 });
-                    buffer3.Add(new EcsIntElement3 { Value0 = 1, Value1 = 1, Value2 = 1 });
-                    ecsTestData.value = ecsTestData2.value1 = ecsTestData3.value2 = entityInQueryIndex + entity.Index;
-                }).Run();
+                    data.value++;
+                }
             }
 
             public JobHandle Process1_Schedule()
             {
-                return
-                    Entities.ForEach((ref EcsTestData data) => { data.value++; }).Schedule(default);
+                return new Process1Mixed().Schedule(new JobHandle());
             }
 
             public JobHandle Process1_ScheduleParallel()
             {
-                return Entities.ForEach((ref EcsTestData data) => { data.value++; }).ScheduleParallel(default);
+                return new Process1Mixed().ScheduleParallel(new JobHandle());
             }
 
             public void Process1_Run()
             {
-                Entities.ForEach((ref EcsTestData data) => { data.value++; }).Run();
+                new Process1Mixed().Run();
             }
 
             protected override void OnUpdate()

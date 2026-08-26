@@ -1,11 +1,11 @@
 ﻿using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 
 namespace Unity.Editor.Bridge
 {
     static class MenuUtilsBridge
     {
-        const int kInvalidSceneHandle = 0;
 
         internal enum ContextMenuOrigin
         {
@@ -16,7 +16,7 @@ namespace Unity.Editor.Bridge
             None
         }
 
-        internal static void AddCreateGameObjectItemsToMenu(GenericMenu menu, UnityEngine.Object[] context, bool includeCreateEmptyChild, bool useCreateEmptyParentMenuItem, bool includeGameObjectInPath, int targetSceneHandle, ContextMenuOrigin origin)
+        internal static void AddCreateGameObjectItemsToMenu(GenericMenu menu, UnityEngine.Object[] context, bool includeCreateEmptyChild, bool useCreateEmptyParentMenuItem, bool includeGameObjectInPath, SceneHandle targetSceneHandle, ContextMenuOrigin origin)
         {
             ScriptingMenuItem[] menus = Menu.GetMenuItems("GameObject", true, false);
             int previousMenuItemPosition = -1;
@@ -50,7 +50,7 @@ namespace Unity.Editor.Bridge
                     menu,
                     menupath,
                     tempContext,
-                    targetSceneHandle,
+                    targetSceneHandle.GetRawData(),
                     BeforeCreateGameObjectMenuItemWasExecuted,
                     AfterCreateGameObjectMenuItemWasExecuted,
                     (MenuUtils.ContextMenuOrigin)origin,
@@ -62,17 +62,17 @@ namespace Unity.Editor.Bridge
             MenuUtils.RemoveInvalidMenuItems(menu);
         }
 
-        static void BeforeCreateGameObjectMenuItemWasExecuted(string menuPath, UnityEngine.Object[] contextObjects, MenuUtils.ContextMenuOrigin origin, int userData)
+        static void BeforeCreateGameObjectMenuItemWasExecuted(string menuPath, UnityEngine.Object[] contextObjects, MenuUtils.ContextMenuOrigin origin, ulong userData)
         {
-            int sceneHandle = userData;
+            SceneHandle sceneHandle = SceneHandle.FromRawData(userData);
             if (origin == MenuUtils.ContextMenuOrigin.Scene || origin == MenuUtils.ContextMenuOrigin.Subscene)
                 GOCreationCommands.forcePlaceObjectsAtWorldOrigin = true;
             EditorSceneManager.SetTargetSceneForNewGameObjects(sceneHandle);
         }
 
-        static void AfterCreateGameObjectMenuItemWasExecuted(string menuPath, UnityEngine.Object[] contextObjects, MenuUtils.ContextMenuOrigin origin, int userData)
+        static void AfterCreateGameObjectMenuItemWasExecuted(string menuPath, UnityEngine.Object[] contextObjects, MenuUtils.ContextMenuOrigin origin, ulong userData)
         {
-            EditorSceneManager.SetTargetSceneForNewGameObjects(kInvalidSceneHandle);
+            EditorSceneManager.SetTargetSceneForNewGameObjects(default(UnityEngine.SceneManagement.SceneHandle));
             GOCreationCommands.forcePlaceObjectsAtWorldOrigin = false;
             // Ensure framing when creating game objects even if we are locked
             // if (isLocked)

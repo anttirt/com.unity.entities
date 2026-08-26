@@ -10,14 +10,6 @@ using static Unity.Entities.SystemAPI;
 
 namespace Unity.Entities.Tests
 {
-#pragma warning disable 0618 // Disable Aspects obsolete warnings
-    readonly partial struct EntityTestAspect : IAspect
-    {
-        readonly RefRW<EcsTestDataEntity> _entityData;
-        public void SetEntity(Entity entity) => _entityData.ValueRW.value1 = entity;
-    }
-#pragma warning restore 0618
-
     public partial class IdiomaticCSharpForEachIterationTests : ECSTestsFixture
     {
         public enum QueryExtension
@@ -48,16 +40,16 @@ namespace Unity.Entities.Tests
         }
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
         T GetManagedComponent<T>(Entity entity) where T : IComponentData => m_Manager.GetComponentObject<T>(entity);
+        #pragma warning restore 0618
 #endif
 
-#pragma warning disable 0618 // Disable Aspects obsolete warnings
-        T GetAspect<T>(Entity entity) where T : struct, IAspect, IAspectCreate<T> => default(T).CreateAspect(entity, ref EmptySystem.CheckedStateRef);
-        T GetAspect<T>(SystemHandle system) where T : struct, IAspect, IAspectCreate<T> => default(T).CreateAspect(system.m_Entity, ref EmptySystem.CheckedStateRef);
-#pragma warning restore 0618
         T GetComponent<T>(Entity entity) where T : unmanaged, IComponentData => m_Manager.GetComponentData<T>(entity);
         T GetComponent<T>(SystemHandle system) where T : unmanaged, IComponentData => m_Manager.GetComponentData<T>(system);
+        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
         T GetSharedComponent<T>(Entity entity) where T : struct, ISharedComponentData => m_Manager.GetSharedComponentManaged<T>(entity);
+        #pragma warning restore 0618
         DynamicBuffer<T> GetDynamicBuffer<T>(Entity entity) where T : unmanaged, IBufferElementData => m_Manager.GetBuffer<T>(entity);
 
         public struct Multiplier : ISharedComponentData
@@ -74,18 +66,20 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < 1000; i++)
                 {
                     var entity = EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     EntityManager.AddComponentData(entity, new EcsTestData(inValue: entity.Index));
                     EntityManager.AddSharedComponentManaged(entity, multiplier);
+                    #pragma warning restore 0618
                 }
                 base.OnCreate();
             }
 
             protected override void OnUpdate()
             {
-                foreach (var (myAspect, multiplier) in Query<MyAspect, Multiplier>())
+                foreach (var (myData, multiplier) in Query<RefRW<EcsTestData>, Multiplier>())
                 {
-                    var current = myAspect._Data.ValueRO.value;
-                    myAspect._Data.ValueRW = new EcsTestData(inValue: current * multiplier.Value);
+                    var current = myData.ValueRO.value;
+                    myData.ValueRW = new EcsTestData(inValue: current * multiplier.Value);
                 }
             }
         }
@@ -97,8 +91,10 @@ namespace Unity.Entities.Tests
             protected override void OnCreate()
             {
                 Entity = EntityManager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.AddComponentData(Entity, new EcsTestData { value = 0 });
                 EntityManager.AddComponentData(Entity, new Disabled());
+                #pragma warning restore 0618
 
                 base.OnCreate();
             }
@@ -157,7 +153,9 @@ namespace Unity.Entities.Tests
 
                 for (int i = 0; i < entityCount; ++i)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(allEntities[i], new EcsTestDataEnableable(1));
+                    #pragma warning restore 0618
                     state.EntityManager.SetComponentEnabled<EcsTestDataEnableable>(allEntities[i], i % 2 != 0); // Set every other entity to be disabled
                 }
             }
@@ -246,8 +244,10 @@ namespace Unity.Entities.Tests
             protected override void OnCreate()
             {
                 Entity = EntityManager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.AddComponentData(Entity, new EcsTestDataEnableable { value = 0 });
                 EntityManager.AddComponentData(Entity, new EcsTestData { value=0 });
+                #pragma warning restore 0618
                 EntityManager.SetComponentEnabled<EcsTestDataEnableable>(Entity, false);
 
                 using var queryBuilder = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestDataEnableable>()
@@ -298,7 +298,9 @@ namespace Unity.Entities.Tests
                 for (int i = 1; i <= 10; i++)
                 {
                     var entity = state.EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(entity, new EcsTestData(i));
+                    #pragma warning restore 0618
                 }
             }
 
@@ -349,7 +351,9 @@ namespace Unity.Entities.Tests
             protected override void OnCreate()
             {
                 Entity = EntityManager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.AddComponentData(Entity, new EcsTestData { value = 0 });
+                #pragma warning restore 0618
 
                 base.OnCreate();
             }
@@ -414,18 +418,20 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < 1000; i++)
                 {
                     var entity = EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     EntityManager.AddComponentData(entity, new EcsTestData(inValue: entity.Index));
                     EntityManager.AddSharedComponentManaged(entity, sharedString);
+                    #pragma warning restore 0618
                 }
                 base.OnCreate();
             }
 
             protected override void OnUpdate()
             {
-                foreach (var (myAspect, sharedString) in Query<MyAspect, EcsStringSharedComponent>())
+                foreach (var (myData, sharedString) in Query<RefRW<EcsTestData>, EcsStringSharedComponent>())
                 {
-                    var current = myAspect._Data.ValueRO.value;
-                    myAspect._Data.ValueRW = new EcsTestData(inValue: current * sharedString.Value.Length);
+                    var current = myData.ValueRO.value;
+                    myData.ValueRW = new EcsTestData(inValue: current * sharedString.Value.Length);
                 }
             }
         }
@@ -438,23 +444,25 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < 1000; i++)
                 {
                     var entity = EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     EntityManager.AddComponentData(entity, new EcsTestData(inValue: entity.Index));
                     EntityManager.AddComponentData(entity, new EcsTestManagedComponent { nullField = new ClassWithClassFields { ClassWithString = new ClassWithString { String = "Hello World!" }}});
+                    #pragma warning restore 0618
                 }
                 base.OnCreate();
             }
 
             protected override void OnUpdate()
             {
-                foreach (var (myAspect, managedComponent) in Query<MyAspect, EcsTestManagedComponent>())
+                foreach (var (myData, managedComponent) in Query<RefRW<EcsTestData>, EcsTestManagedComponent>())
                 {
-                    myAspect._Data.ValueRW = new EcsTestData(inValue: int.MaxValue);
+                    myData.ValueRW = new EcsTestData(inValue: int.MaxValue);
                     managedComponent.nullField = null;
                 }
             }
         }
 #endif
-        partial class IterateThroughAspectsAndComponents_WithNestedForEachSystem : SystemBase
+        partial class IterateThroughComponents_WithNestedForEachSystem : SystemBase
         {
             public NativeArray<Entity> CreatedEntities { get; private set; }
 
@@ -475,22 +483,22 @@ namespace Unity.Entities.Tests
 
             protected override void OnUpdate()
             {
-                foreach (var myAspect in Query<MyAspect>())
+                foreach (var (myData, myData2) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>>())
                 {
-                    myAspect._Data.ValueRW = new EcsTestData(inValue: 1);
-                    myAspect._Data2.ValueRW = new EcsTestData2(inValue: 2);
+                    myData.ValueRW = new EcsTestData(inValue: 1);
+                    myData2.ValueRW = new EcsTestData2(inValue: 2);
 
                     foreach (var ecsTestData3 in Query<RefRW<EcsTestData3>>())
                     {
-                        ecsTestData3.ValueRW.value0 = myAspect._Data.ValueRO.value;
-                        ecsTestData3.ValueRW.value1 = myAspect._Data2.ValueRO.value0;
-                        ecsTestData3.ValueRW.value2 = myAspect._Data2.ValueRO.value1;
+                        ecsTestData3.ValueRW.value0 = myData.ValueRO.value;
+                        ecsTestData3.ValueRW.value1 = myData2.ValueRO.value0;
+                        ecsTestData3.ValueRW.value2 = myData2.ValueRO.value1;
                     }
                 }
             }
         }
 
-        partial struct IterateThroughAspectsAndComponentsSystem : ISystem
+        partial struct IterateThroughComponentsSystem : ISystem
         {
             public void OnCreate(ref SystemState state)
             {
@@ -513,10 +521,10 @@ namespace Unity.Entities.Tests
                 switch (queryExtensionToTest)
                 {
                     case QueryExtension.NoExtension:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -524,10 +532,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.All:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithAll<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithAll<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -535,10 +543,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.Any:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithAny<EcsIntElement>().WithAny<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithAny<EcsIntElement>().WithAny<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -546,10 +554,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.None:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithNone<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithNone<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -557,10 +565,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.Absent:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithAbsent<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithAbsent<EcsTestTag>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -568,10 +576,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.Disabled:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithDisabled<EcsTestDataEnableable>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithDisabled<EcsTestDataEnableable>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -579,10 +587,10 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryExtension.Present:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>().WithPresent<EcsTestDataEnableable>().WithOptions(EntityQueryOptions.IncludeSystems))
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithPresent<EcsTestDataEnableable>().WithOptions(EntityQueryOptions.IncludeSystems))
                         {
-                            myAspect._Data.ValueRW = new EcsTestData { value = 10 };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
+                            myData.ValueRW = new EcsTestData { value = 10 };
+                            myData2.ValueRW = new EcsTestData2 { value0 = 20, value1 = 30 };
 
                             ecsTestData3.ValueRW.value0 = 10;
                             ecsTestData3.ValueRW.value1 = 20;
@@ -593,7 +601,7 @@ namespace Unity.Entities.Tests
             }
         }
 
-        partial struct IterateThroughAspectsAndComponents_WithDifferentReturnTypesSystem : ISystem
+        partial struct IterateThroughComponents_WithDifferentReturnTypesSystem : ISystem
         {
             public void OnCreate(ref SystemState state)
             {
@@ -619,22 +627,22 @@ namespace Unity.Entities.Tests
                 switch (ReturnTypeToTest)
                 {
                     case QueryReturnType.IdentifierName:
-                        foreach (var queryReturnType in Query<MyAspect, RefRW<EcsTestData3>>())
+                        foreach (var queryReturnType in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>())
                         {
                             entityCount++;
 
-                            queryReturnType.Item1._Data.ValueRW = new EcsTestData { value = entityCount };
+                            queryReturnType.Item1.ValueRW = new EcsTestData { value = entityCount };
 
-                            var myAspect = queryReturnType.Item1;
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
+                            var myData2 = queryReturnType.Item2;
+                            myData2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
 
-                            queryReturnType.Item2.ValueRW.value0 = entityCount;
+                            queryReturnType.Item3.ValueRW.value0 = entityCount;
 
-                            // Our source-generator solution changes the type of `queryReturnType.Item2` to `Unity.Entities.InternalCompilerInterface.UncheckedRefRW<Unity.Entities.Tests.EcsTestData3>`
+                            // Our source-generator solution changes the type of `queryReturnType.Item3` to `Unity.Entities.InternalCompilerInterface.UncheckedRefRW<Unity.Entities.Tests.EcsTestData3>`
                             // behind the scenes so that calling `ValueRW` and `ValueRO` will not trigger safety checks. (Safety checks are only crucial when dealing with long-lived `RefRW`/`RefRO` instances.)
                             // This change behind the scenes is not exposed to users, and the next line tests that the usage of explicit types (`RefRW<EcsTestData3>` in this case) is correctly
                             // supported.
-                            RefRW<EcsTestData3> ecsTestData3 = queryReturnType.Item2;
+                            RefRW<EcsTestData3> ecsTestData3 = queryReturnType.Item3;
                             ecsTestData3.ValueRW.value1 = entityCount;
                             ecsTestData3.ValueRW.value2 = entityCount;
                         }
@@ -654,12 +662,12 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryReturnType.TupleWithNamedElementsAndImplicitTypes:
-                        foreach ((var myAspect, var ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>())
+                        foreach ((var myData, var myData2, var ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>())
                         {
                             entityCount++;
 
-                            myAspect._Data.ValueRW = new EcsTestData { value = entityCount };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
+                            myData.ValueRW = new EcsTestData { value = entityCount };
+                            myData2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
 
                             ecsTestData3.ValueRW.value0 = entityCount;
                             ecsTestData3.ValueRW.value1 = entityCount;
@@ -667,29 +675,29 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryReturnType.TupleWithoutNamedElements:
-                        foreach ((MyAspect, RefRW<EcsTestData3>) queryReturnType in Query<MyAspect, RefRW<EcsTestData3>>())
+                        foreach ((RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>) queryReturnType in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>())
                         {
                             entityCount++;
 
-                            queryReturnType.Item1._Data.ValueRW = new EcsTestData { value = entityCount };
+                            queryReturnType.Item1.ValueRW = new EcsTestData { value = entityCount };
 
-                            var myAspect = queryReturnType.Item1;
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
+                            var myData2 = queryReturnType.Item2;
+                            myData2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
 
-                            queryReturnType.Item2.ValueRW.value0 = entityCount;
+                            queryReturnType.Item3.ValueRW.value0 = entityCount;
 
-                            var ecsTestData3 = queryReturnType.Item2;
+                            var ecsTestData3 = queryReturnType.Item3;
                             ecsTestData3.ValueRW.value1 = entityCount;
                             ecsTestData3.ValueRW.value2 = entityCount;
                         }
                         break;
                     case QueryReturnType.ParenthesizedVariable:
-                        foreach (var (myAspect, ecsTestData3) in Query<MyAspect, RefRW<EcsTestData3>>())
+                        foreach (var (myData, myData2, ecsTestData3) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>())
                         {
                             entityCount++;
 
-                            myAspect._Data.ValueRW = new EcsTestData { value = entityCount };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
+                            myData.ValueRW = new EcsTestData { value = entityCount };
+                            myData2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
 
                             ecsTestData3.ValueRW.value0 = entityCount;
                             ecsTestData3.ValueRW.value1 = entityCount;
@@ -697,12 +705,12 @@ namespace Unity.Entities.Tests
                         }
                         break;
                     case QueryReturnType.TupleWithDiscardedElement:
-                        foreach (var (myAspect, ecsTestData3, _) in Query<MyAspect, RefRW<EcsTestData3>>().WithEntityAccess())
+                        foreach (var (myData, myData2, ecsTestData3, _) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithEntityAccess())
                         {
                             entityCount++;
 
-                            myAspect._Data.ValueRW = new EcsTestData { value = entityCount };
-                            myAspect._Data2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
+                            myData.ValueRW = new EcsTestData { value = entityCount };
+                            myData2.ValueRW = new EcsTestData2 { value0 = entityCount, value1 = entityCount };
 
                             ecsTestData3.ValueRW.value0 = entityCount;
                             ecsTestData3.ValueRW.value1 = entityCount;
@@ -713,7 +721,7 @@ namespace Unity.Entities.Tests
             }
         }
 
-        partial struct IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_Schedule : ISystem
+        partial struct IterateThroughComponents_EnsureDependencyCompletedSystem_Schedule : ISystem
         {
             public NativeArray<int> syncHandle;
             public void OnCreate(ref SystemState state) =>
@@ -727,12 +735,12 @@ namespace Unity.Entities.Tests
             public partial struct TestJob : IJobEntity
             {
                 public NativeArray<int> syncHandle;
-                void Execute(MyAspect myAspect, ref EcsTestData3 ecsTestData3)
+                void Execute(RefRW<EcsTestData> myData, RefRW<EcsTestData2> myData2, ref EcsTestData3 ecsTestData3)
                 {
                     syncHandle[0] = 1;
 
-                    myAspect._Data.ValueRW = new EcsTestData(10);
-                    myAspect._Data2.ValueRW = new EcsTestData2(20);
+                    myData.ValueRW = new EcsTestData(10);
+                    myData2.ValueRW = new EcsTestData2(20);
 
                     ecsTestData3 = new EcsTestData3(30);
                 }
@@ -741,7 +749,7 @@ namespace Unity.Entities.Tests
             public void OnUpdate(ref SystemState state) => new TestJob{syncHandle = syncHandle}.Schedule();
             }
 
-        partial struct IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_MainThread : ISystem
+        partial struct IterateThroughComponents_EnsureDependencyCompletedSystem_MainThread : ISystem
         {
             public NativeArray<int> syncHandle;
             public bool ForceDependencyCompletion { get; set; }
@@ -752,7 +760,7 @@ namespace Unity.Entities.Tests
                 if (ForceDependencyCompletion)
                 {
                     // ContainerXXXX.CompleteDependencyBeforeRW(ref SystemState) is generated before every foreach statement
-                    foreach (var _ in Query<MyAspect, RefRW<EcsTestData3>>()) {}
+                    foreach (var _ in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>()) {}
                     syncHandle[0] = 2;
                 }
                 else
@@ -770,7 +778,7 @@ namespace Unity.Entities.Tests
             }
         }
 
-        public partial struct IterateThroughAspectsAndComponents_MultipleUsersWrittenPartsInSystem : ISystem
+        public partial struct IterateThroughComponents_MultipleUsersWrittenPartsInSystem : ISystem
         {
             public void OnCreate(ref SystemState state)
             {
@@ -788,23 +796,23 @@ namespace Unity.Entities.Tests
 
             public void OnUpdate(ref SystemState state)
             {
-                foreach (var myAspect in Query<MyAspect>().WithOptions(EntityQueryOptions.IncludeSystems))
+                foreach (var (myData,myData2) in Query<RefRW<EcsTestData>, RefRW<EcsTestData2>>().WithOptions(EntityQueryOptions.IncludeSystems))
                 {
-                    myAspect._Data.ValueRW.value += myAspect._Data2.ValueRO.value0 + myAspect._Data2.ValueRO.value1; // 10 + 20 + 20 == 50
+                    myData.ValueRW.value += myData2.ValueRO.value0 + myData2.ValueRO.value1; // 10 + 20 + 20 == 50
                     OnUpdate1(ref state);
                 }
             }
         }
 
-        public partial struct IterateThroughAspectsAndComponents_MultipleUsersWrittenPartsInSystem
+        public partial struct IterateThroughComponents_MultipleUsersWrittenPartsInSystem
         {
             public void OnUpdate1(ref SystemState state)
             {
-                foreach (var (myAspect, ecsTestData3) in SystemAPI.Query<MyAspect, RefRW<EcsTestData3>>().WithOptions(EntityQueryOptions.IncludeSystems))
+                foreach (var (myData, myData2, ecsTestData3) in SystemAPI.Query<RefRW<EcsTestData>, RefRW<EcsTestData2>, RefRW<EcsTestData3>>().WithOptions(EntityQueryOptions.IncludeSystems))
                 {
-                    ecsTestData3.ValueRW.value0 += myAspect._Data.ValueRO.value; // 30 + 50 == 80
-                    ecsTestData3.ValueRW.value1 += myAspect._Data.ValueRO.value; // 30 + 50 == 80
-                    ecsTestData3.ValueRW.value2 += myAspect._Data.ValueRO.value; // 30 + 50 == 80
+                    ecsTestData3.ValueRW.value0 += myData.ValueRO.value; // 30 + 50 == 80
+                    ecsTestData3.ValueRW.value1 += myData.ValueRO.value; // 30 + 50 == 80
+                    ecsTestData3.ValueRW.value2 += myData.ValueRO.value; // 30 + 50 == 80
                 }
             }
         }
@@ -855,7 +863,9 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i <= 10; i++)
                 {
                     var entity = state.EntityManager.CreateEntity();
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(entity, new EcsTestData3(inValue: i));
+                    #pragma warning restore 0618
                 }
             }
 
@@ -949,18 +959,6 @@ namespace Unity.Entities.Tests
             }
         }
 
-        partial struct ForEachIterationOverAspect_WithEntityAccessSystem : ISystem
-        {
-            public void OnCreate(ref SystemState state) =>
-                state.EntityManager.AddComponent(state.SystemHandle, ComponentType.ReadWrite<EcsTestDataEntity>());
-
-            public void OnUpdate(ref SystemState state)
-            {
-                foreach (var (aspect, entity) in Query<EntityTestAspect>().WithEntityAccess().WithOptions(EntityQueryOptions.IncludeSystems))
-                    aspect.SetEntity(entity);
-            }
-        }
-
         struct MartialArtsAbilityComponent : IEnableableComponent, IComponentData
         {
             public int Value;
@@ -981,11 +979,17 @@ namespace Unity.Entities.Tests
                 {
                     var e = state.EntityManager.CreateEntity();
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(e, new EcsTestData());
+                    #pragma warning restore 0618
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(e, new LinearVelocity());
+                    #pragma warning restore 0618
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     state.EntityManager.AddComponentData(e, new MartialArtsAbilityComponent{Value = i});
+                    #pragma warning restore 0618
                     bool isPowerOfTwo = (i & (i-1)) == 0;
                     state.EntityManager.SetComponentEnabled<MartialArtsAbilityComponent>(e, isPowerOfTwo);
                 }
@@ -994,7 +998,7 @@ namespace Unity.Entities.Tests
             public void OnUpdate(ref SystemState state)
             {
                 ref var sumData = ref state.EntityManager.GetComponentDataRW<MartialArtsAbilityComponent>(state.SystemHandle).ValueRW;
-                foreach (var component in Query<MyAspect, MartialArtsAbilityComponent>().WithAll<LinearVelocity>())
+                foreach (var component in Query<RefRW<EcsTestData>, MartialArtsAbilityComponent>().WithAll<LinearVelocity>())
                     sumData.Value += component.Item2.Value;
             }
         }
@@ -1006,12 +1010,16 @@ namespace Unity.Entities.Tests
 
                 var entity1 = state.EntityManager.CreateEntity();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 state.EntityManager.AddComponentData(entity1, new MartialArtsAbilityComponent{ Value = 1 });
+                #pragma warning restore 0618
                 state.EntityManager.SetComponentEnabled<MartialArtsAbilityComponent>(entity1, true);
 
                 var entity2 = state.EntityManager.CreateEntity();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 state.EntityManager.AddComponentData(entity2, new MartialArtsAbilityComponent{ Value = 2 });
+                #pragma warning restore 0618
                 state.EntityManager.SetComponentEnabled<MartialArtsAbilityComponent>(entity2, true);
             }
 
@@ -1033,7 +1041,9 @@ namespace Unity.Entities.Tests
             {
                 var entity1 = state.EntityManager.CreateEntity();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 state.EntityManager.AddComponentData(entity1, new MartialArtsAbilityComponent{ Value = 1 });
+                #pragma warning restore 0618
                 state.EntityManager.SetComponentEnabled<MartialArtsAbilityComponent>(entity1, true);
                 state.EntityManager.AddComponent(state.SystemHandle, ComponentType.ReadWrite<DisabledData>());
             }
@@ -1058,7 +1068,7 @@ namespace Unity.Entities.Tests
         [Test]
         public void ForEachIterationWithDifferentReturnTypesFromQueryEnumerable([Values] QueryReturnType queryReturnType)
         {
-            var systemHandle = World.GetOrCreateSystem<IterateThroughAspectsAndComponents_WithDifferentReturnTypesSystem>();
+            var systemHandle = World.GetOrCreateSystem<IterateThroughComponents_WithDifferentReturnTypesSystem>();
 
             ref var queryData = ref World.EntityManager.GetComponentDataRW<SystemQueryData>(systemHandle).ValueRW;
             queryData.returnTypeToTest = queryReturnType;
@@ -1100,8 +1110,8 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in allEntities)
             {
-                var myAspect = GetAspect<MyAspect>(entity);
-                Assert.AreEqual(entity.Index * 5, myAspect._Data.ValueRO.value);
+                var myData = GetComponent<EcsTestData>(entity);
+                Assert.AreEqual(entity.Index * 5, myData.value);
             }
             allEntities.Dispose();
         }
@@ -1239,21 +1249,27 @@ namespace Unity.Entities.Tests
             var entity0 = World.EntityManager.CreateEntity(typeof(EcsTestData));
             World.EntityManager.SetComponentData(entity0, new EcsTestData(1));
             if (isManaged)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 World.EntityManager.AddSharedComponentManaged(entity0, new ManagedSharedData1(1));
+                #pragma warning restore 0618
             else
                 World.EntityManager.AddSharedComponent(entity0, new SharedData1(1));
 
             var entity1 = World.EntityManager.CreateEntity(typeof(EcsTestData));
             World.EntityManager.SetComponentData(entity1, new EcsTestData(10));
             if (isManaged)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 World.EntityManager.AddSharedComponentManaged(entity1, new ManagedSharedData1(1));
+                #pragma warning restore 0618
             else
                 World.EntityManager.AddSharedComponent(entity1, new SharedData1(1));
 
             var entity2 = World.EntityManager.CreateEntity(typeof(EcsTestData));
             World.EntityManager.SetComponentData(entity2, new EcsTestData(100));
             if (isManaged)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 World.EntityManager.AddSharedComponentManaged(entity2, new ManagedSharedData1(2));
+                #pragma warning restore 0618
             else
                 World.EntityManager.AddSharedComponent(entity2, new SharedData1(2));
 
@@ -1312,9 +1328,9 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in allEntities)
             {
-                var myAspect = GetAspect<MyAspect>(entity);
+                var myData = GetComponent<EcsTestData>(entity);
                 var sharedString = GetSharedComponent<EcsStringSharedComponent>(entity);
-                Assert.AreEqual(entity.Index * sharedString.Value.Length, myAspect._Data.ValueRO.value);
+                Assert.AreEqual(entity.Index * sharedString.Value.Length, myData.value);
             }
             allEntities.Dispose();
         }
@@ -1331,25 +1347,26 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in allEntities)
             {
-                var myAspect = GetAspect<MyAspect>(entity);
+                var myData = GetComponent<EcsTestData>(entity);
                 var ecsTestManagedComponent = GetManagedComponent<EcsTestManagedComponent>(entity);
 
                 Assert.AreEqual(null, ecsTestManagedComponent.nullField);
-                Assert.AreEqual(int.MaxValue, myAspect._Data.ValueRO.value);
+                Assert.AreEqual(int.MaxValue, myData.value);
             }
             allEntities.Dispose();
         }
 #endif
         [Test]
-        public void ForEachIteration_ThroughAspectsAndComponents_UsingNestedForEach()
+        public void ForEachIteration_ThroughComponents_UsingNestedForEach()
         {
-            var system = World.GetOrCreateSystemManaged<IterateThroughAspectsAndComponents_WithNestedForEachSystem>();
+            var system = World.GetOrCreateSystemManaged<IterateThroughComponents_WithNestedForEachSystem>();
             system.Update();
 
-            var myAspect = GetAspect<MyAspect>(system.CreatedEntities[0]);
-            Assert.AreEqual(1, myAspect._Data.ValueRO.value);
-            Assert.AreEqual(2, myAspect._Data2.ValueRO.value0);
-            Assert.AreEqual(2, myAspect._Data2.ValueRO.value1);
+            var myData = GetComponent<EcsTestData>(system.CreatedEntities[0]);
+            Assert.AreEqual(1, myData.value);
+            var myData2 = GetComponent<EcsTestData2>(system.CreatedEntities[0]);
+            Assert.AreEqual(2, myData2.value0);
+            Assert.AreEqual(2, myData2.value1);
 
             var firstEcsTestData3 = GetComponent<EcsTestData3>(system.CreatedEntities[1]);
             Assert.AreEqual(1, firstEcsTestData3.value0);
@@ -1365,15 +1382,16 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void ForEachIteration_ThroughAspectsAndComponents([Values] QueryExtension queryExtension)
+        public void ForEachIteration_ThroughComponents([Values] QueryExtension queryExtension)
         {
-            var system = World.GetOrCreateSystem<IterateThroughAspectsAndComponentsSystem>();
+            var system = World.GetOrCreateSystem<IterateThroughComponentsSystem>();
             ref var queryData = ref World.EntityManager.GetComponentDataRW<SystemQueryData>(system).ValueRW;
             queryData.extensionToTest = queryExtension;
 
             system.Update(World.Unmanaged);
 
-            var myAspect = GetAspect<MyAspect>(system);
+            var myData = GetComponent<EcsTestData>(system);
+            var myData2 = GetComponent<EcsTestData2>(system);
             var ecsTestData3 = GetComponent<EcsTestData3>(system);
 
             switch (queryExtension)
@@ -1381,18 +1399,18 @@ namespace Unity.Entities.Tests
                 case QueryExtension.Disabled:
                 case QueryExtension.Absent:
                 case QueryExtension.None:
-                    Assert.AreEqual(0, myAspect._Data.ValueRO.value);
-                    Assert.AreEqual(0, myAspect._Data2.ValueRO.value0);
-                    Assert.AreEqual(0, myAspect._Data2.ValueRO.value1);
+                    Assert.AreEqual(0, myData.value);
+                    Assert.AreEqual(0, myData2.value0);
+                    Assert.AreEqual(0, myData2.value1);
 
                     Assert.AreEqual(0, ecsTestData3.value0);
                     Assert.AreEqual(0, ecsTestData3.value1);
                     Assert.AreEqual(0, ecsTestData3.value2);
                     break;
                 default:
-                    Assert.AreEqual(10, myAspect._Data.ValueRO.value);
-                    Assert.AreEqual(20, myAspect._Data2.ValueRO.value0);
-                    Assert.AreEqual(30, myAspect._Data2.ValueRO.value1);
+                    Assert.AreEqual(10, myData.value);
+                    Assert.AreEqual(20, myData2.value0);
+                    Assert.AreEqual(30, myData2.value1);
 
                     Assert.AreEqual(10, ecsTestData3.value0);
                     Assert.AreEqual(20, ecsTestData3.value1);
@@ -1452,11 +1470,11 @@ namespace Unity.Entities.Tests
             using var syncHandle = new NativeArray<int>(1, Allocator.Persistent);
 
             // Get Systems
-            var scheduler = World.GetOrCreateSystem<IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_Schedule>();
-            var mainThread = World.GetOrCreateSystem<IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_MainThread>();
+            var scheduler = World.GetOrCreateSystem<IterateThroughComponents_EnsureDependencyCompletedSystem_Schedule>();
+            var mainThread = World.GetOrCreateSystem<IterateThroughComponents_EnsureDependencyCompletedSystem_MainThread>();
 
-            ref var schedulerSys = ref World.Unmanaged.GetUnsafeSystemRef<IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_Schedule>(scheduler);
-            ref var mainThreadSys = ref World.Unmanaged.GetUnsafeSystemRef<IterateThroughAspectsAndComponents_EnsureDependencyCompletedSystem_MainThread>(mainThread);
+            ref var schedulerSys = ref World.Unmanaged.GetUnsafeSystemRef<IterateThroughComponents_EnsureDependencyCompletedSystem_Schedule>(scheduler);
+            ref var mainThreadSys = ref World.Unmanaged.GetUnsafeSystemRef<IterateThroughComponents_EnsureDependencyCompletedSystem_MainThread>(mainThread);
 
             schedulerSys.syncHandle = syncHandle;
             mainThreadSys.syncHandle = syncHandle;
@@ -1469,15 +1487,16 @@ namespace Unity.Entities.Tests
         [Test]
         public void ForEachIteration_MultiplePartsInPartialType()
         {
-            var system = World.GetOrCreateSystem<IterateThroughAspectsAndComponents_MultipleUsersWrittenPartsInSystem>();
+            var system = World.GetOrCreateSystem<IterateThroughComponents_MultipleUsersWrittenPartsInSystem>();
             system.Update(World.Unmanaged);
 
-            var myAspect = GetAspect<MyAspect>(system);
+            var myData = GetComponent<EcsTestData>(system);
+            var myData2 = GetComponent<EcsTestData2>(system);
             var ecsTestData3 = GetComponent<EcsTestData3>(system);
 
-            Assert.AreEqual(50, myAspect._Data.ValueRO.value);
-            Assert.AreEqual(20, myAspect._Data2.ValueRO.value0);
-            Assert.AreEqual(20, myAspect._Data2.ValueRO.value1);
+            Assert.AreEqual(50, myData.value);
+            Assert.AreEqual(20, myData2.value0);
+            Assert.AreEqual(20, myData2.value1);
 
             Assert.AreEqual(80, ecsTestData3.value0);
             Assert.AreEqual(80, ecsTestData3.value1);
@@ -1530,17 +1549,6 @@ namespace Unity.Entities.Tests
         public void ForEachIterationOverComponents_WithEntityAccess_ToTupleType()
         {
             var system = World.GetOrCreateSystem<ForEachIterationOverComponents_WithEntityAccessToTupleSystem>();
-            system.Update(World.Unmanaged);
-
-            var ecsTestData = GetComponent<EcsTestDataEntity>(system);
-
-            Assert.AreEqual(system.m_Entity, ecsTestData.value1);
-        }
-
-        [Test]
-        public void ForEachIterationOverAspect_WithEntityAccess()
-        {
-            var system = World.GetOrCreateSystem<ForEachIterationOverAspect_WithEntityAccessSystem>();
             system.Update(World.Unmanaged);
 
             var ecsTestData = GetComponent<EcsTestDataEntity>(system);

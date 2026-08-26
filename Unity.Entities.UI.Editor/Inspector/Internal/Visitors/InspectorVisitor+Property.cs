@@ -308,12 +308,6 @@ namespace Unity.Entities.UI
             if (Nullable.GetUnderlyingType(valueType) != null)
                 return false;
 
-#if !UNITY_2020_2_OR_NEWER
-            // 64-bits enums are not supported in UIToolkit right now.
-            if (valueType.IsEnum && Enum.GetUnderlyingType(valueType) == typeof(long))
-                return false;
-#endif
-
             return true;
         }
 

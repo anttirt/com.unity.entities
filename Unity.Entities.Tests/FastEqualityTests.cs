@@ -473,6 +473,7 @@ namespace Unity.Entities.Tests
             Assert.IsTrue (FastEquality.Equals(UnsafeUtility.AddressOf(ref a), UnsafeUtility.AddressOf(ref aa), in typeInfo));
             Assert.IsFalse(FastEquality.Equals(UnsafeUtility.AddressOf(ref a), UnsafeUtility.AddressOf(ref b),  in typeInfo));
         }
+        #pragma warning disable EA0017 // intentionally a managed shared component
         [DisableAutoTypeRegistration]
         struct TypeWithoutHashCodeOverride : ISharedComponentData, IEquatable<TypeWithoutHashCodeOverride>
         {
@@ -485,6 +486,7 @@ namespace Unity.Entities.Tests
                 return Foo == other.Foo;
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         public void ForgettingGetHashCodeIsAnError()

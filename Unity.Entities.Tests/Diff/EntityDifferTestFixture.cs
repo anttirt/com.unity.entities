@@ -1,11 +1,12 @@
 using NUnit.Framework;
 using Unity.Collections;
+using UnityEngine;
 
 namespace Unity.Entities.Tests
 {
     public abstract class EntityDifferTestFixture : ECSTestsCommonBase
     {
-        ulong m_NextEntityGuidIndex;
+        int m_NextEntityGuidIndex;
 
         /// <summary>
         /// The previous <see cref="World.DefaultGameObjectInjectionWorld"/> to avoid breaking editor static functionality.
@@ -31,6 +32,8 @@ namespace Unity.Entities.Tests
         /// The entity manager for the destination world.
         /// </summary>
         protected EntityManager DstEntityManager;
+
+        protected EntityId CreateTestEntityId(ulong ulongValue) => EntityId.FromULong(ulongValue);
 
         [SetUp]
         public override void Setup()
@@ -66,7 +69,8 @@ namespace Unity.Entities.Tests
         protected EntityGuid CreateEntityGuid()
         {
             m_NextEntityGuidIndex++;
-            return new EntityGuid {a = m_NextEntityGuidIndex, b = ~m_NextEntityGuidIndex };
+
+            return new EntityGuid {OriginatingEntityId = CreateTestEntityId((uint)m_NextEntityGuidIndex), OriginatingSubEntityId = EntityId.None, FullNamespaceId = 0, Serial = 0 };
         }
 
         /// <summary>
@@ -96,20 +100,26 @@ namespace Unity.Entities.Tests
         protected static TComponentData GetComponentData<TComponentData>(EntityManager entityManager, EntityGuid entityGuid)
             where TComponentData : unmanaged, IComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return entityManager.GetComponentData<TComponentData>(GetEntity(entityManager, entityGuid));
+            #pragma warning restore 0618
         }
 
         protected static void SetComponentData<TComponentData>(EntityManager entityManager, EntityGuid entityGuid, TComponentData data)
             where TComponentData : unmanaged, IComponentData
         {
             var entity = GetEntity(entityManager, entityGuid);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             entityManager.SetComponentData(entity, data);
+            #pragma warning restore 0618
         }
 
         protected static TComponentData GetSharedComponentData<TComponentData>(EntityManager entityManager, EntityGuid entityGuid)
             where TComponentData : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return entityManager.GetSharedComponentManaged<TComponentData>(GetEntity(entityManager, entityGuid));
+            #pragma warning restore 0618
         }
 
         protected static Entity GetEntity(EntityManager entityManager, EntityGuid entityGuid)
@@ -120,7 +130,9 @@ namespace Unity.Entities.Tests
 
             foreach (var entity in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (entityManager.GetComponentData<EntityGuid>(entity).Equals(entityGuid))
+                #pragma warning restore 0618
                 {
                     result = entity;
                 }
@@ -141,14 +153,18 @@ namespace Unity.Entities.Tests
         protected static TComponentData GetManagedComponentData<TComponentData>(EntityManager entityManager, EntityGuid entityGuid)
             where TComponentData : class, IComponentData, new()
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return entityManager.GetComponentData<TComponentData>(GetEntity(entityManager, entityGuid));
+            #pragma warning restore 0618
         }
 
         protected static void SetManagedComponentData<TComponentData>(EntityManager entityManager, EntityGuid entityGuid, TComponentData data)
             where TComponentData : class, IComponentData, new()
         {
             var entity = GetEntity(entityManager, entityGuid);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             entityManager.SetComponentData(entity, data);
+            #pragma warning restore 0618
         }
 
 #endif

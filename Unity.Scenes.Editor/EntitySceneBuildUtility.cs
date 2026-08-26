@@ -156,7 +156,7 @@ namespace Unity.Scenes.Editor
 #endif
 
                 if (!artifactHash.isValid)
-                    throw new Exception($"Building EntityScene artifact failed: '{AssetDatabaseCompatibility.GuidToPath(sceneGuid)}' ({sceneGuid}). There were exceptions during the entity scene imports.");
+                    throw new Exception($"Building EntityScene artifact failed: '{scenePath}' ({sceneGuid}). There were exceptions during the entity scene imports.");
 
                 AssetDatabaseCompatibility.GetArtifactPaths(artifactHash, out var artifactPaths);
 
@@ -208,15 +208,26 @@ namespace Unity.Scenes.Editor
                         CreateAssetEntryForObjectIdentifiers will internally generate an id from the address passed in, so a mapping from that id to
                         the scene section hash is created in order to link the data at runtime.
                         */
+
+                        // Use FileUtil to ensure VFS paths are correctly resolved and copied to the local filesystem
+                        // These paths are handed off to the incremental build pipeline, which is not VFS aware
+                        var tempArtifactPath = FileUtil.GetUniqueTempPathInProject();
+                        FileUtil.CopyFileOrDirectory(artifactPath, tempArtifactPath);
+
                         var sectionIndex = EntityScenesPaths.GetSectionIndexFromPath(artifactPath);
-                        var address = $"{artifactHash}.{sectionIndex}";
-                        var id = UnityEngine.Hash128.Compute(address);
+                        var contentHash = HashingMethods.CalculateFile(tempArtifactPath);
+                        var address = $"{sceneGuid}.{contentHash}.{sectionIndex}";
+                        var id = HashingMethods.Calculate(address).ToHash128();
                         var ssh = SceneHeaderUtility.CreateSceneSectionHash(sceneGuid, sectionIndex, default);
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+                        Debug.Log($"Scene {sceneGuid}: contentHash {contentHash}, address {address}, computed id {id}, ssh {ssh}");
+#endif
                         objIdRemapping.Add(id, ssh);
-                        pathOverrides[artifactPath] = ssh;
+                        pathOverrides[tempArtifactPath] = ssh;
 #if ENABLE_CONTENT_BUILD_DIAGNOSTICS
                         Debug.Log($"Scene {sceneGuid}: ReferencedUnityObjects section {sectionIndex}, build id {id}, runtime section id {ssh}, path override: {artifactPath}");
 #endif
+
                         var globalUsage = ReadGlobalUsageArtifact(globalUsgExt, artifactPaths);
                         customContent.Add(new CustomContent
                         {
@@ -224,8 +235,8 @@ namespace Unity.Scenes.Editor
                             Processor = (guid, processor) =>
                             {
                                 var objs = UnityEditorInternal.InternalEditorUtility.LoadSerializedFileAndForget(artifactPath);
-                                processor.GetObjectIdentifiersAndTypesForSerializedFile(artifactPath, out ObjectIdentifier[] objectIds, out Type[] types, globalUsage);
-                                processor.CreateAssetEntryForObjectIdentifiers(objectIds, artifactPath, address, address, typeof(ReferencedUnityObjects));
+                                processor.GetObjectIdentifiersAndTypesForSerializedFile(tempArtifactPath, out ObjectIdentifier[] objectIds, out Type[] types, globalUsage);
+                                processor.CreateAssetEntryForObjectIdentifiers(objectIds, tempArtifactPath, address, address, typeof(ReferencedUnityObjects));
                                 foreach (var obj in objs)
                                 {
                                     ReferencedUnityObjects referencedObjects = obj as ReferencedUnityObjects;
@@ -274,51 +285,16 @@ namespace Unity.Scenes.Editor
             UnityEngine.Debug.Log("Total number of scene imported: " + sceneGuidExportedTypePaths.Count);
 #endif
  			WriteExportedTypesDebugLog(sceneGuidExportedTypePaths);
-            Func<Hash128, long, string, UntypedWeakReferenceId> objIdToRTId = (Hash128 guid, long lfid, string path) =>
-            {
-                if (!guid.IsValid && !string.IsNullOrEmpty(path))
-                {
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                    Debug.Log($"objIdToRTId {guid}, {lfid}, {path} using path override -> {pathOverrides[path]}");
-#endif
-                    if (!pathOverrides.TryGetValue(path, out var overrideId))
-                    {
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                    Debug.Log($"Path override not found for {path}, skipping.");
-#endif
-                    }
-                    return overrideId;
-                }
-                var id = new UntypedWeakReferenceId { GlobalId = new RuntimeGlobalObjectId { AssetGUID = guid, SceneObjectIdentifier0 = lfid }, GenerationType = WeakReferenceGenerationType.UnityObject };
-                if (!weakAssetRefs.Contains(id))
-                {
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                    Debug.Log($"Id not found in WeakAssetRefs, skipping {id}");
-#endif
-                    return default;
-                }
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                Debug.Log($"Id found in WeakAssetRefs, using {id}");
-#endif
-                return id;
-            };
-            Func<UntypedWeakReferenceId, UntypedWeakReferenceId> idRemapFunc = (UntypedWeakReferenceId i) =>
-            {
-                if (objIdRemapping.TryGetValue(i.GlobalId.AssetGUID, out var s))
-                {
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                    Debug.Log($"IdRemapFunc {i} remapped to {s}");
-#endif
-                    return s;
-                }
-#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
-                Debug.Log($"IdRemapFunc, not remap for {i}");
-#endif
 
-                return i;
-            };
-
-            var returnCode = BuildContent(target, weakAssetRefs, customContent, RegisterFileCopy, objIdToRTId, idRemapFunc, sceneGuids.Length, ref subSceneAssetCount);
+            var returnCode = BuildContent(
+                target,
+                weakAssetRefs,
+                customContent,
+                RegisterFileCopy,
+                (guid, lfid, path) => ObjIdToRuntimeId(weakAssetRefs, pathOverrides, guid, lfid, path),
+                (id) => RemapId(objIdRemapping, id),
+                sceneGuids.Length,
+                ref subSceneAssetCount);
 
             if (returnCode < ReturnCode.Success)
                 throw new InvalidOperationException($"ContentCatalogBuildUtility.BuildContentArchives failed with status '{returnCode}'.");
@@ -340,6 +316,55 @@ namespace Unity.Scenes.Editor
                 var headerDestPath = EntityScenesPaths.RelativePathForSceneFile(sceneGUID, EntityScenesPaths.PathType.EntitiesHeader, -1);
                 RegisterFileCopy(tempPath, headerDestPath);
             }
+        }
+
+        static UntypedWeakReferenceId RemapId(Dictionary<Hash128, UntypedWeakReferenceId> objIdRemapping, UntypedWeakReferenceId id)
+        {
+            if (objIdRemapping.TryGetValue(id.GlobalId.AssetGUID, out var s))
+            {
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+                Debug.Log($"IdRemapFunc {id} remapped to {s}");
+#endif
+                return s;
+            }
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+            Debug.Log($"IdRemapFunc, not remap for {id}");
+#endif
+
+            return id;
+        }
+
+        static internal UntypedWeakReferenceId ObjIdToRuntimeId(HashSet<UntypedWeakReferenceId> weakAssetRefs, Dictionary<string, UntypedWeakReferenceId> pathOverrides, Hash128 guid, long lfid, string path)
+        {
+            if (!guid.IsValid && !string.IsNullOrEmpty(path))
+            {
+                // NOTE: SubScene Importer has a deterministic output. What we want to reference is only the SubSceneObjectReferences object which has a lfid == 1, not all objects...
+                if (lfid != 1)
+                    return default;
+
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+                Debug.Log($"objIdToRTId {guid}, {lfid}, {path} using path override -> {pathOverrides[path]}");
+#endif
+                if (!pathOverrides.TryGetValue(path, out var overrideId))
+                {
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+                    Debug.Log($"Path override not found for {path}, skipping.");
+#endif
+                }
+                return overrideId;
+            }
+            var id = new UntypedWeakReferenceId { GlobalId = new RuntimeGlobalObjectId { AssetGUID = guid, SceneObjectIdentifier0 = lfid }, GenerationType = WeakReferenceGenerationType.UnityObject };
+            if (!weakAssetRefs.Contains(id))
+            {
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+                Debug.Log($"Id not found in WeakAssetRefs, skipping {id}");
+#endif
+                return default;
+            }
+#if ENABLE_CONTENT_BUILD_DIAGNOSTICS
+            Debug.Log($"Id found in WeakAssetRefs, using {id}");
+#endif
+            return id;
         }
 
         internal static Action<Dictionary<Hash128, Dictionary<SceneSection, List<Hash128>>>> PostBuildCallback;
@@ -366,7 +391,7 @@ namespace Unity.Scenes.Editor
             // Write all exported types per scene
             foreach(var scene in scenes)
             {
-                var srcLogFile = File.ReadLines(scene.entitiesExportedTypesPath);
+                var srcLogFile = FileUtil.ReadAllLines(scene.entitiesExportedTypesPath);
                 writer.WriteLine($"Exported Types (by stable hash) for scene: {scene.sceneGuid.ToString()}");
                 foreach (var line in srcLogFile)
                 {
@@ -538,7 +563,7 @@ namespace Unity.Scenes.Editor
                 RegisterFileCopy(catalogPath, dstCatalogPath);
                 RegisterFileCopy(verboseCatalogPath, dstCatalogPath.Replace(".bin", ".txt"));
                 foreach (var f in results.WriteResults)
-                    RegisterFileCopy($"{WorkingBuildDir}/{RuntimeContentManager.k_ContentArchiveDirectory}/{f.Key}", $"{RuntimeContentManager.k_ContentArchiveDirectory}/{f.Key}");
+                    RegisterFileCopy($"{WorkingBuildDir}/{RuntimeContentManager.k_ContentArchiveDirectory}/{f.Key}", $"{RuntimeContentManager.k_ContentArchiveDirectory}/{f.Key}{RuntimeContentManager.k_ContentArchiveExtension}");
 
                 EntitySceneBuildAnalytics.ReportBuildEvent(src, numberOfAssetsInSubScenes,  weakAssetRefs.Count, numberOfSubScenesInBuild, assetCount, true);
             }
@@ -603,14 +628,12 @@ namespace Unity.Scenes.Editor
                     var loadOp = loadingOperation as UnityEditorInternal.LoadFileAndForgetOperation;
                     if (loadOp == null)
                         return false;
-                    if (loadOp.isDone)
-                        return true;
-
-                    //async op is not going to finish here, just revert to the sync version
+                    // Block on the async operation's Result, bound to native GetRequestedObject
+                    // which waits for the operation to complete. The wait ensures the loaded
+                    // GameObjects have been placed in dstScene before we return.
+                    var result = loadOp.Result;
                     loadingOperation = null;
-                    AssetDatabaseCompatibility.GetArtifactPaths(refId.GlobalId.AssetGUID, out var artifactPaths);
-                    var loadPath = EntityScenesPaths.GetLoadPathFromArtifactPaths(artifactPaths, EntityScenesPaths.PathType.EntitiesUnityObjectReferences, (int)refId.GlobalId.SceneObjectIdentifier0);
-                    forceLoadedObjects = UnityEditorInternal.InternalEditorUtility.LoadSerializedFileAndForget(loadPath);
+                    forceLoadedObjects = result != null ? new Object[] { result } : null;
                     return forceLoadedObjects != null;
                 }
                 else
@@ -684,6 +707,16 @@ namespace Unity.Scenes.Editor
                 return _Instances;
             }
         }
+        Dictionary<SceneHandle, AsyncOperation> _ScenesOperations;
+        Dictionary<SceneHandle, AsyncOperation> SceneOperations
+        {
+            get
+            {
+                if (_ScenesOperations == null)
+                    _ScenesOperations = new Dictionary<SceneHandle, AsyncOperation>();
+                return _ScenesOperations;
+            }
+        }
 
         [UnityEditor.InitializeOnLoadMethod]
         static void EditorInitializeOnLoadMethod()
@@ -728,13 +761,41 @@ namespace Unity.Scenes.Editor
         public void UnloadScene(ref Scene scene)
         {
             SceneManager.UnloadSceneAsync(scene, UnloadSceneOptions.UnloadAllEmbeddedSceneObjects);
+            SceneOperations.Remove(scene.handle);
             scene = default;
         }
 
         public Scene LoadScene(UntypedWeakReferenceId sceneReferenceId, ContentSceneParameters loadParams)
         {
-            UnityEditor.SceneManagement.EditorSceneManager.LoadSceneAsyncInPlayMode(AssetDatabase.GUIDToAssetPath(sceneReferenceId.GlobalId.AssetGUID), new LoadSceneParameters { loadSceneMode = loadParams.loadSceneMode, localPhysicsMode = loadParams.localPhysicsMode });
-            return SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
+            var op = UnityEditor.SceneManagement.EditorSceneManager.LoadSceneAsyncInPlayMode(AssetDatabase.GUIDToAssetPath(sceneReferenceId.GlobalId.AssetGUID), new LoadSceneParameters { loadSceneMode = loadParams.loadSceneMode, localPhysicsMode = loadParams.localPhysicsMode });
+            var scene = SceneManager.GetSceneAt(SceneManager.sceneCount - 1);
+            if (loadParams.autoIntegrate == false)
+                SceneOperations[scene.handle] = op;
+            return scene;
+        }
+
+        public bool IntegrateSceneAtEndOfFrame(ref Scene scene)
+        {
+            if (!SceneOperations.TryGetValue(scene.handle, out var op))
+                return false;
+            op.allowSceneActivation = true;
+            return true;
+        }
+
+        public SceneLoadingStatus GetSceneLoadingStatus(ref Scene scene)
+        {
+            if (!scene.IsValid())
+                return SceneLoadingStatus.Failed;
+            if (scene.isLoaded)
+                return SceneLoadingStatus.Complete;
+            if (SceneOperations.TryGetValue(scene.handle, out var op))
+            {
+                if (!op.allowSceneActivation)
+                    return SceneLoadingStatus.WaitingForIntegrate;
+                else
+                    return SceneLoadingStatus.WillIntegrateNextFrame;
+            }
+            return SceneLoadingStatus.InProgress;
         }
 
         public void Unload(UntypedWeakReferenceId objectId)

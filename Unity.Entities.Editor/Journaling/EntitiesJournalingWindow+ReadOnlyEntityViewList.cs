@@ -1,4 +1,5 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -67,4 +68,5 @@ namespace Unity.Entities.Editor
         }
     }
 }
+#pragma warning restore 0618
 #endif

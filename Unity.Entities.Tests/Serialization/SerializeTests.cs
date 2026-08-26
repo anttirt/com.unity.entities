@@ -57,12 +57,32 @@ namespace Unity.Entities.Tests
         public TestBinaryWriter(Allocator allocator)
         {
             content = new NativeList<byte>(allocator);
+#if UNITY_DOTS_IMHEX
+            m_ImHexPattern = ImHexPatternEntitySceneBinaryWriter.Create(nameof(TestBinaryWriter));
+#endif
         }
 
         public void Dispose()
         {
+#if UNITY_DOTS_IMHEX
+            m_ImHexPattern.Dispose();
+#endif
             content.Dispose();
         }
+
+#if UNITY_DOTS_IMHEX
+        public ref ImHexPatternEntitySceneBinaryWriter ImHexPattern => ref m_ImHexPattern;
+        ImHexPatternEntitySceneBinaryWriter m_ImHexPattern;
+
+        public void OverwriteImHexPattern(ImHexPatternEntitySceneBinaryWriter writer)
+        {
+            var originalName = m_ImHexPattern.fileName;
+            m_ImHexPattern.shouldWriteToDisk = false;
+            m_ImHexPattern.Dispose();
+            m_ImHexPattern = writer;
+            m_ImHexPattern.fileName = originalName;
+        }
+#endif
 
         public void WriteBytes(void* data, int bytes)
         {
@@ -983,10 +1003,12 @@ namespace Unity.Entities.Tests
             var e1 = CreateEntityWithDefaultData(1);
             var e2 = CreateEntityWithDefaultData(2);
             var e3 = CreateEntityWithDefaultData(3);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new TestComponentData1 { value = 10, referencedEntity = e2 });
             m_Manager.AddComponentData(e2, new TestComponentData2 { value = 20, referencedEntity = e1 });
             m_Manager.AddComponentData(e3, new TestComponentData1 { value = 30, referencedEntity = Entity.Null });
             m_Manager.AddComponentData(e3, new TestComponentData2 { value = 40, referencedEntity = Entity.Null });
+            #pragma warning restore 0618
             m_Manager.AddBuffer<EcsIntElement>(e1);
             m_Manager.RemoveComponent<EcsTestData2>(e3);
             m_Manager.AddBuffer<EcsIntElement>(e3);
@@ -1056,24 +1078,32 @@ namespace Unity.Entities.Tests
                 var new_e3 = entities3[0];
                 var new_e4 = entities4[0];
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(1, entityManager.GetComponentData<EcsTestData>(new_e1).value);
                 Assert.AreEqual(-1, entityManager.GetComponentData<EcsTestData2>(new_e1).value0);
                 Assert.AreEqual(-1, entityManager.GetComponentData<EcsTestData2>(new_e1).value1);
                 Assert.AreEqual(10, entityManager.GetComponentData<TestComponentData1>(new_e1).value);
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(2, entityManager.GetComponentData<EcsTestData>(new_e2).value);
                 Assert.AreEqual(-2, entityManager.GetComponentData<EcsTestData2>(new_e2).value0);
                 Assert.AreEqual(-2, entityManager.GetComponentData<EcsTestData2>(new_e2).value1);
                 Assert.AreEqual(20, entityManager.GetComponentData<TestComponentData2>(new_e2).value);
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(3, entityManager.GetComponentData<EcsTestData>(new_e3).value);
                 Assert.AreEqual(30, entityManager.GetComponentData<TestComponentData1>(new_e3).value);
                 Assert.AreEqual(40, entityManager.GetComponentData<TestComponentData2>(new_e3).value);
+                #pragma warning restore 0618
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsTrue(entityManager.Exists(entityManager.GetComponentData<TestComponentData1>(new_e1).referencedEntity));
                 Assert.IsTrue(entityManager.Exists(entityManager.GetComponentData<TestComponentData2>(new_e2).referencedEntity));
                 Assert.AreEqual(new_e2 , entityManager.GetComponentData<TestComponentData1>(new_e1).referencedEntity);
                 Assert.AreEqual(new_e1 , entityManager.GetComponentData<TestComponentData2>(new_e2).referencedEntity);
+                #pragma warning restore 0618
 
                 var buf1 = entityManager.GetBuffer<EcsIntElement>(new_e1);
                 Assert.AreEqual(3, buf1.Length);
@@ -1156,7 +1186,9 @@ namespace Unity.Entities.Tests
 // LOAD]
 // [SAVE
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new TestUnknownComponent { Value = 7 });
+            #pragma warning restore 0618
 
             using (var writer = new StreamBinaryWriter(pfn))
             {
@@ -1177,7 +1209,9 @@ namespace Unity.Entities.Tests
         public void SerializeEntitiesSupportsNonASCIIComponentTypeNames()
         {
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new 测试 { value = 7 });
+            #pragma warning restore 0618
 
             // disposed via reader
             var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator);
@@ -1205,7 +1239,9 @@ namespace Unity.Entities.Tests
                 var entities = group1.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 var new_e1 = entities[0];
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(7, entityManager.GetComponentData<测试>(new_e1).value);
+                #pragma warning restore 0618
             }
             finally
             {
@@ -1219,9 +1255,13 @@ namespace Unity.Entities.Tests
             var dummyEntity = CreateEntityWithDefaultData(0); //To ensure entity indices are offset
 
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestData(1));
+            #pragma warning restore 0618
             var e2 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e2, new EcsTestData2(2));
+            #pragma warning restore 0618
 
             m_Manager.AddBuffer<TestBufferElement>(e1);
             var buffer1 = m_Manager.GetBuffer<TestBufferElement>(e1);
@@ -1288,11 +1328,15 @@ namespace Unity.Entities.Tests
             var dummyEntity = CreateEntityWithDefaultData(0); //To ensure entity indices are offset
 
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestData(1));
+            #pragma warning restore 0618
             m_Manager.AddChunkComponentData<EcsTestData3>(e1);
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(e1), new EcsTestData3(42));
             var e2 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e2, new EcsTestData2(2));
+            #pragma warning restore 0618
             m_Manager.AddChunkComponentData<EcsTestData3>(e2);
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(e2), new EcsTestData3(57));
 
@@ -1323,10 +1367,14 @@ namespace Unity.Entities.Tests
                 var new_e1 = entities1[0];
                 var new_e2 = entities2[0];
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(1, entityManager.GetComponentData<EcsTestData>(new_e1).value);
+                #pragma warning restore 0618
                 Assert.AreEqual(42, entityManager.GetChunkComponentData<EcsTestData3>(new_e1).value0);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(2, entityManager.GetComponentData<EcsTestData2>(new_e2).value0);
+                #pragma warning restore 0618
                 Assert.AreEqual(57, entityManager.GetChunkComponentData<EcsTestData3>(new_e2).value0);
             }
             finally
@@ -1341,9 +1389,13 @@ namespace Unity.Entities.Tests
             var dummyEntity = CreateEntityWithDefaultData(0); //To ensure entity indices are offset
 
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new EcsTestData(1));
+            #pragma warning restore 0618
             var e2 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e2, new EcsTestData2(2));
+            #pragma warning restore 0618
 
             m_Manager.AddBuffer<TestBufferElement>(e1);
             var buffer1 = m_Manager.GetBuffer<TestBufferElement>(e1);
@@ -1435,8 +1487,10 @@ namespace Unity.Entities.Tests
             m_Manager.CreateEntity(archetype1, entities);
             for (int i = 0; i < entityCount; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(entities[i], arrayComponent);
                 m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp(i % 4));
+                #pragma warning restore 0618
             }
 
             var intComponents = new NativeArray<EcsTestDataBlobAssetRef>(entityCount / 5, Allocator.Temp);
@@ -1448,9 +1502,11 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entityCount; ++i)
             {
                 var intComponent = intComponents[i % intComponents.Length];
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(entities[i], intComponent);
                 m_Manager.SetComponentData(entities[i], new EcsTestData2(intComponent.value.Value));
                 m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp2(i % 3));
+                #pragma warning restore 0618
 
                 m_Manager.AddBuffer<EcsTestDataBlobAssetElement>(entities[i]);
                 var buffer = m_Manager.GetBuffer<EcsTestDataBlobAssetElement>(entities[i]);
@@ -1514,7 +1570,9 @@ namespace Unity.Entities.Tests
                 var entities1 = group1.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(entityCount, entities1.Length);
                 var new_e1 = entities1[0];
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 arrayComponent = entityManager.GetComponentData<EcsTestDataBlobAssetArray>(new_e1);
+                #pragma warning restore 0618
                 var a = arrayComponent.array;
                 Assert.AreEqual(1.7f, a.Value[0]);
                 Assert.AreEqual(2.6f, a.Value[1]);
@@ -1526,8 +1584,10 @@ namespace Unity.Entities.Tests
                 Assert.AreEqual(entityCount, entities2.Length);
                 for (int i = 0; i < entityCount; ++i)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var val = entityManager.GetComponentData<EcsTestData2>(entities2[i]).value0;
                     Assert.AreEqual(val, entityManager.GetComponentData<EcsTestDataBlobAssetRef>(entities2[i]).value.Value);
+                    #pragma warning restore 0618
                 }
 
                 var entities3 = group3.ToEntityArray(World.UpdateAllocator.ToAllocator);
@@ -1627,7 +1687,9 @@ namespace Unity.Entities.Tests
             m_Manager.CreateEntity(archetype1, entities);
             for (int i = 0; i < entityCount; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(entities[i], arrayComponent);
+                #pragma warning restore 0618
             }
 
             var intComponents = new NativeArray<EcsTestDataBlobAssetRef>(entityCount / 5, Allocator.Temp);
@@ -1639,8 +1701,10 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entityCount; ++i)
             {
                 var intComponent = intComponents[i % intComponents.Length];
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(entities[i], intComponent);
                 m_Manager.SetComponentData(entities[i], new EcsTestData2(intComponent.value.Value));
+                #pragma warning restore 0618
 
                 m_Manager.AddBuffer<EcsTestDataBlobAssetElement>(entities[i]);
                 var buffer = m_Manager.GetBuffer<EcsTestDataBlobAssetElement>(entities[i]);
@@ -1704,7 +1768,9 @@ namespace Unity.Entities.Tests
                 var entities1 = group1.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(entityCount, entities1.Length);
                 var new_e1 = entities1[0];
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 arrayComponent = entityManager.GetComponentData<EcsTestDataBlobAssetArray>(new_e1);
+                #pragma warning restore 0618
                 var a = arrayComponent.array;
                 Assert.AreEqual(1.7f, a.Value[0]);
                 Assert.AreEqual(2.6f, a.Value[1]);
@@ -1716,8 +1782,10 @@ namespace Unity.Entities.Tests
                 Assert.AreEqual(entityCount, entities2.Length);
                 for (int i = 0; i < entityCount; ++i)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var val = entityManager.GetComponentData<EcsTestData2>(entities2[i]).value0;
                     Assert.AreEqual(val, entityManager.GetComponentData<EcsTestDataBlobAssetRef>(entities2[i]).value.Value);
+                    #pragma warning restore 0618
                 }
 
                 var entities3 = group3.ToEntityArray(World.UpdateAllocator.ToAllocator);
@@ -1801,7 +1869,9 @@ namespace Unity.Entities.Tests
         public void SerializeComponentWithPointerField()
         {
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new ComponentWithPointer());
+            #pragma warning restore 0618
 
             using (var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator))
             {
@@ -1821,7 +1891,9 @@ namespace Unity.Entities.Tests
         public void SerializeComponentWithIntPtrField()
         {
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new ComponentWithIntPtr());
+            #pragma warning restore 0618
 
             using (var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator))
             {
@@ -1862,7 +1934,9 @@ namespace Unity.Entities.Tests
         public void SerializeComponentWithNestedPointerField()
         {
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new ComponentWithNestedPointer());
+            #pragma warning restore 0618
 
             using (var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator))
             {
@@ -1890,7 +1964,9 @@ namespace Unity.Entities.Tests
         public void EnsureSerializationWhitelistingDoesNotTrumpValidation()
         {
             var e1 = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e1, new ComponentWithNestedPointerAndNestedWhiteListType());
+            #pragma warning restore 0618
 
             using (var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator))
             {
@@ -1908,7 +1984,9 @@ namespace Unity.Entities.Tests
                 using var world = new World("DeserializedChunksAreConsideredChangedOnlyOnce World");
                 var manager = world.EntityManager;
                 var entity = manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentData(entity, new EcsTestData(42));
+                #pragma warning restore 0618
 
                 // owned by caller via reader
                 var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator);
@@ -1946,7 +2024,9 @@ namespace Unity.Entities.Tests
                 using var world = new World("DeserializedChunksAreConsideredChangedOnlyOnce World");
                 var manager = world.EntityManager;
                 var entity = manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentData(entity, new EcsTestData(42));
+                #pragma warning restore 0618
 
                 // owned by caller via reader
                 var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator);
@@ -1973,7 +2053,9 @@ namespace Unity.Entities.Tests
                 using var world = new World("DeserializedChunksAreConsideredChangedOnlyOnce World");
                 var manager = world.EntityManager;
                 var entity = manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 manager.AddComponentData(entity, new EcsTestData(42));
+                #pragma warning restore 0618
 
                 var system = world.GetOrCreateSystemManaged<TestEcsChangeSystem>();
 
@@ -2024,7 +2106,9 @@ namespace Unity.Entities.Tests
                 SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader);
                 entityManager.EndExclusiveEntityTransaction();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.IsNull(entityManager.CreateEntityQuery(typeof(ManagedComponent)).GetSingleton<ManagedComponent>());
+                #pragma warning restore 0618
             }
         }
 
@@ -2038,7 +2122,9 @@ namespace Unity.Entities.Tests
             var targetEntities = new NativeArray<Entity>(numberOfEntitiesPerManager, Allocator.Temp);
             m_Manager.CreateEntity(targetArchetype, targetEntities);
             for (int i = 0; i != targetEntities.Length; i++)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(targetEntities[i], new EcsTestData(i));
+                #pragma warning restore 0618
 
             var sourceArchetype = m_Manager.CreateArchetype(typeof(EcsTestManagedDataEntity));
             var sourceEntities = new NativeArray<Entity>(numberOfEntitiesPerManager, Allocator.Temp);
@@ -2046,7 +2132,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i != sourceEntities.Length; i++)
             {
                 int index = i & ~1;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(sourceEntities[i],  new EcsTestManagedDataEntity("foo", targetEntities[index], index));
+                #pragma warning restore 0618
             }
 
             // Destroy ever 2nd target entity to ensure something changes when entity ids are compacted during serialization
@@ -2076,10 +2164,14 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(numberOfEntitiesPerManager, managedGroup.CalculateEntityCount());
 
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var managedTestDataArray = managedGroup.ToComponentDataArray<EcsTestManagedDataEntity>();
+            #pragma warning restore 0618
             for (int i = 0; i != managedTestDataArray.Length; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(managedTestDataArray[i].value2, entityManager.GetComponentData<EcsTestData>(managedTestDataArray[i].value1).value);
+                #pragma warning restore 0618
             }
 
             targetEntities.Dispose();
@@ -2105,8 +2197,10 @@ namespace Unity.Entities.Tests
                 expectedManagedComponent2.List.Add("three");
                 expectedManagedComponent2.List.Add("four");
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(e1, expectedManagedComponent);
                 m_Manager.AddComponentData(e1, expectedManagedComponent2);
+                #pragma warning restore 0618
             }
 
             // disposed via reader
@@ -2138,13 +2232,17 @@ namespace Unity.Entities.Tests
                     {
                         var e = entities[i];
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var actualManagedComponent = entityManager.GetComponentData<ManagedComponent>(e);
+                        #pragma warning restore 0618
                         Assert.AreEqual(i.ToString(), actualManagedComponent.String);
                         Assert.AreEqual(2, actualManagedComponent.Map.Count);
                         Assert.AreEqual(i, actualManagedComponent.Map["positive"]);
                         Assert.AreEqual(-i, actualManagedComponent.Map["negative"]);
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var actualManagedComponent2 = entityManager.GetComponentData<ManagedComponent2>(e);
+                        #pragma warning restore 0618
                         Assert.AreEqual(4, actualManagedComponent2.List.Count);
                         Assert.AreEqual("one", actualManagedComponent2.List[0]);
                         Assert.AreEqual("two", actualManagedComponent2.List[1]);
@@ -2363,7 +2461,9 @@ namespace Unity.Entities.Tests
                 var e1 = m_Manager.CreateEntity();
 
                 var expectedManagedComponent = new ManagedComponentCustomClass(new MyClass(i));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(e1, expectedManagedComponent);
+                #pragma warning restore 0618
             }
 
             // disposed via reader
@@ -2396,7 +2496,9 @@ namespace Unity.Entities.Tests
                     {
                         var e = entities[i];
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var actualManagedComponent = entityManager.GetComponentData<ManagedComponentCustomClass>(e);
+                        #pragma warning restore 0618
                         var myClass = actualManagedComponent.mClass;
                         Assert.IsNotNull(actualManagedComponent);
                         Assert.IsNotNull(myClass);
@@ -2727,6 +2829,7 @@ namespace Unity.Entities.Tests
             }
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         struct TestManagedStruct : ISharedComponentData, IEquatable<TestManagedStruct>
         {
             public int Value;
@@ -2759,6 +2862,7 @@ namespace Unity.Entities.Tests
                 return !left.Equals(right);
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         public void SerializeEntities_WithManagedSharedComponents_Works()
@@ -2779,10 +2883,14 @@ namespace Unity.Entities.Tests
             };
 
             Entity a = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(a, s1);
+            #pragma warning restore 0618
 
             Entity b = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(b, s2);
+            #pragma warning restore 0618
 
             var writer = new TestBinaryWriter(m_Manager.World.UpdateAllocator.ToAllocator);
             SerializeUtility.SerializeWorld(m_Manager, writer);
@@ -2802,7 +2910,9 @@ namespace Unity.Entities.Tests
 
             List<TestManagedStruct> sharedComponentValues = new List<TestManagedStruct>();
             List<int> sharedComponentIndices = new List<int>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             entityManager.GetAllUniqueSharedComponentsManaged<TestManagedStruct>(sharedComponentValues, sharedComponentIndices);
+            #pragma warning restore 0618
             Assert.AreEqual(3, sharedComponentValues.Count, "Serialization / Deserialization failed - unexpected number of shared components");
             CollectionAssert.AreEquivalent(new[] {new TestManagedStruct(), s1, s2}, sharedComponentValues, "The shared component values are not equal");
         }
@@ -2816,12 +2926,16 @@ namespace Unity.Entities.Tests
                 var entities = m_Manager.CreateEntity(archetype, 20, Allocator.Temp);
 
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[12], new EcsTestData(12345));
                 m_Manager.AddSharedComponentManaged(a, new EcsTestSharedCompEntity(entities[12]));
+                #pragma warning restore 0618
 
                 Entity b = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[17], new EcsTestData(23456));
                 m_Manager.AddSharedComponentManaged(b, new EcsTestSharedCompEntity(entities[17]));
+                #pragma warning restore 0618
 
                 entities[12] = Entity.Null;
                 entities[17] = Entity.Null;
@@ -2848,7 +2962,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(3, sharedComponents.Length, "Serialization / Deserialization failed - unexpected number of shared components");
             Assert.IsTrue(entityManager.Exists(sharedComponents[1].value), "Entity remapping failed for unmanaged shared component");
             Assert.IsTrue(entityManager.Exists(sharedComponents[2].value), "Entity remapping failed for unmanaged shared component");
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             CollectionAssert.AreEquivalent(new[] {12345, 23456}, new[] {entityManager.GetComponentData<EcsTestData>(sharedComponents[1].value).value, entityManager.GetComponentData<EcsTestData>(sharedComponents[2].value).value});
+            #pragma warning restore 0618
         }
 #else
         [Test]
@@ -2859,12 +2975,16 @@ namespace Unity.Entities.Tests
                 var entities = m_Manager.CreateEntity(archetype, 20, Allocator.Temp);
 
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[12], new EcsTestData(12345));
                 m_Manager.AddSharedComponentManaged(a, new EcsTestSharedCompEntity(entities[12]));
+                #pragma warning restore 0618
 
                 Entity b = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[17], new EcsTestData(23456));
                 m_Manager.AddSharedComponentManaged(b, new EcsTestSharedCompEntity(entities[17]));
+                #pragma warning restore 0618
 
                 entities[12] = Entity.Null;
                 entities[17] = Entity.Null;
@@ -2888,12 +3008,16 @@ namespace Unity.Entities.Tests
                 var entities = m_Manager.CreateEntity(archetype, 20, Allocator.Temp);
 
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[12], new EcsTestData(12345));
                 m_Manager.AddSharedComponentManaged(a, new EcsTestSharedCompManagedEntity(entities[12], "First"));
+                #pragma warning restore 0618
 
                 Entity b = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[17], new EcsTestData(23456));
                 m_Manager.AddSharedComponentManaged(b, new EcsTestSharedCompManagedEntity(entities[17], "Second"));
+                #pragma warning restore 0618
 
                 entities[12] = Entity.Null;
                 entities[17] = Entity.Null;
@@ -2947,13 +3071,17 @@ namespace Unity.Entities.Tests
             using var blobRefB = BlobAssetReference<int>.Create(234);
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(a, new EcsTestManagedDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobRefA,
                 });
 
                 Entity b = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(b, new EcsTestManagedDataBlobAssetRef
+                #pragma warning restore 0618
                 {
                     value = blobRefB,
                 });
@@ -2980,8 +3108,10 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(2, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetComponentData<EcsTestManagedDataBlobAssetRef>(entities[0]).value.Value;
                 var b = entityManager.GetComponentData<EcsTestManagedDataBlobAssetRef>(entities[1]).value.Value;
+                #pragma warning restore 0618
 
                 Assert.AreEqual(123 + 234, a + b);
             }
@@ -3010,6 +3140,7 @@ namespace Unity.Entities.Tests
             public UnityObjectRef<UnityEngine.GameObject> value;
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         public struct EcsTestManagedSharedComponentWithUnityObjectRef : ISharedComponentData, IEquatable<EcsTestManagedSharedComponentWithUnityObjectRef>
         {
             public UnityObjectRef<UnityEngine.GameObject> value;
@@ -3032,6 +3163,7 @@ namespace Unity.Entities.Tests
                 return HashCode.Combine(value, ManagedField);
             }
         }
+        #pragma warning restore EA0017
 #endif
 
         [Test]
@@ -3040,7 +3172,9 @@ namespace Unity.Entities.Tests
             var go = new UnityEngine.GameObject("Foo");
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(a, new EcsTestComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3056,7 +3190,7 @@ namespace Unity.Entities.Tests
 
             // Make sure it's the same object
             var referencedObj = (UnityEngine.GameObject)referencedObjects[0];
-            Assert.AreEqual(go.GetInstanceID(), referencedObj.GetInstanceID());
+            Assert.AreEqual(go.GetEntityId(), referencedObj.GetEntityId());
 
             using var deserializedWorld = new World("Deserialized World");
             var entityManager = deserializedWorld.EntityManager;
@@ -3074,9 +3208,11 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetComponentData<EcsTestComponentWithUnityObjectRef>(entities[0]).value.Value;
+                #pragma warning restore 0618
 
-                Assert.AreEqual(go.GetInstanceID(), a.GetInstanceID());
+                Assert.AreEqual(go.GetEntityId(), a.GetEntityId());
             }
         }
 
@@ -3086,7 +3222,9 @@ namespace Unity.Entities.Tests
             UnityEngine.GameObject go = null;
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(a, new EcsTestComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3116,7 +3254,9 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetComponentData<EcsTestComponentWithUnityObjectRef>(entities[0]).value;
+                #pragma warning restore 0618
 
                 Assert.IsTrue(a == go);
             }
@@ -3144,7 +3284,7 @@ namespace Unity.Entities.Tests
 
             // Make sure it's the same object
             var referencedObj = (UnityEngine.GameObject)referencedObjects[0];
-            Assert.AreEqual(go.GetInstanceID(), referencedObj.GetInstanceID());
+            Assert.AreEqual(go.GetEntityId(), referencedObj.GetEntityId());
 
             using var deserializedWorld = new World("Deserialized World");
             var entityManager = deserializedWorld.EntityManager;
@@ -3164,7 +3304,7 @@ namespace Unity.Entities.Tests
 
                 var a = entityManager.GetSharedComponent<EcsTestSharedComponentWithUnityObjectRef>(entities[0]).value.Value;
 
-                Assert.AreEqual(go.GetInstanceID(), a.GetInstanceID());
+                Assert.AreEqual(go.GetEntityId(), a.GetEntityId());
             }
         }
 
@@ -3233,8 +3373,8 @@ namespace Unity.Entities.Tests
             // Make sure it's the same object
             var referencedObj1 = (UnityEngine.GameObject)referencedObjects[0];
             var referencedObj2 = (UnityEngine.GameObject)referencedObjects[1];
-            Assert.AreEqual(go1.GetInstanceID(), referencedObj1.GetInstanceID());
-            Assert.AreEqual(go2.GetInstanceID(), referencedObj2.GetInstanceID());
+            Assert.AreEqual(go1.GetEntityId(), referencedObj1.GetEntityId());
+            Assert.AreEqual(go2.GetEntityId(), referencedObj2.GetEntityId());
 
             using var deserializedWorld = new World("Deserialized World");
             var entityManager = deserializedWorld.EntityManager;
@@ -3256,8 +3396,8 @@ namespace Unity.Entities.Tests
                 var outObj1 = buffer[0].value.Value;
                 var outObj2 = buffer[1].value.Value;
 
-                Assert.AreEqual(go1.GetInstanceID(), outObj1.GetInstanceID());
-                Assert.AreEqual(go2.GetInstanceID(), outObj2.GetInstanceID());
+                Assert.AreEqual(go1.GetEntityId(), outObj1.GetEntityId());
+                Assert.AreEqual(go2.GetEntityId(), outObj2.GetEntityId());
             }
         }
 
@@ -3307,6 +3447,41 @@ namespace Unity.Entities.Tests
             }
         }
 
+        static BlobAssetReference<int> CreateIntBlobAsset(int value)
+        {
+            using var builder = new BlobBuilder(Allocator.Temp);
+            ref var data = ref builder.ConstructRoot<int>();
+            data = value;
+            return builder.CreateBlobAssetReference<int>(Allocator.Temp);
+        }
+        
+        [Test]
+        public unsafe void BlobAssetPtrHashComparer_SortsByHashThenLengthThenContent()
+        {
+            var comparer = new BlobAssetPtrHashComparer();
+
+            var blob1 = CreateIntBlobAsset(100);
+            var blob2 = CreateIntBlobAsset(200);
+            var blob3 = CreateIntBlobAsset(100); // Same value as blob1, will have same hash
+
+            try
+            {
+                var ptr1 = new BlobAssetPtr(blob1.m_data.Header);
+                var ptr2 = new BlobAssetPtr(blob2.m_data.Header);
+                var ptr3 = new BlobAssetPtr(blob3.m_data.Header);
+
+                Assert.AreNotEqual(0, comparer.Compare(ptr1, ptr2), "Blobs with different hashes should not compare equal");
+                Assert.AreEqual(0, comparer.Compare(ptr1, ptr3), "Blobs with identical content should compare equal");
+                Assert.AreEqual(-comparer.Compare(ptr1, ptr2), comparer.Compare(ptr2, ptr1), "Compare(a,b) should equal -Compare(b,a)");
+            }
+            finally
+            {
+                blob1.Dispose();
+                blob2.Dispose();
+                blob3.Dispose();
+            }
+        }
+
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
         [Test]
         public void SerializeEntities_WithUnityObjRef_ManagedComponentData()
@@ -3314,7 +3489,9 @@ namespace Unity.Entities.Tests
             var go = new UnityEngine.GameObject("Foo");
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(a, new EcsTestManagedComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3330,7 +3507,7 @@ namespace Unity.Entities.Tests
 
             // Make sure it's the same object
             var referencedObj = (UnityEngine.GameObject)referencedObjects[0];
-            Assert.AreEqual(go.GetInstanceID(), referencedObj.GetInstanceID());
+            Assert.AreEqual(go.GetEntityId(), referencedObj.GetEntityId());
 
             using var deserializedWorld = new World("Deserialized World");
             var entityManager = deserializedWorld.EntityManager;
@@ -3348,9 +3525,11 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetComponentData<EcsTestManagedComponentWithUnityObjectRef>(entities[0]).value.Value;
+                #pragma warning restore 0618
 
-                Assert.AreEqual(go.GetInstanceID(), a.GetInstanceID());
+                Assert.AreEqual(go.GetEntityId(), a.GetEntityId());
             }
         }
 
@@ -3360,7 +3539,9 @@ namespace Unity.Entities.Tests
             UnityEngine.GameObject go = null;
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(a, new EcsTestManagedComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3390,7 +3571,9 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetComponentData<EcsTestManagedComponentWithUnityObjectRef>(entities[0]).value;
+                #pragma warning restore 0618
 
                 Assert.IsTrue(a == go);
             }
@@ -3402,7 +3585,9 @@ namespace Unity.Entities.Tests
             var go = new UnityEngine.GameObject("Foo");
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(a, new EcsTestManagedSharedComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3418,7 +3603,7 @@ namespace Unity.Entities.Tests
 
             // Make sure it's the same object
             var referencedObj = (UnityEngine.GameObject)referencedObjects[0];
-            Assert.AreEqual(go.GetInstanceID(), referencedObj.GetInstanceID());
+            Assert.AreEqual(go.GetEntityId(), referencedObj.GetEntityId());
 
             using var deserializedWorld = new World("Deserialized World");
             var entityManager = deserializedWorld.EntityManager;
@@ -3436,9 +3621,11 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetSharedComponentManaged<EcsTestManagedSharedComponentWithUnityObjectRef>(entities[0]).value.Value;
+                #pragma warning restore 0618
 
-                Assert.AreEqual(go.GetInstanceID(), a.GetInstanceID());
+                Assert.AreEqual(go.GetEntityId(), a.GetEntityId());
             }
         }
 
@@ -3448,7 +3635,9 @@ namespace Unity.Entities.Tests
             UnityEngine.GameObject go = null;
             {
                 Entity a = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(a, new EcsTestManagedSharedComponentWithUnityObjectRef
+                #pragma warning restore 0618
                 {
                     value = go
                 });
@@ -3478,7 +3667,9 @@ namespace Unity.Entities.Tests
                 var entities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
                 Assert.AreEqual(1, entities.Length);
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var a = entityManager.GetSharedComponentManaged<EcsTestManagedSharedComponentWithUnityObjectRef>(entities[0]).value;
+                #pragma warning restore 0618
 
                 Assert.IsTrue(a == go);
             }

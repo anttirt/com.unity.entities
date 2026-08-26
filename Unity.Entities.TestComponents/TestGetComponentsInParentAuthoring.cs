@@ -14,19 +14,20 @@ namespace Unity.Entities.Tests
 			public int Field;
 		}
 
-        public struct IntElement : IBufferElementData
+        public struct EntityIdElement : IBufferElementData
         {
-            public static implicit operator int(IntElement e)
+            public static implicit operator EntityId(EntityIdElement e)
             {
                 return e.Value;
             }
 
-            public static implicit operator IntElement(int e)
+            public static implicit operator EntityIdElement(EntityId e)
             {
-                return new IntElement {Value = e};
+                return new EntityIdElement { Value = e };
             }
 
-            public int Value;
+            public EntityId Value;
+
         }
 
         class Baker : Baker<TestGetComponentsInParentAuthoring>
@@ -40,10 +41,10 @@ namespace Unity.Entities.Tests
                 var entity = GetEntity(TransformUsageFlags.None);
                 AddComponent(entity, new ComponentTest1() {Field = found.Count});
 
-                DynamicBuffer<IntElement> buffer = AddBuffer<IntElement>(entity);
+                DynamicBuffer<EntityIdElement> buffer = AddBuffer<EntityIdElement>(entity);
                 foreach (var component in found)
                 {
-                    buffer.Add(component.GetInstanceID());
+                    buffer.Add(component.GetEntityId());
                 }
             }
         }

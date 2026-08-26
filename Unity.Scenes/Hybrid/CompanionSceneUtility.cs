@@ -69,7 +69,7 @@ namespace Unity.Entities
 
         static void CreateCompanionScenes()
         {
-            var previewSceneFlags = PreviewSceneFlags.AllowMonoBehaviourEvents | PreviewSceneFlags.AllowCamerasForRendering | PreviewSceneFlags.IsPreviewScene | PreviewSceneFlags.AllowAutoPlayAudioSources;
+            var previewSceneFlags = PreviewSceneFlags.AllowMonoBehaviourEvents | PreviewSceneFlags.AllowCamerasForRendering | PreviewSceneFlags.IsPreviewScene | PreviewSceneFlags.IsPlayableScene;
             _companionScene = EditorSceneManager.NewPreviewScene(true, previewSceneFlags);
             var companionSceneCullingMask = SceneCullingMasks.DefaultSceneCullingMask;
             _companionScene.name = "CompanionScene";

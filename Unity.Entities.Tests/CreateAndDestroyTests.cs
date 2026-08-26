@@ -348,14 +348,18 @@ namespace Unity.Entities.Tests
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(entity));
             Assert.IsTrue(m_Manager.HasComponent<EcsTestSharedComp>(entity));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<EcsTestData2>(entity);
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(entity));
             Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(entity));
             Assert.IsTrue(m_Manager.HasComponent<EcsTestSharedComp>(entity));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<EcsTestSharedComp>(entity);
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(entity));
@@ -438,14 +442,18 @@ namespace Unity.Entities.Tests
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(entity));
             Assert.IsTrue(m_Manager.HasComponent<EcsCleanupShared1>(entity));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsCleanupShared1>(entity).Value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<EcsTestData2>(entity);
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(entity));
             Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(entity));
             Assert.IsTrue(m_Manager.HasComponent<EcsCleanupShared1>(entity));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsCleanupShared1>(entity).Value);
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<EcsCleanupShared1>(entity);
             Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(entity));
@@ -498,14 +506,18 @@ namespace Unity.Entities.Tests
         {
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(SharedData1), typeof(SharedData2));
             var entity = m_Manager.CreateEntity(archetype);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new SharedData1() { value = 5});
             m_Manager.SetSharedComponentManaged(entity, new SharedData2() { value = 9});
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent(entity, new ComponentTypeSet(typeof(EcsTestData2), typeof(EcsTestData4)));
             Assert.AreEqual(m_Manager.CreateArchetype(typeof(EcsTestData), typeof(SharedData1), typeof(SharedData2)),
                 m_Manager.GetChunk(entity).Archetype);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(5, m_Manager.GetSharedComponentManaged<SharedData1>(entity).value);
             Assert.AreEqual(9, m_Manager.GetSharedComponentManaged<SharedData2>(entity).value);
+            #pragma warning restore 0618
             m_Manager.DestroyEntity(entity);
         }
 
@@ -732,13 +744,17 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity(archetype);
 
             var sharedComponentValue = new EcsTestSharedComp(1337);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, sharedComponentValue);
+            #pragma warning restore 0618
 
             var typesToAdd = new ComponentTypeSet(typeof(EcsTestData3), typeof(EcsTestSharedComp2));
 
             m_Manager.AddComponent(entity, typesToAdd);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity), sharedComponentValue);
+            #pragma warning restore 0618
 
             var expectedTotalTypes = new ComponentTypeSet(typeof(Simulate), typeof(EcsTestData),
                 typeof(EcsTestData3), typeof(EcsTestSharedComp), typeof(EcsTestSharedComp2));
@@ -802,14 +818,18 @@ namespace Unity.Entities.Tests
             var sharedValue = new EcsSharedForcedOrder(123);
             var systemValue = new EcsCleanupSharedForcedOrder(234);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(srcEntity, sharedValue);
             m_Manager.AddSharedComponentManaged(srcEntity, systemValue);
+            #pragma warning restore 0618
 
             var versionSharedBefore = m_Manager.GetSharedComponentOrderVersion(sharedValue);
             var versionSystemBefore = m_Manager.GetSharedComponentOrderVersion(systemValue);
 
             var dstEntity = m_Manager.Instantiate(srcEntity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var sharedValueCopied = m_Manager.GetSharedComponentManaged<EcsSharedForcedOrder>(dstEntity);
+            #pragma warning restore 0618
 
             var versionSharedAfter = m_Manager.GetSharedComponentOrderVersion(sharedValue);
             var versionSystemAfter = m_Manager.GetSharedComponentOrderVersion(systemValue);
@@ -994,8 +1014,10 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var added0 = m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp());
             var added1 = m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp());
+            #pragma warning restore 0618
 
             Assert.That(added0, Is.True);
             Assert.That(added1, Is.False);
@@ -1017,8 +1039,10 @@ namespace Unity.Entities.Tests
 
             m_Manager.AddComponentData(entity, new EcsTestData(1));
             m_Manager.AddComponentData(entity, new EcsTestData2(2));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(3));
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp3(4));
+            #pragma warning restore 0618
             var newArchetype = m_Manager.CreateArchetype(typeof(EcsTestData2), typeof(EcsTestData3), typeof(EcsTestSharedComp3), typeof(EcsTestSharedComp2));
 
             m_Manager.SetArchetype(entity, newArchetype);
@@ -1026,8 +1050,10 @@ namespace Unity.Entities.Tests
 
             Assert.AreEqual(2, m_Manager.GetComponentData<EcsTestData2>(entity).value0);
             Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData3>(entity).value0);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsTestSharedComp2>(entity).value0);
             Assert.AreEqual(4, m_Manager.GetSharedComponentManaged<EcsTestSharedComp3>(entity).value0);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -1054,6 +1080,96 @@ namespace Unity.Entities.Tests
             var newArchetype = m_Manager.CreateArchetype(typeof(EcsCleanup1), typeof(EcsCleanupTag1));
             m_Manager.SetArchetype(entity, newArchetype);
             Assert.AreEqual(newArchetype, m_Manager.GetChunk(entity).Archetype);
+        }
+
+        [Test]
+        public void SetArchetypeArray_AppliesToAllEntities()
+        {
+            var entities = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                entities[i] = m_Manager.CreateEntity(typeof(EcsTestData));
+                m_Manager.SetComponentData(entities[i], new EcsTestData(i + 1));
+            }
+
+            var newArchetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2),  typeof(EcsTestData3));
+            m_Manager.SetArchetype(entities, newArchetype);
+
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                Assert.AreEqual(newArchetype, m_Manager.GetChunk(entities[i]).Archetype);
+
+                Assert.AreEqual(i + 1, m_Manager.GetComponentData<EcsTestData>(entities[i]).value);
+
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData2>(entities[i]).value0);
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData2>(entities[i]).value1);
+
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData3>(entities[i]).value0);
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData3>(entities[i]).value1);
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData3>(entities[i]).value2);
+            }
+        }
+
+        [Test]
+        public void SetArchetypeArray_BatchPath_AppliesCorrectly()
+        {
+            // 20 entities to exceed FASTER_TO_BATCH_THRESHOLD (10) and exercise the batch code path
+            var entities = CollectionHelper.CreateNativeArray<Entity>(20, World.UpdateAllocator.ToAllocator);
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                entities[i] = m_Manager.CreateEntity(typeof(EcsTestData));
+                m_Manager.SetComponentData(entities[i], new EcsTestData(i + 1));
+            }
+
+            var newArchetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestData3));
+            m_Manager.SetArchetype(entities, newArchetype);
+
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                Assert.AreEqual(newArchetype, m_Manager.GetChunk(entities[i]).Archetype);
+                Assert.AreEqual(i + 1, m_Manager.GetComponentData<EcsTestData>(entities[i]).value);
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData2>(entities[i]).value0);
+                Assert.AreEqual(0, m_Manager.GetComponentData<EcsTestData3>(entities[i]).value0);
+            }
+        }
+
+        [Test]
+        public void SetArchetypeArray_BatchPath_SkipsEntitiesAlreadyAtTargetArchetype()
+        {
+            // 20 entities: first 10 already at the target archetype, last 10 need moving
+            var newArchetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestData2));
+            var oldArchetype = m_Manager.CreateArchetype(typeof(EcsTestData));
+
+            var entities = CollectionHelper.CreateNativeArray<Entity>(20, World.UpdateAllocator.ToAllocator);
+            for (int i = 0; i < 10; ++i)
+            {
+                entities[i] = m_Manager.CreateEntity(newArchetype);
+                m_Manager.SetComponentData(entities[i], new EcsTestData(i + 1));
+            }
+            for (int i = 10; i < 20; ++i)
+            {
+                entities[i] = m_Manager.CreateEntity(oldArchetype);
+                m_Manager.SetComponentData(entities[i], new EcsTestData(i + 1));
+            }
+
+            m_Manager.SetArchetype(entities, newArchetype);
+
+            for (int i = 0; i < entities.Length; ++i)
+            {
+                Assert.AreEqual(newArchetype, m_Manager.GetChunk(entities[i]).Archetype);
+                Assert.AreEqual(i + 1, m_Manager.GetComponentData<EcsTestData>(entities[i]).value);
+            }
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Requires component existence validation")]
+        public void SetArchetypeArray_RemovingStateComponentThrows()
+        {
+            var entities = CollectionHelper.CreateNativeArray<Entity>(20, World.UpdateAllocator.ToAllocator);
+            for (int i = 0; i < entities.Length; ++i)
+                entities[i] = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsCleanup1));
+
+            Assert.Throws<ArgumentException>(() => m_Manager.SetArchetype(entities, m_Manager.CreateArchetype(typeof(EcsTestData))));
         }
 
         [Test]
@@ -1202,8 +1318,9 @@ namespace Unity.Entities.Tests
             using (var destroyed = new NativeList<Entity>(World.UpdateAllocator.ToAllocator))
             {
                 void CallCreatedAndDestroyed() =>
-#pragma warning disable CS0618 // Type or member is obsolete
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.GetCreatedAndDestroyedEntitiesAsync(state, created, destroyed).Complete();
+                    #pragma warning restore 0618
 #pragma warning restore
 
                 // Create e0 & e1
@@ -1253,8 +1370,9 @@ namespace Unity.Entities.Tests
             using (var created = new NativeList<Entity>(World.UpdateAllocator.ToAllocator))
             using (var destroyed = new NativeList<Entity>(World.UpdateAllocator.ToAllocator))
             {
-#pragma warning disable CS0618 // Type or member is obsolete
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.GetCreatedAndDestroyedEntities(state, created, destroyed);
+                #pragma warning restore 0618
 #pragma warning restore
 
                 var entity0 = m_Manager.CreateEntity(typeof(BoundsComponent), ComponentType.ChunkComponent<ChunkBoundsComponent>());
@@ -1262,8 +1380,9 @@ namespace Unity.Entities.Tests
                 var entity1 = m_Manager.CreateEntity(typeof(BoundsComponent), ComponentType.ChunkComponent<ChunkBoundsComponent>());
                 m_Manager.SetComponentData(entity1, new BoundsComponent {boundsMin = new Mathematics.float3(0, 0, 0), boundsMax = new Mathematics.float3(10, 10, 10)});
 
-#pragma warning disable CS0618 // Type or member is obsolete
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.GetCreatedAndDestroyedEntities(state, created, destroyed);
+                #pragma warning restore 0618
 #pragma warning restore
 
                 var metaQuery = m_Manager.CreateEntityQuery(typeof(ChunkBoundsComponent), typeof(ChunkHeader));

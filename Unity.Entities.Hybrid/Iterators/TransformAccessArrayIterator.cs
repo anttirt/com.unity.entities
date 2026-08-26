@@ -31,6 +31,7 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="query">The query matching entities whose transform data should be gathered</param>
         /// <returns>An object that allows access to entity transform data</returns>
+        [Obsolete("GetTransformAccessArray relies on accessing managed UnityEngine.Transform components, which is deprecated and will be removed. First deprecated in 6.6.")]
         public static unsafe TransformAccessArray GetTransformAccessArray(this EntityQuery query)
         {
             var state = (TransformAccessArrayState)query._CachedState;
@@ -46,7 +47,9 @@ namespace Unity.Entities
             state.OrderVersion = orderVersion;
 
             UnityEngine.Profiling.Profiler.BeginSample("DirtyTransformAccessArrayUpdate");
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var trans = query.ToComponentArray<Transform>();
+            #pragma warning restore 0618
             if (!state.Data.isCreated)
                 state.Data = new TransformAccessArray(trans);
             else

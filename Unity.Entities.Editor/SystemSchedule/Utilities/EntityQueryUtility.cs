@@ -1,12 +1,7 @@
-using System.Collections.Generic;
-
 namespace Unity.Entities.Editor
 {
-    static class EntityQueryUtility
+    internal static class EntityQueryUtility
     {
-        public static IEnumerable<string> CollectComponentTypesFromSystemQuery(SystemProxy systemProxy)
-        {
-            return systemProxy.GetComponentTypesUsedByQueries();
-        }
+        public static string[] CollectComponentTypesFromSystemQuery(SystemProxy systemProxy) => systemProxy.GetComponentTypesUsedByQueries();
     }
 }

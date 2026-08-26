@@ -6,6 +6,7 @@ using Unity.Collections;
 using Unity.Editor.Bridge;
 using Unity.Jobs;
 using Unity.PerformanceTesting;
+using UnityEngine;
 
 namespace Unity.Entities.Editor.PerformanceTests
 {
@@ -15,14 +16,14 @@ namespace Unity.Entities.Editor.PerformanceTests
     {
         const int k_MinId = -4_352_596;
 
-        static int[] GenerateIds(int count) => Enumerable.Range(0, count).Select(i => k_MinId + i * 50_000).ToArray();
+        static EntityId[] GenerateIds(int count) => Enumerable.Range(0, count).Select(i => EntityId.FromULong((ulong)(k_MinId + i * 50_000))).ToArray();
 
         [Test, Performance]
         public void HierarchyGameObjectChangeTracker_MergeEvents_AddNewEvents([Values(0, 10_000, 100_000)] int existingEventCount, [Values(500, 4000, 10_000, 50_000)] int eventsToAddCount)
         {
             NativeList<GameObjectChangeTrackerEvent> events = default;
             NativeArray<GameObjectChangeTrackerEvent> eventsToAdd = default;
-            NativeParallelHashMap<int, int> eventsIndex = default;
+            NativeParallelHashMap<EntityId, int> eventsIndex = default;
 
             var ids = GenerateIds(existingEventCount + eventsToAddCount);
 
@@ -35,7 +36,7 @@ namespace Unity.Entities.Editor.PerformanceTests
             {
                 events = new NativeList<GameObjectChangeTrackerEvent>(existingEventCount, Allocator.TempJob);
                 eventsToAdd = new NativeArray<GameObjectChangeTrackerEvent>(eventsToAddCount, Allocator.TempJob);
-                eventsIndex = new NativeParallelHashMap<int, int>(existingEventCount, Allocator.TempJob);
+                eventsIndex = new NativeParallelHashMap<EntityId, int>(existingEventCount, Allocator.TempJob);
 
                 for (var i = 0; i < existingEventCount; i++)
                 {
@@ -64,7 +65,7 @@ namespace Unity.Entities.Editor.PerformanceTests
         {
             NativeList<GameObjectChangeTrackerEvent> events = default;
             NativeArray<GameObjectChangeTrackerEvent> eventsToAdd = default;
-            NativeParallelHashMap<int, int> eventsIndex = default;
+            NativeParallelHashMap<EntityId, int> eventsIndex = default;
 
             var ids = GenerateIds(existingEventCount);
 
@@ -77,7 +78,7 @@ namespace Unity.Entities.Editor.PerformanceTests
             {
                 events = new NativeList<GameObjectChangeTrackerEvent>(existingEventCount, Allocator.TempJob);
                 eventsToAdd = new NativeArray<GameObjectChangeTrackerEvent>(eventsToAddCount, Allocator.TempJob);
-                eventsIndex = new NativeParallelHashMap<int, int>(existingEventCount, Allocator.TempJob);
+                eventsIndex = new NativeParallelHashMap<EntityId, int>(existingEventCount, Allocator.TempJob);
 
                 for (var i = 0; i < existingEventCount; i++)
                 {
@@ -106,7 +107,7 @@ namespace Unity.Entities.Editor.PerformanceTests
         {
             NativeList<GameObjectChangeTrackerEvent> events = default;
             NativeArray<GameObjectChangeTrackerEvent> eventsToAdd = default;
-            NativeParallelHashMap<int, int> eventsIndex = default;
+            NativeParallelHashMap<EntityId, int> eventsIndex = default;
 
             var ids = GenerateIds(existingEventCount);
 
@@ -119,7 +120,7 @@ namespace Unity.Entities.Editor.PerformanceTests
             {
                 events = new NativeList<GameObjectChangeTrackerEvent>(existingEventCount, Allocator.TempJob);
                 eventsToAdd = new NativeArray<GameObjectChangeTrackerEvent>(eventsToAddCount, Allocator.TempJob);
-                eventsIndex = new NativeParallelHashMap<int, int>(existingEventCount, Allocator.TempJob);
+                eventsIndex = new NativeParallelHashMap<EntityId, int>(existingEventCount, Allocator.TempJob);
 
                 for (var i = 0; i < existingEventCount; i++)
                 {
@@ -153,7 +154,7 @@ namespace Unity.Entities.Editor.PerformanceTests
             NativeList<GameObjectChangeTrackerEvent> events = default;
             NativeArray<GameObjectChangeTrackerEvent> eventsToAdd = default;
             NativeArray<GameObjectChangeTrackerEvent> eventsBatchToAdd = default;
-            NativeParallelHashMap<int, int> eventsIndex = default;
+            NativeParallelHashMap<EntityId, int> eventsIndex = default;
 
             var ids = GenerateIds(existingEventCount + eventsToAddCount * repeats);
 
@@ -175,7 +176,7 @@ namespace Unity.Entities.Editor.PerformanceTests
                 events = new NativeList<GameObjectChangeTrackerEvent>(existingEventCount, Allocator.TempJob);
                 eventsToAdd = new NativeArray<GameObjectChangeTrackerEvent>(eventsToAddCount * repeats, Allocator.TempJob);
                 eventsBatchToAdd = new NativeArray<GameObjectChangeTrackerEvent>(eventsToAddCount, Allocator.TempJob);
-                eventsIndex = new NativeParallelHashMap<int, int>(existingEventCount, Allocator.TempJob);
+                eventsIndex = new NativeParallelHashMap<EntityId, int>(existingEventCount, Allocator.TempJob);
 
                 for (var i = 0; i < existingEventCount; i++)
                 {

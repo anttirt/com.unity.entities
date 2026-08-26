@@ -17,6 +17,14 @@ namespace Unity.Entities
     {
     }
 
+    public interface IDebugOnAdded
+    {
+    }
+
+    public interface IDebugOnRemoved
+    {
+    }
+
     /// <summary>
     /// An interface for creating structs that can be stored in a <see cref="DynamicBuffer{T}"/>.
     /// </summary>
@@ -241,8 +249,8 @@ namespace Unity.Entities
     /// <remarks> By default, an <see cref="EntityQuery"/> ignores all entities that have this component. You
     /// can override this default behavior by setting the `EntityQueryOptions.IncludeDisabledEntities` flag of the
     /// <see cref="EntityQueryDesc"/> object used to create the query.</remarks>
-    /// <seealso cref="EntityManager.IsEnabled(Entity)"/>
-    /// <seealso cref="EntityManager.SetEnabled(Entity,bool)"/>
+    /// <seealso href="Unity.Entities.EntityManager.IsEnabled.html#Unity_Entities_EntityManager_IsEnabled_Unity_Entities_Entity_">IsEnabled(Entity)</seealso>
+    /// <seealso href="Unity.Entities.EntityManager.SetEnabled.html#Unity_Entities_EntityManager_SetEnabled_Unity_Entities_Entity_System_Boolean_">SetEnabled(Entity, bool)</seealso>
     public struct Disabled : IComponentData
     {
     }
@@ -312,7 +320,7 @@ namespace Unity.Entities
     /// <summary>
     /// A Unity-defined shared component assigned to all entities in the same subscene.
     /// </summary>
-    [Serializable][ChunkSerializable]
+    [ChunkSerializable]
     public struct SceneTag : ISharedComponentData, IEquatable<SceneTag>
     {
         /// <summary>

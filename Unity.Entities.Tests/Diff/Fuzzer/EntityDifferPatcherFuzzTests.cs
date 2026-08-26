@@ -67,28 +67,28 @@ namespace Unity.Entities.Tests.Fuzzer
         private static readonly (string Name, string Data)[] TestCases =
         {
             ("ShuffleLinkedEntityGroups", @"
-CreateEntity_|_{""Guid"":{""a"":3,""b"":0}}
-CreateLinkedEntityGroup_|_{""Guid"":{""a"":3,""b"":0}}
-CreateEntity_|_{""Guid"":{""a"":7,""b"":0}}
-RemoveLinkedEntityGroup_|_{""Guid"":{""a"":3,""b"":0}}
-CreateLinkedEntityGroup_|_{""Guid"":{""a"":3,""b"":0}}
-AddToLinkedEntityGroup_|_{""ToAdd"":{""a"":7,""b"":0},""AddTo"":{""a"":3,""b"":0}}
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
+CreateLinkedEntityGroup_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 7}}}
+RemoveLinkedEntityGroup_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
+CreateLinkedEntityGroup_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
+AddToLinkedEntityGroup_|_{""ToAdd"":{""_OriginatingEntityId"":{""m_rawData"": 7}},""AddTo"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
 Validate_|_
-RemoveFromLinkedEntityGroup_|_{""ToRemove"":{""a"":7,""b"":0},""RemoveFrom"":{""a"":3,""b"":0}}
+RemoveFromLinkedEntityGroup_|_{""ToRemove"":{""_OriginatingEntityId"":{""m_rawData"": 7}},""RemoveFrom"":{""_OriginatingEntityId"":{""m_rawData"": 3}}}
 Validate_|_"),
             ("AddAndRemoveFromLinkedEntityGroup_ThenDestroy", @"
-CreateEntity_|_{""Guid"":{""a"":1,""b"":0}}
-DestroyEntity_|_{""Guid"":{""a"":1,""b"":0}}
-CreateEntity_|_{""Guid"":{""a"":27,""b"":0}}
-CreateEntity_|_{""Guid"":{""a"":28,""b"":0}}
-CreateEntity_|_{""Guid"":{""a"":30,""b"":0}}
-CreateLinkedEntityGroup_|_{""Guid"":{""a"":30,""b"":0}}
-AddToLinkedEntityGroup_|_{""ToAdd"":{""a"":27,""b"":0},""AddTo"":{""a"":30,""b"":0}}
-AddToLinkedEntityGroup_|_{""ToAdd"":{""a"":28,""b"":0},""AddTo"":{""a"":30,""b"":0}}
-RemoveFromLinkedEntityGroup_|_{""ToRemove"":{""a"":27,""b"":0},""RemoveFrom"":{""a"":30,""b"":0}}
-RemoveLinkedEntityGroup_|_{""Guid"":{""a"":30,""b"":0}}
-DestroyEntity_|_{""Guid"":{""a"":30,""b"":0}}
-DestroyEntity_|_{""Guid"":{""a"":28,""b"":0}}")
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 1}}}
+DestroyEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 1}}}
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 27}}}
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 28}}}
+CreateEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+CreateLinkedEntityGroup_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+AddToLinkedEntityGroup_|_{""ToAdd"":{""_OriginatingEntityId"":{""m_rawData"": 27}},""AddTo"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+AddToLinkedEntityGroup_|_{""ToAdd"":{""_OriginatingEntityId"":{""m_rawData"": 28}},""AddTo"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+RemoveFromLinkedEntityGroup_|_{""ToRemove"":{""_OriginatingEntityId"":{""m_rawData"": 27}},""RemoveFrom"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+RemoveLinkedEntityGroup_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+DestroyEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 30}}}
+DestroyEntity_|_{""Guid"":{""_OriginatingEntityId"":{""m_rawData"": 28}}}")
         };
     }
 }

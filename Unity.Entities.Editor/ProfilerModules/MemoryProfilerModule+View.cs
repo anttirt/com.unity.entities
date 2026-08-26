@@ -6,8 +6,8 @@ using Unity.Entities.UI;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
-using TreeView = Unity.Editor.Bridge.TreeView;
 
 namespace Unity.Entities.Editor
 {
@@ -16,7 +16,7 @@ namespace Unity.Entities.Editor
         public class MemoryProfilerModuleView
         {
             const string k_UserSettingsKey = "Entities" + nameof(MemoryProfiler) + ".";
-            const string k_ShowEmptyArchetypesKey = k_UserSettingsKey + nameof(ShowEmptyArchetypes);
+            const string k_ShowEmptyArchetypesKey = k_UserSettingsKey + nameof(showEmptyArchetypes);
 
             static readonly string s_ShowEmptyArchetypes = L10n.Tr("Show Empty Archetypes");
             static readonly string s_All = L10n.Tr("All");
@@ -31,7 +31,6 @@ namespace Unity.Entities.Editor
             static readonly string s_ExternalComponents = L10n.Tr("External Components");
             static readonly string s_ChunkComponents = L10n.Tr("Chunk Components");
             static readonly string s_SharedComponents = L10n.Tr("Shared Components");
-            static readonly string s_Segments = L10n.Tr("Segments");
             static readonly string s_Unknown = L10n.Tr("Unknown");
             static readonly string s_ComponentSizeInChunkTooltip = L10n.Tr("Component size in chunk.");
             static readonly string s_ComponentsSizeInChunkTooltip = L10n.Tr("Components size in chunk.");
@@ -39,11 +38,12 @@ namespace Unity.Entities.Editor
             static readonly VisualElementTemplate s_WindowTemplate = PackageResources.LoadTemplate("ProfilerModules/memory-profiler-window");
             static readonly VisualElementTemplate s_LeftPaneTemplate = PackageResources.LoadTemplate("ProfilerModules/memory-profiler-left-pane");
             static readonly VisualElementTemplate s_RightPaneTemplate = PackageResources.LoadTemplate("ProfilerModules/memory-profiler-right-pane");
-            static readonly VisualElementTemplate s_TreeViewItemTemplate = PackageResources.LoadTemplate("ProfilerModules/memory-profiler-tree-view-item");
             static readonly VisualElementTemplate s_ComponentTemplate = PackageResources.LoadTemplate("ProfilerModules/memory-profiler-component");
 
+            static readonly ObjectPool<VisualElement> k_CellLabelPool = new (() => new VisualElement());
+
             MemoryProfilerTreeViewItemData[] m_ArchetypesDataSource;
-            readonly List<MemoryProfilerTreeViewItemData> m_ArchetypesDataFiltered = new List<MemoryProfilerTreeViewItemData>();
+            readonly List<MemoryProfilerTreeViewItemData> m_ArchetypesDataFiltered = new ();
 
             VisualElement m_Window;
             TwoPaneSplitView m_Splitter;
@@ -53,7 +53,7 @@ namespace Unity.Entities.Editor
             SearchElement m_SearchElement;
             Label m_Message;
             VisualElement m_Content;
-            TreeView m_TreeView;
+            MultiColumnTreeView m_TreeView;
 
             // Right pane elements
             VisualElement m_RightPane;
@@ -62,14 +62,13 @@ namespace Unity.Entities.Editor
             Label m_UnusedEntityCount;
             Label m_ChunkCount;
             Label m_ChunkCapacity;
-            //Label m_SegmentCount;
             FoldoutField m_ComponentsFoldout;
             Label m_ComponentsSizeInChunk;
             Label m_ExternalComponents;
             FoldoutField m_ChunkComponentsFoldout;
             FoldoutField m_SharedComponentsFoldout;
 
-            bool ShowEmptyArchetypes
+            bool showEmptyArchetypes
             {
                 get => EditorUserSettings.GetConfigValue(k_ShowEmptyArchetypesKey) == true.ToString();
                 set => EditorUserSettings.SetConfigValue(k_ShowEmptyArchetypesKey, value ? value.ToString() : null);
@@ -104,7 +103,7 @@ namespace Unity.Entities.Editor
                 m_SearchElement.AddSearchDataCallback<MemoryProfilerTreeViewItemData>(data =>
                 {
                     return data.ComponentTypes
-                        .Select(t => TypeManager.GetType(t))
+                        .Select(TypeManager.GetType)
                         .Where(t => t != null)
                         .Select(t => t.Name)
                         .Append(FormattingUtility.HashToString(data.StableHash))
@@ -128,7 +127,7 @@ namespace Unity.Entities.Editor
                 };
                 searchHandler.SetSearchDataProvider(() =>
                 {
-                    return m_ArchetypesDataSource?.Where(a => a.EntityCount > 0 || ShowEmptyArchetypes) ?? Enumerable.Empty<MemoryProfilerTreeViewItemData>();
+                    return m_ArchetypesDataSource?.Where(a => a.EntityCount > 0 || showEmptyArchetypes) ?? Enumerable.Empty<MemoryProfilerTreeViewItemData>();
                 });
                 searchHandler.OnBeginSearch += query =>
                 {
@@ -150,9 +149,9 @@ namespace Unity.Entities.Editor
                 options.clicked += () =>
                 {
                     var menu = new GenericMenu();
-                    menu.AddItem(new GUIContent(s_ShowEmptyArchetypes), ShowEmptyArchetypes, () =>
+                    menu.AddItem(new GUIContent(s_ShowEmptyArchetypes), showEmptyArchetypes, () =>
                     {
-                        ShowEmptyArchetypes = !ShowEmptyArchetypes;
+                        showEmptyArchetypes = !showEmptyArchetypes;
                         m_SearchElement.Search();
                     });
                     menu.DropDown(options.worldBound);
@@ -162,29 +161,122 @@ namespace Unity.Entities.Editor
                 m_Content = m_LeftPane.Q("content");
                 m_Content.SetVisibility(false);
 
-                var leftHeader = m_Content.Q("header");
-                leftHeader.Q<Label>("column1").text = s_Archetypes;
-                leftHeader.Q<Label>("column2").text = s_Allocated;
-                leftHeader.Q<Label>("column3").text = s_Unused;
-
                 var container = m_Content.Q("tree-view-container");
-                m_TreeView = new TreeView();
-                container.Add(m_TreeView);
-                m_TreeView.itemHeight = 18;
+                m_TreeView = new MultiColumnTreeView()
+                {
+                    name = "MemoryProfilerModuleTreeView",
+                    fixedItemHeight = 18,
+                    autoExpand = true,
+                    viewDataKey = "full-view",
+                    selectionType = SelectionType.Single
+                };
                 m_TreeView.AddToClassList("memory-profiler-left-pane__tree-view");
-                m_TreeView.makeItem = () =>
+                CreateColumns(m_TreeView);
+                m_TreeView.selectionChanged += OnTreeViewSelectionChanged;
+
+                container.Add(m_TreeView);
+            }
+
+            void CreateColumns(MultiColumnTreeView treeView)
+            {
+                const string headerStr = "Header";
+
+                var archetypeColumn = new Column()
                 {
-                    return s_TreeViewItemTemplate.Clone();
+                    name = s_Archetypes,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_Archetypes;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindArchetypeItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    minWidth = 100,
+                    width = 300
                 };
-                m_TreeView.bindItem = (element, item) =>
+
+                var allocatedColumn = new Column()
                 {
-                    var itemData = (MemoryProfilerTreeViewItem)item;
-                    element.Q<Label>("column1").text = itemData.displayName;
-                    element.Q<Label>("column2").text = FormattingUtility.BytesToString(itemData.totalAllocatedBytes);
-                    element.Q<Label>("column3").text = FormattingUtility.BytesToString(itemData.totalUnusedBytes);
+                    name = s_Allocated,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_Allocated;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindAllocatedItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    width = 100
                 };
-                m_TreeView.onSelectionChange += OnTreeViewSelectionChanged;
-                m_TreeView.selectionType = SelectionType.Single;
+
+                var unusedColumn = new Column()
+                {
+                    name = s_Unused,
+                    makeHeader = MakeHeaderLabel,
+                    bindHeader = e =>
+                    {
+                        var label = e.Q<Label>(headerStr);
+                        label.text = s_Unused;
+                    },
+                    makeCell = MakeCellLabel,
+                    bindCell = BindUnusedItem,
+                    destroyCell = DestroyCellLabel,
+                    resizable = true,
+                    width = 100
+                };
+
+                treeView.columns.Add(archetypeColumn);
+                treeView.columns.Add(allocatedColumn);
+                treeView.columns.Add(unusedColumn);
+            }
+
+            static VisualElement MakeHeaderLabel()
+            {
+                var label = new Label
+                {
+                    name = "Header",
+                };
+                label.AddToClassList("memory-profiler-left-pane__column-header");
+                return label;
+            }
+
+            static VisualElement MakeCellLabel()
+            {
+                var element = k_CellLabelPool.Get();
+                var label = new Label
+                {
+                    name = "Cell"
+                };
+                element.Add(label);
+                return element;
+            }
+
+            static void DestroyCellLabel(VisualElement element)
+            {
+                k_CellLabelPool.Release(element);
+            }
+
+            void BindArchetypeItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<MemoryProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = itemData.displayName;
+            }
+
+            void BindAllocatedItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<MemoryProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = FormattingUtility.BytesToString(itemData.totalAllocatedBytes);
+            }
+
+            void BindUnusedItem(VisualElement element, int index)
+            {
+                var itemData = m_TreeView.GetItemDataForIndex<MemoryProfilerTreeViewItem>(index);
+                element.Q<Label>("Cell").text = FormattingUtility.BytesToString(itemData.totalUnusedBytes);
             }
 
             void CreateViewRightPane(VisualElement root)
@@ -207,9 +299,6 @@ namespace Unity.Entities.Editor
 
                 content.Q<Label>("chunk-capacity-label").text = s_ChunkCapacity;
                 m_ChunkCapacity = content.Q<Label>("chunk-capacity-value");
-
-                //content.Q<Label>("segment-count-label").text = s_Segments;
-                //m_SegmentCount = content.Q<Label>("segment-count-value");
 
                 m_ComponentsFoldout = content.Q<FoldoutField>("components");
                 m_ComponentsFoldout.text = s_Components;
@@ -238,45 +327,61 @@ namespace Unity.Entities.Editor
                     return;
 
                 var itemId = 0;
-                var rootItem = new MemoryProfilerTreeViewItem() { id = itemId++, displayName = s_All };
+                var rootItem = new TreeViewItemData<MemoryProfilerTreeViewItem>(itemId++, new MemoryProfilerTreeViewItem { displayName = s_All });
 
                 foreach (var worldName in m_ArchetypesDataFiltered.Select(x => x.WorldName).Distinct())
-                    rootItem.AddChild(new MemoryProfilerTreeViewItem { id = itemId++, displayName = worldName });
+                {
+                    TreeViewItemDataBridge<MemoryProfilerTreeViewItem>.AddChild(rootItem,
+                        new TreeViewItemData<MemoryProfilerTreeViewItem>(itemId++, new MemoryProfilerTreeViewItem()
+                        {
+                            displayName = worldName
+                        }));
+                }
 
                 foreach (var archetypeData in m_ArchetypesDataFiltered)
                 {
-                    var worldItem = rootItem.children.First(item => item.displayName == archetypeData.WorldName);
-                    var archetypeDataItem = worldItem.children.FirstOrDefault(x => x.data.StableHash == archetypeData.StableHash);
-                    if (archetypeDataItem == null)
+                    var worldItem = rootItem.children.First(item => item.data.displayName == archetypeData.WorldName);
+
+                    TreeViewItemData<MemoryProfilerTreeViewItem> archetypeDataItem = default;
+                    var foundArchetypeItem = false;
+                    foreach (var item in worldItem.children)
                     {
-                        archetypeDataItem = new MemoryProfilerTreeViewItem
+                        if (item.data.data.StableHash == archetypeData.StableHash)
                         {
-                            id = itemId++,
-                            displayName = $"Archetype {FormattingUtility.HashToString(archetypeData.StableHash)}",
-                            data = archetypeData
-                        };
-                        worldItem.AddChild(archetypeDataItem);
+                            archetypeDataItem = item;
+                            foundArchetypeItem = true;
+                            break;
+                        }
                     }
 
-                    archetypeDataItem.totalAllocatedBytes += archetypeData.AllocatedBytes;
-                    archetypeDataItem.totalUnusedBytes += archetypeData.UnusedBytes;
-                    worldItem.totalAllocatedBytes += archetypeData.AllocatedBytes;
-                    worldItem.totalUnusedBytes += archetypeData.UnusedBytes;
-                    rootItem.totalAllocatedBytes += archetypeData.AllocatedBytes;
-                    rootItem.totalUnusedBytes += archetypeData.UnusedBytes;
+                    if (!foundArchetypeItem)
+                    {
+                        archetypeDataItem = new TreeViewItemData<MemoryProfilerTreeViewItem>(itemId++, new MemoryProfilerTreeViewItem()
+                        {
+                            displayName = $"Archetype {FormattingUtility.HashToString(archetypeData.StableHash)}",
+                            data = archetypeData
+                        });
+                        TreeViewItemDataBridge<MemoryProfilerTreeViewItem>.AddChild(worldItem, archetypeDataItem);
+                    }
+
+                    archetypeDataItem.data.totalAllocatedBytes += archetypeData.AllocatedBytes;
+                    archetypeDataItem.data.totalUnusedBytes += archetypeData.UnusedBytes;
+                    worldItem.data.totalAllocatedBytes += archetypeData.AllocatedBytes;
+                    worldItem.data.totalUnusedBytes += archetypeData.UnusedBytes;
+                    rootItem.data.totalAllocatedBytes += archetypeData.AllocatedBytes;
+                    rootItem.data.totalUnusedBytes += archetypeData.UnusedBytes;
                 }
 
                 AddLeafCountRecursive(rootItem);
 
-                rootItem.SortChildrenRecursive(item => item.totalAllocatedBytes, false);
                 if (rootItem.hasChildren)
                 {
-                    m_TreeView.rootItems = new[] { rootItem };
+                    m_TreeView.SetRootItems(new[] { rootItem });
                     m_TreeView.ExpandItem(rootItem.id);
                 }
                 else
                 {
-                    m_TreeView.rootItems = Array.Empty<MemoryProfilerTreeViewItem>();
+                    m_TreeView.Clear();
                 }
 
                 m_Message.SetVisibility(false);
@@ -299,14 +404,14 @@ namespace Unity.Entities.Editor
 
                 m_ArchetypesDataSource = null;
                 m_ArchetypesDataFiltered.Clear();
-                m_TreeView.rootItems = Array.Empty<MemoryProfilerTreeViewItem>();
+                m_TreeView.Clear();
                 m_Message.SetVisibility(true);
                 m_Message.text = message;
                 m_Content.SetVisibility(false);
                 SetInspectorValue(null);
             }
 
-            void OnTreeViewSelectionChanged(IEnumerable<ITreeViewItem> items)
+            void OnTreeViewSelectionChanged(IEnumerable<object> items)
             {
                 SetInspectorValue(items.FirstOrDefault() as MemoryProfilerTreeViewItem);
             }
@@ -320,7 +425,6 @@ namespace Unity.Entities.Editor
                     m_UnusedEntityCount.text = FormattingUtility.CountToString(item.data.UnusedEntityCount);
                     m_ChunkCount.text = FormattingUtility.CountToString(item.data.ChunkCount);
                     m_ChunkCapacity.text = FormattingUtility.CountToString(item.data.ChunkCapacity);
-                    //m_SegmentCount.text = CountToString(item.data.SegmentCount);
                     m_ComponentsFoldout.Clear();
                     m_ExternalComponents.SetVisibility(false);
                     m_ChunkComponentsFoldout.Clear();
@@ -351,7 +455,9 @@ namespace Unity.Entities.Editor
                                 componentIcon.AddToClassList("memory-profiler-component__icon-buffer-component");
                             else if (TypeManager.IsSharedComponentType(typeIndex))
                                 componentIcon.AddToClassList("memory-profiler-component__icon-shared-component");
+                            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                             else if (TypeManager.IsManagedComponent(typeIndex))
+                            #pragma warning restore 0618
                                 componentIcon.AddToClassList("memory-profiler-component__icon-managed-component");
                             else if (TypeManager.IsZeroSized(typeIndex))
                                 componentIcon.AddToClassList("memory-profiler-component__icon-tag-component");
@@ -359,7 +465,7 @@ namespace Unity.Entities.Editor
                                 componentIcon.AddToClassList("memory-profiler-component__icon-component");
 
                             var type = TypeManager.GetType(typeIndex);
-                            componentName.text = type?.Name ?? s_Unknown;
+                            componentName.text = type?.IsNested == true ? $"{type.DeclaringType.Name}+{type.Name}" : type?.Name ?? s_Unknown;
 
                             // Chunk and shared components store data outside archetype
                             if (!TypeManager.IsChunkComponent(typeIndex) &&
@@ -405,20 +511,19 @@ namespace Unity.Entities.Editor
                     m_UnusedEntityCount.text = null;
                     m_ChunkCount.text = null;
                     m_ChunkCapacity.text = null;
-                    //m_SegmentCount.text = null;
                     m_ComponentsFoldout.Clear();
                     m_ChunkComponentsFoldout.Clear();
                     m_SharedComponentsFoldout.Clear();
                 }
             }
 
-            int AddLeafCountRecursive(MemoryProfilerTreeViewItem item)
+            static int AddLeafCountRecursive(TreeViewItemData<MemoryProfilerTreeViewItem> item)
             {
                 var count = item.hasChildren ? 0 : 1;
                 foreach (var child in item.children)
                     count += AddLeafCountRecursive(child);
                 if (item.hasChildren)
-                    item.displayName += $" ({count})";
+                    item.data.displayName += $" ({count})";
                 return count;
             }
 

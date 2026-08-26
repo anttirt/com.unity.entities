@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using Unity.Collections;
 using UnityEngine;
 
@@ -50,24 +49,25 @@ namespace Unity.Entities.TestComponents
             var blobAssetStore = bakingSystem.BlobAssetStore;
             using (var context = new BlobAssetComputationContext<int, int>(blobAssetStore, 16, Allocator.Temp))
             {
-                Entities.ForEach((ref BlobAssetReferenceFromTestSystem blobRefComponent, in TempBlobAssetData blobData) =>
+                foreach (var (blobRefComponent, blobData) in
+                         SystemAPI.Query<RefRW<BlobAssetReferenceFromTestSystem>, RefRO<TempBlobAssetData>>())
                 {
-                    if(!context.GetBlobAsset(blobData.blobHash, out blobRefComponent.blobReference))
+                    if (!context.GetBlobAsset(blobData.ValueRO.blobHash, out blobRefComponent.ValueRW.blobReference))
                     {
-                        context.AddBlobAssetToCompute(blobData.blobHash, 0);
+                        context.AddBlobAssetToCompute(blobData.ValueRO.blobHash, 0);
 
                         // Create the blob reference
                         BlobBuilder builder = new BlobBuilder(Allocator.TempJob);
                         ref var data = ref builder.ConstructRoot<int>();
-                        data = blobData.blobValue;
+                        data = blobData.ValueRO.blobValue;
                         var blobAssetReference = builder.CreateBlobAssetReference<int>(Allocator.Persistent);
                         builder.Dispose();
 
-                        blobRefComponent.blobReference = blobAssetReference;
+                        blobRefComponent.ValueRW.blobReference = blobAssetReference;
 
-                        context.AddComputedBlobAsset(blobData.blobHash, blobAssetReference);
+                        context.AddComputedBlobAsset(blobData.ValueRO.blobHash, blobAssetReference);
                     }
-                }).Run();
+                }
             }
         }
     }

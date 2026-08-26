@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities.Tests;
+using Unity.Jobs;
 using Unity.PerformanceTesting;
 
 namespace Unity.Entities.PerformanceTests
@@ -15,6 +17,7 @@ namespace Unity.Entities.PerformanceTests
         EntityArchetype archetype1;
         EntityArchetype archetype2;
         EntityArchetype archetype3;
+        EntityArchetype archetype4;
         NativeArray<Entity> entities1;
         NativeArray<Entity> entities2;
         NativeArray<Entity> entities3;
@@ -31,6 +34,7 @@ namespace Unity.Entities.PerformanceTests
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
             archetype3 = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestManagedComponent));
 #endif
+            archetype4 = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestTag));
             entities1 = new NativeArray<Entity>(count, Allocator.Persistent);
             entities2 = new NativeArray<Entity>(count, Allocator.Persistent);
             entities3 = new NativeArray<Entity>(count, Allocator.Persistent);
@@ -56,22 +60,18 @@ namespace Unity.Entities.PerformanceTests
             public Entity entity;
         }
 
-        void FillWithEcsTestDataWithEntity(EntityCommandBuffer cmds, int repeat)
+        NativeArray<Entity> FillWithEcsTestDataWithEntity(EntityCommandBuffer cmds, int repeat)
         {
-            for (int i = repeat; i != 0; --i)
-            {
-                var e = cmds.CreateEntity();
-                cmds.AddComponent(e, new EcsTestDataWithEntity {value = i});
-            }
+            var entities = cmds.CreateEntity(repeat, Allocator.Persistent);
+            cmds.AddComponent(entities, new EcsTestDataWithEntity { value = repeat });
+            return entities;
         }
 
-        void FillWithEcsTestData(EntityCommandBuffer cmds, int repeat)
+        NativeArray<Entity> FillWithEcsTestData(EntityCommandBuffer cmds, int repeat)
         {
-            for (int i = repeat; i != 0; --i)
-            {
-                var e = cmds.CreateEntity();
-                cmds.AddComponent(e, new EcsTestData {value = i});
-            }
+            var entities = cmds.CreateEntity(repeat, Allocator.Persistent);
+            cmds.AddComponent(entities, new EcsTestData { value = repeat });
+            return entities;
         }
 
         void FillWithCreateEntityCommands(EntityCommandBuffer cmds, int repeat)
@@ -82,12 +82,24 @@ namespace Unity.Entities.PerformanceTests
             }
         }
 
+        NativeArray<Entity> FillWithBatchedCreateEntityCommands(EntityCommandBuffer cmds, int repeat)
+        {
+            return cmds.CreateEntity(repeat, Allocator.Persistent);
+
+        }
+
         void FillWithInstantiateEntityCommands(EntityCommandBuffer cmds, int repeat, Entity prefab)
         {
             for (int i = repeat; i != 0; --i)
             {
                 cmds.Instantiate(prefab);
             }
+        }
+
+        void FillWithBatchedInstantiateEntityCommands(EntityCommandBuffer cmds, ref NativeArray<Entity> entities, Entity prefab)
+        {
+            cmds.Instantiate(prefab, entities);
+
         }
 
         void FillWithAddComponentCommands(EntityCommandBuffer cmds, NativeArray<Entity> entities, ComponentType componentType)
@@ -143,7 +155,9 @@ namespace Unity.Entities.PerformanceTests
         {
             for (int i = entities.Length - 1; i != 0; i--)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddComponent(entities[i], new EcsTestManagedComponent {value = "string1"});
+                #pragma warning restore 0618
             }
         }
 
@@ -151,7 +165,9 @@ namespace Unity.Entities.PerformanceTests
         {
             for (int i = entities.Length - 1; i != 0; i--)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetComponent(entities[i], new EcsTestManagedComponent {value = "string2"});
+                #pragma warning restore 0618
             }
         }
 
@@ -242,13 +258,14 @@ namespace Unity.Entities.PerformanceTests
             const int kPlaybackLoopCount = 1000;
 
             var ecbs = new List<EntityCommandBuffer>(kPlaybackLoopCount);
+            var entityArrays = new List<NativeArray<Entity>>(kPlaybackLoopCount);
             Measure.Method(
                 () =>
                 {
                     for (int repeat = 0; repeat < kPlaybackLoopCount; ++repeat)
                     {
                         var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-                        FillWithEcsTestData(cmds, kCreateLoopCount);
+                        entityArrays.Add(FillWithEcsTestData(cmds, kCreateLoopCount));
                         ecbs.Add(cmds);
                     }
                 })
@@ -277,6 +294,10 @@ namespace Unity.Entities.PerformanceTests
             {
                 ecb.Dispose();
             }
+            foreach (var arr in entityArrays)
+            {
+                arr.Dispose();
+            }
         }
 
         [Test, Performance]
@@ -286,13 +307,14 @@ namespace Unity.Entities.PerformanceTests
             const int kPlaybackLoopCount = 1000;
 
             var ecbs = new List<EntityCommandBuffer>(kPlaybackLoopCount);
+            var entityArrays = new List<NativeArray<Entity>>(kPlaybackLoopCount);
             Measure.Method(
                 () =>
                 {
                     for (int repeat = 0; repeat < kPlaybackLoopCount; ++repeat)
                     {
                         var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-                        FillWithEcsTestDataWithEntity(cmds, kCreateLoopCount);
+                        entityArrays.Add(FillWithEcsTestDataWithEntity(cmds, kCreateLoopCount));
                         ecbs.Add(cmds);
                     }
                 })
@@ -316,6 +338,10 @@ namespace Unity.Entities.PerformanceTests
             {
                 ecb.Dispose();
             }
+            foreach (var arr in entityArrays)
+            {
+                arr.Dispose();
+            }
         }
 
         [Test, Performance]
@@ -330,6 +356,7 @@ namespace Unity.Entities.PerformanceTests
 
 
             var ecbs = new List<EntityCommandBuffer>(kPlaybackLoopCount);
+            var entityArrays = new List<NativeArray<Entity>>(kPlaybackLoopCount);
             Measure.Method(
                 () =>
                 {
@@ -338,7 +365,7 @@ namespace Unity.Entities.PerformanceTests
                         var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
                         Entity e0 = cmds.CreateEntity();
                         cmds.AddComponent(e0, new EcsTestDataWithEntity {value = -1, entity = e0 });
-                        FillWithEcsTestData(cmds, kCreateLoopCount);
+                        entityArrays.Add(FillWithEcsTestData(cmds, kCreateLoopCount));
                         ecbs.Add(cmds);
                     }
                 })
@@ -359,6 +386,10 @@ namespace Unity.Entities.PerformanceTests
             foreach (var ecb in ecbs)
             {
                 ecb.Dispose();
+            }
+            foreach (var arr in entityArrays)
+            {
+                arr.Dispose();
             }
         }
 
@@ -476,6 +507,59 @@ namespace Unity.Entities.PerformanceTests
         }
 
         [Test, Performance]
+        public void EntityCommandBuffer_CreateEntitiesBatched([Values(10, 1000, 10000)] int size)
+        {
+            var ecb = default(EntityCommandBuffer);
+            NativeArray<Entity> createdEntities = default;
+            Measure.Method(
+                    () =>
+                    {
+                        createdEntities = FillWithBatchedCreateEntityCommands(ecb, size);
+                    })
+                .SampleGroup("Record")
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                })
+                .CleanUp(() =>
+                {
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                    {
+                        m_Manager.DestroyEntity(entities);
+                    }
+                    ecb.Dispose();
+                    createdEntities.Dispose();
+                })
+                .Run();
+
+            Measure.Method(
+                    () =>
+                    {
+                        ecb.Playback(m_Manager);
+                    })
+                .SampleGroup("Playback")
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                    createdEntities = FillWithBatchedCreateEntityCommands(ecb, size);
+                })
+                .CleanUp(() =>
+                {
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                    {
+                        m_Manager.DestroyEntity(entities);
+                    }
+                    ecb.Dispose();
+                    createdEntities.Dispose();
+                })
+                .Run();
+        }
+
+        [Test, Performance]
         public void EntityCommandBuffer_InstantiateEntities([Values(10, 1000, 10000)] int size)
         {
             var ecb = default(EntityCommandBuffer);
@@ -524,6 +608,66 @@ namespace Unity.Entities.PerformanceTests
                         m_Manager.DestroyEntity(entities);
                     }
                     ecb.Dispose();
+                })
+                .Run();
+        }
+
+        [Test, Performance]
+        public void EntityCommandBuffer_InstantiateEntitiesBatched([Values(10, 1000, 10000)] int size)
+        {
+            var ecb = default(EntityCommandBuffer);
+            var prefabEntity = m_Manager.CreateEntity(archetype1);
+            NativeArray<Entity> instantiatedEntities = default;
+            Measure.Method(
+                    () =>
+                    {
+                        FillWithBatchedInstantiateEntityCommands(ecb, ref instantiatedEntities, prefabEntity);
+                    })
+                .SampleGroup("Record")
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                    prefabEntity = m_Manager.CreateEntity(archetype1);
+                    instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(size,
+                        World.UpdateAllocator.ToAllocator);
+                })
+                .CleanUp(() =>
+                {
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                    {
+                        m_Manager.DestroyEntity(entities);
+                    }
+                    ecb.Dispose();
+                    instantiatedEntities.Dispose();
+                })
+                .Run();
+
+            Measure.Method(
+                    () =>
+                    {
+                        ecb.Playback(m_Manager);
+                    })
+                .SampleGroup("Playback")
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                    prefabEntity = m_Manager.CreateEntity(archetype1);
+                    instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(size,
+                        World.UpdateAllocator.ToAllocator);
+                    FillWithBatchedInstantiateEntityCommands(ecb, ref instantiatedEntities, prefabEntity);
+                })
+                .CleanUp(() =>
+                {
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                    {
+                        m_Manager.DestroyEntity(entities);
+                    }
+                    ecb.Dispose();
+                    instantiatedEntities.Dispose();
                 })
                 .Run();
         }
@@ -1324,5 +1468,382 @@ namespace Unity.Entities.PerformanceTests
                 })
                 .Run();
         }
+
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
+        [Test, Performance]
+        public void EntityCommandBuffer_MultiPlayback_RemapEntity(
+            [Values(10, 100, 1000)] int entityCount)
+        {
+            EntityCommandBuffer ecb = default;
+            NativeArray<Entity> entities = new NativeArray<Entity>();
+
+            Measure.Method(() =>
+            {
+                ecb.Playback(m_Manager);
+            })
+            .SetUp(() =>
+            {
+                ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator,
+                    PlaybackPolicy.MultiPlayback);
+
+
+                var componentTypeSet = new ComponentTypeSet(typeof(EcsTestData));
+                for (int i = 0; i < entityCount; i++)
+                {
+                    var e = ecb.CreateEntity();
+                    ecb.AddComponent(e, componentTypeSet);
+                }
+                ecb.Playback(m_Manager);
+            })
+            .CleanUp(() =>
+            {
+                entities.Dispose();
+                ecb.Dispose();
+            })
+            .SampleGroup(new SampleGroup(
+                $"MultiPlayback_RemapEntity_N{entityCount} With 1 Component",
+                SampleUnit.Microsecond))
+            .WarmupCount(1)
+            .MeasurementCount(100)
+            .Run();
+
+            Measure.Method(() =>
+                {
+                    ecb.Playback(m_Manager);
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator,
+                        PlaybackPolicy.MultiPlayback);
+
+
+                    var componentTypeSet = new ComponentTypeSet(typeof(EcsTestData), typeof(EcsTestData2),typeof(EcsTestData3),typeof(EcsTestData4));
+                    for (int i = 0; i < entityCount; i++)
+                    {
+                        var e = ecb.CreateEntity();
+                        ecb.AddComponent(e, componentTypeSet);
+                    }
+                    ecb.Playback(m_Manager);
+                })
+                .CleanUp(() =>
+                {
+                    entities.Dispose();
+                    ecb.Dispose();
+                })
+                .SampleGroup(new SampleGroup(
+                    $"MultiPlayback_RemapEntity_N{entityCount} With 4 Components",
+                    SampleUnit.Microsecond))
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .Run();
+
+            Measure.Method(() =>
+                {
+                    ecb.Playback(m_Manager);
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator,
+                        PlaybackPolicy.MultiPlayback);
+
+                    var componentTypeSet = new ComponentTypeSet(typeof(EcsTestData));
+                    entities = ecb.CreateEntity(entityCount, Allocator.Persistent);
+                    ecb.AddComponent(entities, componentTypeSet);
+
+                    ecb.Playback(m_Manager);
+                })
+                .CleanUp(() =>
+                {
+                    entities.Dispose();
+                    ecb.Dispose();
+                })
+                .SampleGroup(new SampleGroup(
+                    $"MultiPlayback_RemapEntity_N{entityCount} Batched With 1 Component",
+                    SampleUnit.Microsecond))
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .Run();
+
+            Measure.Method(() =>
+                {
+                    ecb.Playback(m_Manager);
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator,
+                        PlaybackPolicy.MultiPlayback);
+
+
+                    var componentTypeSet = new ComponentTypeSet(typeof(EcsTestData), typeof(EcsTestData2),typeof(EcsTestData3),typeof(EcsTestData4));
+                    entities = ecb.CreateEntity(entityCount, Allocator.Persistent);
+                    ecb.AddComponent(entities, componentTypeSet);
+
+                    ecb.Playback(m_Manager);
+                })
+                .CleanUp(() =>
+                {
+                    entities.Dispose();
+                    ecb.Dispose();
+                })
+                .SampleGroup(new SampleGroup(
+                    $"MultiPlayback_RemapEntity_N{entityCount} Batched With 4 Components",
+                    SampleUnit.Microsecond))
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .Run();
+
+            Entity prefab = default;
+            Measure.Method(() =>
+                {
+                    ecb.Playback(m_Manager);
+                })
+                .SetUp(() =>
+                {
+                    prefab = m_Manager.CreateEntity(typeof(EcsTestData), typeof(Prefab));
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator,
+                        PlaybackPolicy.MultiPlayback);
+
+                    for (int i = 0; i < entityCount; i++)
+                        ecb.Instantiate(prefab);
+
+                    ecb.Playback(m_Manager);
+                })
+                .CleanUp(() =>
+                {
+                    ecb.Dispose();
+                    m_Manager.DestroyEntity(prefab);
+                })
+                .SampleGroup(new SampleGroup(
+                    $"MultiPlayback_RemapEntity_N{entityCount} Instantiate",
+                    SampleUnit.Microsecond))
+                .WarmupCount(1)
+                .MeasurementCount(100)
+                .Run();
+
+        }
+#pragma warning restore 618
+
+        [Test, Performance]
+        public void EntityCommandBuffer_CreateEntities_From_Job(
+            [Values(100, 1000, 10000)] int entityCount)
+        {
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestTag));
+            EntityCommandBuffer ecb = default;
+            NativeArray<Entity> entities = default;
+
+            Measure.Method(() =>
+                {
+                    var job = new CreateEntitiesJob { ecb = ecb, archetype = archetype, Result = entities };
+                    job.Run();
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                    entities = CollectionHelper.CreateNativeArray<Entity>(entityCount,
+                        World.UpdateAllocator.ToAllocator);
+                })
+                .CleanUp(() =>
+                {
+                    ecb.Playback(m_Manager);
+                    for (int i = 0; i < entityCount; i++)
+                    {
+                        Assert.IsFalse(m_Manager.HasComponent<EcsTestData>(entities[i]));
+                        Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(entities[i]));
+                    }
+
+                    ecb.Dispose();
+                    entities.Dispose();
+
+                    World.UpdateAllocator.Rewind();
+                })
+                .SampleGroup(new SampleGroup($"BatchedCreate_N{entityCount}", SampleUnit.Microsecond))
+                .WarmupCount(5)
+                .MeasurementCount(50)
+                .Run();
+
+                Measure.Method(() =>
+                    {
+                        var job = new CreateEntitiesSlowJob
+                        {
+                            ecb = ecb, archetype = archetype, entityCount = entityCount, Result = entities
+                        };
+                        job.Run();
+                    })
+                    .SetUp(() =>
+                    {
+                        ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                        entities = CollectionHelper.CreateNativeArray<Entity>(entityCount,
+                            World.UpdateAllocator.ToAllocator);
+                    })
+                    .CleanUp(() =>
+                    {
+                        ecb.Playback(m_Manager);
+                        for (int i = 0; i < entityCount; i++)
+                        {
+                            Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(entities[i]));
+                            Assert.IsFalse(m_Manager.HasComponent<EcsTestData>(entities[i]));
+                        }
+
+                        ecb.Dispose();
+                        entities.Dispose();
+                        World.UpdateAllocator.Rewind();
+                    })
+                    .SampleGroup(new SampleGroup($"NonBatchedCreate_N{entityCount}", SampleUnit.Microsecond))
+                    .WarmupCount(5)
+                    .MeasurementCount(50)
+                    .Run();
+        }
+
+        [BurstCompile]
+        public struct CreateEntitiesJob : IJob
+        {
+            public EntityCommandBuffer ecb;
+            public EntityArchetype archetype;
+            public NativeArray<Entity> Result;
+
+            public void Execute()
+            {
+                ecb.CreateEntity(archetype, Result);
+                ecb.AddComponent<EcsTestData2>(Result);
+                ecb.RemoveComponent<EcsTestData>(Result);
+            }
+        }
+
+        [BurstCompile]
+        public struct CreateEntitiesSlowJob : IJob
+        {
+            public EntityCommandBuffer ecb;
+            public EntityArchetype archetype;
+            public int entityCount;
+            public NativeArray<Entity> Result;
+
+            public void Execute()
+            {
+                for (int i = 0; i < entityCount; i++)
+                {
+                    Result[i] = ecb.CreateEntity(archetype);
+                }
+                ecb.AddComponent<EcsTestData2>(Result);
+                ecb.RemoveComponent<EcsTestData>(Result);
+
+            }
+        }
+
+        [BurstCompile]
+        public struct CreateEntitiesParallelJob : IJobParallelFor
+        {
+            public EntityCommandBuffer.ParallelWriter ecb;
+            public EntityArchetype archetype;
+            public int perWorker;
+
+            public void Execute(int index)
+            {
+                int baseSortKey = index * perWorker;
+                for (int i = 0; i < perWorker; i++)
+                {
+                    ecb.CreateEntity(baseSortKey + i, archetype);
+                }
+            }
+        }
+
+        [BurstCompile]
+        public struct CreateEntitiesBatchedParallelJob : IJobParallelFor
+        {
+            public EntityCommandBuffer.ParallelWriter ecb;
+            public EntityArchetype archetype;
+            public int perWorker;
+
+            public void Execute(int index)
+            {
+                var local = new NativeArray<Entity>(perWorker, Allocator.Temp);
+                ecb.CreateEntity(index, archetype, local);
+                local.Dispose();
+            }
+        }
+
+        [Test, Performance]
+        public void EntityCommandBuffer_ParallelWriter_Record_FromParallelJob(
+            [Values(100, 1000)] int perWorker,
+            [Values(false, true)] bool batched)
+        {
+            const int workerCount = 64;
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
+            EntityCommandBuffer ecb = default;
+
+            Measure.Method(() =>
+                {
+                    if (batched)
+                    {
+                        var job = new CreateEntitiesBatchedParallelJob
+                            { ecb = ecb.AsParallelWriter(), archetype = archetype, perWorker = perWorker };
+                        job.Schedule(workerCount, 1).Complete();
+                    }
+                    else
+                    {
+                        var job = new CreateEntitiesParallelJob
+                            { ecb = ecb.AsParallelWriter(), archetype = archetype, perWorker = perWorker };
+                        job.Schedule(workerCount, 1).Complete();
+                    }
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                })
+                .CleanUp(() =>
+                {
+                    ecb.Playback(m_Manager);
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                        m_Manager.DestroyEntity(entities);
+                    ecb.Dispose();
+                    World.UpdateAllocator.Rewind();
+                })
+                .SampleGroup(new SampleGroup(
+                    $"Record_Workers{workerCount}_PerWorker{perWorker}_{(batched ? "Batched" : "PerEntity")}",
+                    SampleUnit.Microsecond))
+                .WarmupCount(3)
+                .MeasurementCount(30)
+                .Run();
+        }
+
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
+        [Test, Performance]
+        public void EntityCommandBuffer_ParallelWriter_Playback(
+            [Values(100, 1000)] int perWorker,
+            [Values(PlaybackPolicy.SinglePlayback, PlaybackPolicy.MultiPlayback)] PlaybackPolicy policy)
+        {
+            const int workerCount = 64;
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
+            EntityCommandBuffer ecb = default;
+            bool measureSecondPlayback = policy == PlaybackPolicy.MultiPlayback;
+
+            Measure.Method(() =>
+                {
+                    ecb.Playback(m_Manager);
+                })
+                .SetUp(() =>
+                {
+                    ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, policy);
+                    var job = new CreateEntitiesParallelJob
+                        { ecb = ecb.AsParallelWriter(), archetype = archetype, perWorker = perWorker };
+                    job.Schedule(workerCount, 1).Complete();
+
+                    if (measureSecondPlayback)
+                        ecb.Playback(m_Manager);
+                })
+                .CleanUp(() =>
+                {
+                    using (var entities = m_Manager.UniversalQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
+                        m_Manager.DestroyEntity(entities);
+                    ecb.Dispose();
+                    World.UpdateAllocator.Rewind();
+                })
+                .SampleGroup(new SampleGroup(
+                    $"Playback_Workers{workerCount}_PerWorker{perWorker}_{(measureSecondPlayback ? "MultiSecond" : "First")}",
+                    SampleUnit.Microsecond))
+                .WarmupCount(3)
+                .MeasurementCount(30)
+                .Run();
+        }
+#pragma warning restore 618
     }
 }

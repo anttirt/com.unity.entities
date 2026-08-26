@@ -58,6 +58,9 @@ namespace Doc.CodeSamples.Tests
     #endregion
 
     #region InstantiateEmbeddedPrefabs
+    // A tag component to add to each new instance
+    public struct Instantiated : IComponentData { }
+
     public partial struct InstantiatePrefabSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -72,7 +75,7 @@ namespace Doc.CodeSamples.Tests
                 var instance = ecb.Instantiate(prefab.ValueRO.Value);
                 // Note: the returned instance is only relevant when used in the ECB
                 // as the entity is not created in the EntityManager until ECB.Playback
-                ecb.AddComponent<ComponentA>(instance);
+                ecb.AddComponent<Instantiated>(instance);
             }
 
             ecb.Playback(state.EntityManager);
@@ -123,31 +126,32 @@ namespace Doc.CodeSamples.Tests
     #endregion
 
 
+    #region PrefabsInQueries
+    // A component that a baker adds to the prefab GameObject
+    public struct Turret : IComponentData { }
+
     public partial struct PrefabsInQueriesSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
-            #region PrefabsInQueries
-            // This query will return all baked entities, including the prefab entities
+            // Matches the entity prefab as well as the instances
             var prefabQuery = SystemAPI.QueryBuilder()
-                .WithAll<BakedEntity>().WithOptions(EntityQueryOptions.IncludePrefab).Build();
-            #endregion
-
-            #region DestroyPrefabs
-            var ecb = new EntityCommandBuffer(Allocator.Temp);
-
-            foreach (var (component, entity) in
-                     SystemAPI.Query<RefRO<RotationSpeed>>().WithEntityAccess())
-            {
-                if (component.ValueRO.RadiansPerSecond <= 0)
-                {
-                    ecb.DestroyEntity(entity);
-                }
-            }
-
-            ecb.Playback(state.EntityManager);
-            ecb.Dispose();
-            #endregion
+                .WithAll<Turret>().WithOptions(EntityQueryOptions.IncludePrefab).Build();
         }
     }
+    #endregion
+
+    #region DestroyPrefabs
+    public partial struct DestroyPrefabInstancesSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            // Matches every instance, including disabled ones, but not the entity prefab
+            var instanceQuery = SystemAPI.QueryBuilder().WithAll<Turret>()
+                .WithOptions(EntityQueryOptions.IncludeDisabledEntities).Build();
+
+            state.EntityManager.DestroyEntity(instanceQuery);
+        }
+    }
+    #endregion
 }

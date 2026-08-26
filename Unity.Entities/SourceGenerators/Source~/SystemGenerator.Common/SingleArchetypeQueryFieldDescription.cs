@@ -86,7 +86,6 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
             if (_queryStorageFieldName != null)
                 writer.WriteLine($"{_queryStorageFieldName} = ");
 
-            var codeAspect = new List<string>(8);
             writer.WriteLine($"{generatedQueryFieldName} = ");
             writer.Indent++;
             writer.WriteLine("entityQueryBuilder");
@@ -116,15 +115,12 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
                 if (requiredTypesIndex != -1)
                     requiredTypes.RemoveAtSwapBack(requiredTypesIndex);
             }
-            // Anything left in the requiredTypes list that isn't an Aspect goes into the withAllComponentTypes list,
+            // Anything left in the requiredTypes list goes into the withAllComponentTypes list,
             // and gets a WithAll<T>() constraint.
-            var withAllComopnentTypes = new List<Query>(requiredTypes.Count);
+            var withAllComponentTypes = new List<Query>(requiredTypes.Count);
             foreach (var comp in requiredTypes)
-                if (comp.TypeSymbol.IsAspect())
-                    codeAspect.Add($".WithAspect<{comp.TypeSymbol.ToFullName()}>()");
-                else
-                    withAllComopnentTypes.Add(comp);
-            var distinctWithAllTypeNames = GetDistinctRequiredTypeNames(withAllComopnentTypes);
+                withAllComponentTypes.Add(comp);
+            var distinctWithAllTypeNames = GetDistinctRequiredTypeNames(withAllComponentTypes);
             foreach (var ro in distinctWithAllTypeNames.readOnlyTypeNames)
                 writer.WriteLine($".WithAll<{ro}>()");
             foreach (var rw in distinctWithAllTypeNames.readWriteTypeNames)
@@ -149,10 +145,6 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
             }
             foreach (var comp in _archetype.Absent)
                 writer.WriteLine($".WithAbsent<{comp.TypeSymbol.ToFullName()}>()");
-
-            // Append all ".WithAspect" calls. They must be done after all "WithAll", "WithAny" and "WithNone" calls to avoid component aliasing
-            foreach (var code in codeAspect)
-                writer.WriteLine(code);
 
             if(_archetype.Options != EntityQueryOptions.Default)
                 writer.WriteLine($".WithOptions({_archetype.Options.GetAsFlagStringSeperatedByOr()})");

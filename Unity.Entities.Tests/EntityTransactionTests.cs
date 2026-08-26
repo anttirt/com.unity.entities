@@ -288,33 +288,6 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        [Ignore("Need additional safety handle features to be able to do this")]
-        public void TransactionSync4()
-        {
-            var top = new SyncIJobChunk {}.Schedule(m_Manager.UniversalQuery, default);
-            Assert.Throws<InvalidOperationException>(() =>
-            {
-                // Cant run exclusive transaction while ijob chunk is running
-                new SyncEntityMgrJob { TheManager = m_Manager }.Schedule().Complete();
-            });
-            top.Complete();
-        }
-
-        [Test]
-        [Ignore("Need additional safety handle features to be able to do this")]
-        public void TransactionSync5()
-        {
-            var q = m_Manager.UniversalQuery;
-            var j = new SyncEntityMgrJob { TheManager = m_Manager }.Schedule();
-            Assert.Throws<InvalidOperationException>(() =>
-            {
-                // Can't schedule job while entity manager belongs to job
-                new SyncIJobChunk {}.ScheduleParallel(q, default).Complete();
-            });
-            j.Complete();
-        }
-
-        [Test]
         [TestRequiresCollectionChecks]
         public void BufferLookup_AcquiredBeforeTransaction_Throws()
         {
@@ -810,7 +783,9 @@ namespace Unity.Entities.Tests
 
             for (int i = 0; i < archetype.ChunkCapacity; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value,m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value);
+                #pragma warning restore 0618
             }
 
         }
@@ -821,7 +796,9 @@ namespace Unity.Entities.Tests
             public Entity Entity;
             public void Execute()
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var value = Transaction.GetSharedComponentManaged<EcsTestSharedComp>(Entity).value;
+                #pragma warning restore 0618
                 Transaction.SetSharedComponent(Entity,new EcsTestSharedComp
                 {
                     value = value * 2
@@ -942,7 +919,9 @@ namespace Unity.Entities.Tests
             m_Manager.ExclusiveEntityTransactionDependency = job.Schedule(m_Manager.ExclusiveEntityTransactionDependency);
             m_Manager.EndExclusiveEntityTransaction();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(value,m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+            #pragma warning restore 0618
         }
 
         struct AddSharedComponentDataToQueryJob: IJob
@@ -953,7 +932,9 @@ namespace Unity.Entities.Tests
             {
                 var comp = SharedComp;
                 var t = Transaction;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.DoesNotThrow(() => t.EntityManager.AddSharedComponentManaged(t.EntityManager.UniversalQuery, comp));
+                #pragma warning restore 0618
             }
         }
 
@@ -977,8 +958,10 @@ namespace Unity.Entities.Tests
             m_Manager.ExclusiveEntityTransactionDependency = job.Schedule(m_Manager.ExclusiveEntityTransactionDependency);
             m_Manager.EndExclusiveEntityTransaction();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(value,m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity1).value);
             Assert.AreEqual(value,m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity2).value);
+            #pragma warning restore 0618
         }
 
         struct AddMissingBuffersJob: IJob
@@ -1140,40 +1123,6 @@ namespace Unity.Entities.Tests
             }
         }
 
-#if ENTITY_STORE_V1
-        struct IncreaseCapacityJob: IJob
-        {
-            public ExclusiveEntityTransaction Transaction;
-            public int Count;
-
-            public void Execute()
-            {
-                Transaction.AllocateConsecutiveEntitiesForLoading(Count);
-            }
-        }
-
-        [Test]
-        [Ignore("Need more context on a practical for this function. Being addressed in DOTS-6013")]
-        public unsafe void AllocateConsecutiveEntitiesForLoadingInJob_Works()
-        {
-            int currentCapacity = m_Manager.GetCheckedEntityDataAccess()->EntityComponentStore->EntitiesCapacity;
-            Debug.Log(currentCapacity);
-            int newCapacity = currentCapacity * 2;
-
-
-            var job = new IncreaseCapacityJob()
-            {
-                Transaction = m_Manager.BeginExclusiveEntityTransaction(),
-                Count = newCapacity
-            };
-
-            m_Manager.ExclusiveEntityTransactionDependency = job.Schedule(m_Manager.ExclusiveEntityTransactionDependency);
-            m_Manager.EndExclusiveEntityTransaction();
-
-            //+2 because the EntityComponentStore has one slot allocated for Entity.Null, and one to signify the end of the various structures
-            Assert.AreEqual(newCapacity + 2,m_Manager.GetCheckedEntityDataAccess()->EntityComponentStore->EntitiesCapacity);
-        }
-#endif
 
         partial class ScheduleJobDuringExclusiveEntityTransactionTestSystem : SystemBase
         {

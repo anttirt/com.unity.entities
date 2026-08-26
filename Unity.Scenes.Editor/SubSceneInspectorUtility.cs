@@ -12,11 +12,17 @@ using Hash128 = Unity.Entities.Hash128;
 namespace Unity.Scenes.Editor
 {
     [InitializeOnLoad]
-    public static class SubSceneInspectorUtility
+    public static partial class SubSceneInspectorUtility
     {
         internal delegate void RepaintAction();
 
         internal static event RepaintAction WantsRepaint;
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            WantsRepaint = null;
+        }
 
         static SubSceneInspectorUtility()
         {
@@ -172,7 +178,7 @@ namespace Unity.Scenes.Editor
         {
             Lightmapping.bakeCompleted += () =>
             {
-                ForceReimport(UnityEngine.Object.FindObjectsByType<SubScene>(FindObjectsSortMode.None));
+                ForceReimport(UnityEngine.Object.FindObjectsByType<SubScene>());
             };
         }
 

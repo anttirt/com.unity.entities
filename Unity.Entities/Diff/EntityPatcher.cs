@@ -15,24 +15,24 @@ namespace Unity.Entities
     [BurstCompile]
     public static unsafe partial class EntityPatcher
     {
-        static string s_ApplyChangeSetProfilerMarkerStr = "EntityPatcher.ApplyChangeSet";
+        const string s_ApplyChangeSetProfilerMarkerStr = "EntityPatcher.ApplyChangeSet";
 
-        static Profiling.ProfilerMarker s_ApplyChangeSetProfilerMarker = new Profiling.ProfilerMarker(s_ApplyChangeSetProfilerMarkerStr);
-        static Profiling.ProfilerMarker s_BuildEntityLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildEntityLookups");
-        static Profiling.ProfilerMarker s_BuildPackedLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildPackedLookups");
-        static Profiling.ProfilerMarker s_ApplyDestroyEntitiesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyDestroyEntities");
-        static Profiling.ProfilerMarker s_ApplyCreateEntitiesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyCreateEntities");
-        static Profiling.ProfilerMarker s_ApplyEntityNamesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyEntityNames");
-        static Profiling.ProfilerMarker s_ApplyRemoveComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyRemoveComponents");
-        static Profiling.ProfilerMarker s_ApplyAddComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyAddComponents");
-        static Profiling.ProfilerMarker s_ApplySetSharedComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetSharedComponents");
-        static Profiling.ProfilerMarker s_ApplySetManagedComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetManagedComponents");
-        static Profiling.ProfilerMarker s_ApplySetComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetComponents");
-        static Profiling.ProfilerMarker s_BuildPrefabAndLinkedEntityGroupLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildPrefabAndLinkedEntityGroupLookups");
-        static Profiling.ProfilerMarker s_ApplyLinkedEntityGroupRemovalsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyLinkedEntityGroupRemovals");
-        static Profiling.ProfilerMarker s_ApplyLinkedEntityGroupAdditionsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyLinkedEntityGroupAdditions");
-        static Profiling.ProfilerMarker s_ApplyEntityPatchesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyEntityPatches");
-        static Profiling.ProfilerMarker s_ApplyBlobAssetChangesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyBlobAssetChanges");
+        static readonly Profiling.ProfilerMarker s_ApplyChangeSetProfilerMarker = new Profiling.ProfilerMarker(s_ApplyChangeSetProfilerMarkerStr);
+        static readonly Profiling.ProfilerMarker s_BuildEntityLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildEntityLookups");
+        static readonly Profiling.ProfilerMarker s_BuildPackedLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildPackedLookups");
+        static readonly Profiling.ProfilerMarker s_ApplyDestroyEntitiesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyDestroyEntities");
+        static readonly Profiling.ProfilerMarker s_ApplyCreateEntitiesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyCreateEntities");
+        static readonly Profiling.ProfilerMarker s_ApplyEntityNamesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyEntityNames");
+        static readonly Profiling.ProfilerMarker s_ApplyRemoveComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyRemoveComponents");
+        static readonly Profiling.ProfilerMarker s_ApplyAddComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyAddComponents");
+        static readonly Profiling.ProfilerMarker s_ApplySetSharedComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetSharedComponents");
+        static readonly Profiling.ProfilerMarker s_ApplySetManagedComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetManagedComponents");
+        static readonly Profiling.ProfilerMarker s_ApplySetComponentsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplySetComponents");
+        static readonly Profiling.ProfilerMarker s_BuildPrefabAndLinkedEntityGroupLookupsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.BuildPrefabAndLinkedEntityGroupLookups");
+        static readonly Profiling.ProfilerMarker s_ApplyLinkedEntityGroupRemovalsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyLinkedEntityGroupRemovals");
+        static readonly Profiling.ProfilerMarker s_ApplyLinkedEntityGroupAdditionsProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyLinkedEntityGroupAdditions");
+        static readonly Profiling.ProfilerMarker s_ApplyEntityPatchesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyEntityPatches");
+        static readonly Profiling.ProfilerMarker s_ApplyBlobAssetChangesProfilerMarker = new Profiling.ProfilerMarker("EntityPatcher.ApplyBlobAssetChanges");
 
         internal static string[] CollectImportantProfilerMarkerStrings()
         {
@@ -682,7 +682,7 @@ namespace Unity.Entities
             in NativeArray<ComponentType> packedTypes)
         {
             var componentAlreadyExists = new NativeList<SetComponentError>(addComponents.Length, Allocator.TempJob);
-            var ecb = new EntityCommandBuffer(Allocator.TempJob, PlaybackPolicy.SinglePlayback);
+            var ecb = new EntityCommandBuffer(Allocator.TempJob);
 
             new ApplyAddComponentsJob()
             {
@@ -870,7 +870,7 @@ namespace Unity.Entities
             var entityDoesNotExist = new NativeList<SetComponentError>(sharedComponentDataChanges.Length, Allocator.TempJob);
             var componentDoesNotExist = new NativeList<SetComponentError>(sharedComponentDataChanges.Length, Allocator.TempJob);
             var setManagedComponentsToEntities = new NativeList<ManagedComponentData>(noManagedEntities, Allocator.TempJob);
-            var ecb = new EntityCommandBuffer(Allocator.TempJob, PlaybackPolicy.SinglePlayback);
+            var ecb = new EntityCommandBuffer(Allocator.TempJob);
 
             new ApplySetSharedComponentsJob()
             {
@@ -949,7 +949,9 @@ namespace Unity.Entities
                     else
                     {
                         var clone = managedObjectClone.Clone(packedManagedComponentDataChange.BoxedValue);
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         entityManager.SetComponentObject(entity, component, clone);
+                        #pragma warning restore 0618
                     }
                 }
                 while (packedEntities.TryGetNextValue(out entity, ref iterator));
@@ -1276,7 +1278,9 @@ namespace Unity.Entities
                                 var pointer = (byte*)entityManager.GetBufferRawRW(entity, component.TypeIndex);
                                 UnsafeUtility.MemCpy(pointer + targetOffset, &targetEntity, sizeof(Entity));
                             }
+#pragma warning disable 0618 // managed component / managed shared component helpers obsolete; internal patcher still needs them.
                             else if (component.IsManagedComponent || component.TypeIndex.IsManagedSharedComponent)
+#pragma warning restore 0618
                             {
                                 entityTargets.Add(i, new EntityTargetPair { Entity = entity, TargetEntity = targetEntity });
                             }
@@ -1333,11 +1337,13 @@ namespace Unity.Entities
                     var pair = keys[i];
                     var patches = managedObjectEntityReferencePatches.GetValuesForKey(pair);
 
+#pragma warning disable 0618 // managed component helpers obsolete; internal patcher still needs them.
                     if (pair.Component.IsManagedComponent)
                     {
                         var obj = entityManager.GetComponentObject<object>(pair.Entity, pair.Component);
                         managedObjectPatcher.ApplyPatches(ref obj, patches);
                     }
+#pragma warning restore 0618
                     else if (pair.Component.IsSharedComponent)
                     {
                         var obj = entityManager.GetSharedComponentData(pair.Entity, pair.Component.TypeIndex);
@@ -1594,15 +1600,18 @@ namespace Unity.Entities
         class ManagedObjectEntityReferencePatcher : PropertyVisitor, IVisitPropertyAdapter<Entity>
         {
             NativeParallelMultiHashMap<EntityComponentPair, ManagedObjectEntityReferencePatch>.Enumerator Patches;
+            readonly UniqueReferenceExcludeAdapter m_UniqueRefExclude = new UniqueReferenceExcludeAdapter();
 
             public ManagedObjectEntityReferencePatcher()
             {
+                AddAdapter(m_UniqueRefExclude);
                 AddAdapter(this);
             }
 
             public void ApplyPatches(ref object obj, NativeParallelMultiHashMap<EntityComponentPair, ManagedObjectEntityReferencePatch>.Enumerator patches)
             {
                 Patches = patches;
+                m_UniqueRefExclude.PrepareForNewRootVisit();
                 PropertyContainer.Accept(this, ref obj);
             }
 

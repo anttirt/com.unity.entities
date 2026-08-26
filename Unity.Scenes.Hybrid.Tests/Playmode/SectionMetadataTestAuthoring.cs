@@ -38,12 +38,16 @@ public class SectionMetadataTestAuthoring : MonoBehaviour
             if (conversionSystem.GetSceneSectionEntity(entity) != sectionEntity)
                 return;
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             int sectionIndex = dstManager.GetSharedComponentManaged<SceneSection>(entity).Section;
+            #pragma warning restore 0618
             dstManager.AddComponentData(sectionEntity, new TestMetadata {SectionIndex = sectionIndex, Value = Value});
 
         dstManager.AddComponentData(sectionEntity, new TestMetadataWithEntity());
         dstManager.AddComponentData(sectionEntity, new TestMetadataWithBlobAsset());
+        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
         dstManager.AddSharedComponentManaged(sectionEntity, new EcsTestSharedComp());
+        #pragma warning restore 0618
         dstManager.AddBuffer<EcsIntElement>(sectionEntity);
         dstManager.AddComponentData(sectionEntity, new EcsCleanup1());
         dstManager.AddComponent<TestMetadataTag>(sectionEntity);

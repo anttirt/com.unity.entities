@@ -1,5 +1,5 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using NUnit.Framework;
+using Unity.Collections;
 #if UNITY_EDITOR
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -15,23 +15,24 @@ namespace Unity.Scenes.Hybrid.Tests
         int m_TickCount = 0;
         int m_NumPendingLoads;
         public int NumPendingLoads => m_NumPendingLoads;
+
         protected override void OnUpdate()
         {
             int tickCount = ++m_TickCount;
-            int numPendingLoads = 0;
+            var numPendingLoads = new NativeReference<int>(Allocator.Temp);
+            numPendingLoads.Value = 0;
 
-            // root scene
-            Entities
-                .WithNone<DisableSceneResolveAndLoad, SceneSectionStreamingSystem.StreamingState, ResolvedSceneHash>()
-                .ForEach((Entity entity, in RequestSceneLoaded requestSceneLoad) =>
+            foreach (var requestSceneLoad in SystemAPI.Query<RefRO<RequestSceneLoaded>>()
+                         .WithNone<DisableSceneResolveAndLoad>()
+                         .WithNone<SceneSectionStreamingSystem.StreamingState>()
+                         .WithNone<ResolvedSceneHash>())
             {
-                if ((requestSceneLoad.LoadFlags & SceneLoadFlags.BlockOnStreamIn) == SceneLoadFlags.BlockOnStreamIn)
-                {
-                    numPendingLoads++;
-                }
-            }).Run();
+                if ((requestSceneLoad.ValueRO.LoadFlags & SceneLoadFlags.BlockOnStreamIn) == SceneLoadFlags.BlockOnStreamIn)
+                    numPendingLoads.Value++;
+            }
 
-            m_NumPendingLoads = numPendingLoads;
+            m_NumPendingLoads = numPendingLoads.Value;
+            numPendingLoads.Dispose();
         }
     }
 

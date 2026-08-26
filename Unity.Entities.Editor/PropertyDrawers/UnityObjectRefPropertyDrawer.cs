@@ -17,11 +17,11 @@ namespace Unity.Entities.Editor
             var container = new VisualElement();
 
             var targetObjectType = DetermineTargetType(fieldInfo.FieldType);
-            var instanceIdName = $"{property.propertyPath}.Id.instanceId";
+            var instanceIdName = $"{property.propertyPath}.Id.{nameof(UntypedUnityObjectRef.entityId)}";
             var instanceIdProperty = property.serializedObject.FindProperty($"{instanceIdName}");
-            var unityObjectRef = new UntypedUnityObjectRef { instanceId = (int)instanceIdProperty.intValue };
+            var unityObjectRef = new UntypedUnityObjectRef { entityId = instanceIdProperty.entityIdValue };
 
-            var currObject = UnityEngine.Resources.InstanceIDToObject(unityObjectRef.instanceId);
+            var currObject = UnityEngine.Resources.EntityIdToObject(unityObjectRef.entityId);
             var objectField = new ObjectField
             {
                 objectType = targetObjectType,
@@ -32,7 +32,7 @@ namespace Unity.Entities.Editor
             objectField.SetValueWithoutNotify(currObject);
             objectField.RegisterCallback((ChangeEvent<UnityEngine.Object> e) =>
             {
-                instanceIdProperty.intValue = e.newValue.GetInstanceID();
+                instanceIdProperty.entityIdValue = e.newValue.GetEntityId();
                 property.serializedObject.ApplyModifiedProperties();
             });
            objectField.AddToClassList(ObjectField.alignedFieldUssClassName);

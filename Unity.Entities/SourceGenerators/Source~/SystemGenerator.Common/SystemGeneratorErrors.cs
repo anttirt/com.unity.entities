@@ -17,7 +17,7 @@ public static class SystemGeneratorErrors
     public static void DC0060(GeneratorExecutionContext context, Location location, string assemblyName)
     {
         context.LogError(nameof(DC0060), k_ErrorTitle,
-            $"Assembly {assemblyName} contains Entities.ForEach or Entities.OnUpdate invocations that use burst but does not have a reference to Unity.Burst.  Please add an assembly reference to `Unity.Burst` in the asmdef for {assemblyName}.", location);
+            $"Assembly {assemblyName} contains Entities.ForEach or Entities.OnUpdate invocations that use burst but does not have a reference to UnityEngine.BurstModule.  Please add an assembly reference to `UnityEngine.BurstModule` in the asmdef for {assemblyName}.", location);
     }
 
     public static void DC0061(GeneratorExecutionContext context, Location location, string assemblyName)

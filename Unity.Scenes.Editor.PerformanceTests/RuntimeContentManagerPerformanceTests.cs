@@ -95,6 +95,16 @@ namespace Unity.Entities.Tests.Content
             {
                 throw new System.NotImplementedException();
             }
+
+            public bool IntegrateSceneAtEndOfFrame(ref Scene scene)
+            {
+                throw new System.NotImplementedException();
+            }
+
+            public SceneLoadingStatus GetSceneLoadingStatus(ref Scene scene)
+            {
+                throw new System.NotImplementedException();
+            }
         }
 
         [UnityTest, Performance]

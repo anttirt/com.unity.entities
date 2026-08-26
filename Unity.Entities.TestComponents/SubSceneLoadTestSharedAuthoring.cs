@@ -13,6 +13,7 @@ namespace Unity.Scenes.Editor.Tests
         public string String;
     }
 
+    #pragma warning disable EA0017 // intentionally a managed shared component
     public struct SubSceneLoadTestSharedComponent : ISharedComponentData, IEquatable<SubSceneLoadTestSharedComponent>
     {
         // Shared components do not support Entity or BlobAssetReference typed fields, hence not tested
@@ -41,6 +42,7 @@ namespace Unity.Scenes.Editor.Tests
             }
         }
     }
+    #pragma warning restore EA0017
 
     public class SubSceneLoadTestBaker : Baker<SubSceneLoadTestSharedAuthoring>
     {
@@ -48,7 +50,9 @@ namespace Unity.Scenes.Editor.Tests
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged(entity, new SubSceneLoadTestSharedComponent()
+            #pragma warning restore 0618
             {
                 Int = authoring.Int,
                 Asset = authoring.Asset,

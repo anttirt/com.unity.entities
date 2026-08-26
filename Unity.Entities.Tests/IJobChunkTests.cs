@@ -257,14 +257,18 @@ namespace Unity.Entities.Tests
             var entityCount = 10000;
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData), typeof(EcsTestSharedComp));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData), typeof(EcsTestSharedComp));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = 17});
+            #pragma warning restore 0618
             using var entities = m_Manager.CreateEntity(archetype, entityCount, World.UpdateAllocator.ToAllocator);
             for (var i = 0; i < entityCount; ++i)
             {
                 m_Manager.SetComponentData(entities[i], new EcsTestData {value = -1});
                 if ((i % 2) == 0)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp {value = 17});
+                    #pragma warning restore 0618
                 }
             }
 
@@ -316,7 +320,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entities.Length; ++i)
             {
                 int testValue = m_Manager.GetComponentData<EcsTestData>(entities[i]).value;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value == 17)
+                #pragma warning restore 0618
                 {
                     FastAssert.AreEqual(1, testValue);
                 }
@@ -399,7 +405,9 @@ namespace Unity.Entities.Tests
                 foreach (var entity in entities)
                 {
                     m_Manager.SetComponentData(entity, new EcsTestData() {value = val});
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp() {value = val});
+                    #pragma warning restore 0618
                     val++;
                 }
 

@@ -154,7 +154,7 @@ namespace Unity.Entities.Serialization
             if (obj == null)
                 return default;
 
-            var goid = UnityEditor.GlobalObjectId.GetGlobalObjectIdSlow(obj.GetInstanceID());
+            var goid = UnityEditor.GlobalObjectId.GetGlobalObjectIdSlow(obj.GetEntityId());
             var rtgoid = UnsafeUtility.As<GlobalObjectId, RuntimeGlobalObjectId>(ref goid);
             return new UntypedWeakReferenceId(rtgoid, typeof(SceneAsset) == obj.GetType() ? WeakReferenceGenerationType.GameObjectScene : WeakReferenceGenerationType.UnityObject);
         }

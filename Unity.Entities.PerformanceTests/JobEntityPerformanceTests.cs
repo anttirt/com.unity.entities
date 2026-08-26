@@ -12,6 +12,16 @@ using static Unity.Entities.PerformanceTests.PerformanceTestHelpers;
 
 namespace Unity.Entities.PerformanceTests
 {
+    public partial class EntitiesTestsFixture : ECSTestsFixture
+    {
+        public enum ScheduleType
+        {
+            Run,
+            Schedule,
+            ScheduleParallel
+        }
+    }
+
     [NoAlias]
     [BurstCompile(FloatPrecision.Standard, FloatMode.Default, CompileSynchronously = true)]
     struct EcsTestSetComponentValueTo10Chunk_BaseLine : IJobChunk
@@ -470,7 +480,9 @@ namespace Unity.Entities.PerformanceTests
 
             for (int i = kEntityCount / 2; i < kEntityCount; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp {value = 10});
+                #pragma warning restore 0618
             }
 
             var dependsOn = new JobHandle();
@@ -479,7 +491,9 @@ namespace Unity.Entities.PerformanceTests
             {
                 All = new ComponentType[] { typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp) }
             });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = 10});
+            #pragma warning restore 0618
 
             Measure.Method(
                 () =>
@@ -522,7 +536,9 @@ namespace Unity.Entities.PerformanceTests
 
             for (int i = 0; i < kEntityCount; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp {value = i % 10 });
+                #pragma warning restore 0618
             }
 
             var dependsOn = new JobHandle();
@@ -531,7 +547,9 @@ namespace Unity.Entities.PerformanceTests
             {
                 All = new ComponentType[] { typeof(EcsTestData), typeof(EcsTestData2), typeof(EcsTestSharedComp) }
             });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = 10});
+            #pragma warning restore 0618
 
             Measure.Method(
                 () =>
@@ -588,7 +606,9 @@ namespace Unity.Entities.PerformanceTests
 
                 for (int j = 0; j < kEntityCountPerArchetype; ++j)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     m_Manager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp {value = i % 10 });
+                    #pragma warning restore 0618
                 }
 
                 entities.Dispose();
@@ -600,7 +620,9 @@ namespace Unity.Entities.PerformanceTests
             {
                 All = new ComponentType[] { typeof(EcsTestData), typeof(EcsTestSharedComp) }
             });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = 10});
+            #pragma warning restore 0618
 
             Measure.Method(
                 () =>

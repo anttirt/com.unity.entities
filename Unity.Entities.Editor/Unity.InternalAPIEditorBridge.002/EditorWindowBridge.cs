@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,6 +12,13 @@ namespace Unity.Editor.Bridge
         public static void ClearPersistentViewData(EditorWindow window) => window.ClearPersistentViewData();
 
         public static T[] GetEditorWindowInstances<T>() where T : EditorWindow => Resources.FindObjectsOfTypeAll<T>();
+
+        public static IEnumerable<T> GetActiveEditorWindows<T>() where T : EditorWindow
+        {
+            foreach (var window in EditorWindow.activeEditorWindows)
+                if (window is T typed)
+                    yield return typed;
+        }
 
         static EditorWindowBridge()
         {

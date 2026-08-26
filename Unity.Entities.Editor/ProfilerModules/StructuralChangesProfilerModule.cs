@@ -14,6 +14,7 @@ using Unity.Profiling.Editor;
 namespace Unity.Entities.Editor
 {
     [ProfilerModuleMetadata("Entities Structural Changes", IconPath = "Profiler.CPU")]
+    [Serializable]
     partial class StructuralChangesProfilerModule : ProfilerModule
     {
         class StructuralChangesProfilerViewController : ProfilerModuleViewController
@@ -87,7 +88,7 @@ namespace Unity.Entities.Editor
         static readonly string s_NoFrameDataAvailable = L10n.Tr("No frame data available. Select a frame from the charts above to see its details here.");
         static readonly string s_DisplayingFrameDataDisabled = L10n.Tr("Displaying of frame data disabled while recording. To see the data, pause recording.");
 
-        static IEnumerable<StructuralChangesProfilerTreeViewItemData> GetTreeViewData(RawFrameDataView frame)
+        static IEnumerable<TreeViewItemData<StructuralChangesProfilerTreeViewItemData>> GetTreeViewData(RawFrameDataView frame)
         {
             var worldsData = GetSessionMetaData<WorldData>(frame, EntitiesProfiler.Guid, (int)DataTag.WorldData).Distinct().ToDictionary(x => x.SequenceNumber, x => x);
             var systemsData = GetSessionMetaData<SystemData>(frame, EntitiesProfiler.Guid, (int)DataTag.SystemData).Distinct().ToDictionary(x => x.System, x => x);
@@ -96,7 +97,7 @@ namespace Unity.Entities.Editor
                 if (worldsData.TryGetValue(structuralChangeData.WorldSequenceNumber, out var worldData))
                 {
                     systemsData.TryGetValue(structuralChangeData.ExecutingSystem, out var systemData);
-                    yield return new StructuralChangesProfilerTreeViewItemData(worldData, systemData, structuralChangeData);
+                    yield return new TreeViewItemData<StructuralChangesProfilerTreeViewItemData>(0, new StructuralChangesProfilerTreeViewItemData(worldData, systemData, structuralChangeData));
                 }
             }
         }

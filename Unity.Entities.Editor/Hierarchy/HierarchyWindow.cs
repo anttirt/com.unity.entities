@@ -3,7 +3,7 @@ using Unity.Collections;
 using Unity.Editor.Bridge;
 using Unity.Profiling;
 using Unity.Scenes;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -188,6 +188,7 @@ namespace Unity.Entities.Editor
         VisualElement CreateToolbar(VisualElement root, Hierarchy hierarchy)
         {
             var toolbar = Resources.Templates.Hierarchy.Toolbar.Clone();
+
             var leftSide = toolbar.Q<VisualElement>(className: UssClasses.Hierarchy.Toolbar.LeftSide);
             var rightSide = toolbar.Q<VisualElement>(className: UssClasses.Hierarchy.Toolbar.RightSide);
             leftSide.Add(CreateWorldSelector());
@@ -226,6 +227,10 @@ namespace Unity.Entities.Editor
             }));
 
             root.Add(toolbar);
+
+            var deprecationWarning = root.Q<HelpBox>("deprecation-warning");
+            deprecationWarning.text = "The Entities Hierarchy window is deprecated and will be removed in a future version. Entities have now been integrated into the standard Hierarchy window.";
+            deprecationWarning.SetVisibility(true);
 
             return toolbar;
         }

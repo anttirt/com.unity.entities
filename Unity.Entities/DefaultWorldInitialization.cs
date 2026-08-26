@@ -11,13 +11,15 @@ using Unity.Collections;
 using Unity.Profiling;
 using UnityEngine.LowLevel;
 using UnityEngine.PlayerLoop;
+using Unity.Scripting.LifecycleManagement;
+using UnityEditor;
 
 namespace Unity.Entities
 {
     /// <summary>
     /// Utilities to help initialize the default ECS <see cref="World"/>.
     /// </summary>
-    public static class DefaultWorldInitialization
+    public static partial class DefaultWorldInitialization
     {
 #pragma warning disable 0067 // unused variable
         /// <summary>
@@ -43,12 +45,34 @@ namespace Unity.Entities
             DomainUnloadOrPlayModeChangeShutdown();
         }
 
-        internal static void CleanupEntityComponentStore(object _, EventArgs __) => CleanupEntityComponentStore();
+#if !UNITY_EDITOR
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#else
+        [InitializeOnLoadMethod]
+#endif
+        static void PopulateEntityComponentStorePool()
+        {
+            EntityComponentStore.s_entityPool.Data.Populate();
+        }
+
+#if UNITY_EDITOR
+        [OnCodeDeinitializing]
+#else
+        [OnExitingPlayMode]
+#endif
+        internal static void DisposeEntityComponentStorePool()
+        {
+            EntityComponentStore.s_entityPool.Data.Dispose();
+        }
+
+#if UNITY_EDITOR
+        [OnCodeUnloading]
+#else
+        [OnExitingPlayMode]
+#endif
         internal static void CleanupEntityComponentStore()
         {
-#if!ENTITY_STORE_V1
             EntityComponentStore.s_entityStore.Data.Dispose();
-#endif
         }
 
         /// <summary>
@@ -100,8 +124,13 @@ namespace Unity.Entities
 
             CleanupEntityComponentStore();
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+            EntityComponentStore.s_entityPool.Data.Reset();
+            EntityComponentStore.s_entityPool.Data.RePopulate();
+
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             EntitiesJournaling.Shutdown();
+#pragma warning restore 0618            
 #endif
 
 #if ENABLE_PROFILER
@@ -129,8 +158,10 @@ namespace Unity.Entities
             EntitiesProfiler.Initialize();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             EntitiesJournaling.Initialize();
+#pragma warning restore 0618
 #endif
 
             if (!editorWorld)

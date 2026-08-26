@@ -1,4 +1,6 @@
-﻿using Unity.Entities;
+using Unity.Entities;
+using Unity.Mathematics;
+using Unity.Transforms;
 using UnityEngine;
 
 namespace DocCodeSamples.Tests
@@ -6,7 +8,6 @@ namespace DocCodeSamples.Tests
 #region unityobjectref-example
     public class AnimatorAuthoring : MonoBehaviour
     {
-
         public GameObject AnimatorPrefab;
 
         public class AnimatorBaker : Baker<AnimatorAuthoring>
@@ -14,17 +15,22 @@ namespace DocCodeSamples.Tests
             public override void Bake(AnimatorAuthoring authoring)
             {
                 var e = GetEntity(TransformUsageFlags.Renderable);
-                AddComponent(e, new AnimatorRefComponent
+                AddComponent(e, new AnimatorPrefabRef
                 {
-                    AnimatorAsGO =  authoring.AnimatorPrefab
+                    Prefab = authoring.AnimatorPrefab
                 });
             }
         }
     }
 
-    public struct AnimatorRefComponent : IComponentData
+    public struct AnimatorPrefabRef : IComponentData
     {
-        public UnityObjectRef<GameObject> AnimatorAsGO;
+        public UnityObjectRef<GameObject> Prefab;
+    }
+
+    public struct AnimatorInstanceRef : IComponentData
+    {
+        public UnityObjectRef<Animator> Animator;
     }
 
 #endregion
@@ -32,39 +38,54 @@ namespace DocCodeSamples.Tests
 #region unityobjectref-spawn-system-example
     public partial struct SpawnAnimatedCubeSystem : ISystem
     {
+        EntityQuery m_Query;
+
         public void OnCreate(ref SystemState state)
         {
-            var entities = SystemAPI.QueryBuilder().WithAll<AnimatorRefComponent>().WithNone<Animator>().Build().ToEntityArray(state.WorldUpdateAllocator);
+            m_Query = SystemAPI.QueryBuilder()
+                .WithAll<AnimatorPrefabRef, LocalToWorld>()
+                .WithNone<AnimatorInstanceRef>()
+                .Build();
+            state.RequireForUpdate(m_Query);
+        }
+
+        public void OnUpdate(ref SystemState state)
+        {
+            var entities = m_Query.ToEntityArray(state.WorldUpdateAllocator);
 
             foreach (var entity in entities)
             {
-                var animRef = SystemAPI.GetComponent<AnimatorRefComponent>(entity);
+                var prefabRef = SystemAPI.GetComponent<AnimatorPrefabRef>(entity);
+                var worldTransform = SystemAPI.GetComponent<LocalToWorld>(entity);
 
-                var rotatingCube = (GameObject)Object.Instantiate(animRef.AnimatorAsGO);
+                //Instantiate the GO and place it at the entity's transform
+                var rotatingCube = Object.Instantiate(prefabRef.Prefab.Value);
+                rotatingCube.transform.SetPositionAndRotation(worldTransform.Position, worldTransform.Rotation);
 
-                state.EntityManager.AddComponentObject(entity, rotatingCube.GetComponent<Animator>());
+                //Add the animator to the entity
+                state.EntityManager.AddComponentData(entity, new AnimatorInstanceRef
+                {
+                    Animator = rotatingCube.GetComponent<Animator>()
+                });
             }
         }
     }
 
 #endregion
 
-#if !UNITY_DISABLE_MANAGED_COMPONENTS
-
 #region unityobjectref-anim-system-example
-    public partial struct ChangeRotationAnimationSystem : ISystem
+    public partial struct ModulateAnimatorSpeedSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
+            var sineSpeed = 1f + math.sin((float)SystemAPI.Time.ElapsedTime);
+
             //Query and modify the speed of the Animator
-            foreach (var anim in SystemAPI.Query<SystemAPI.ManagedAPI.UnityEngineComponent<Animator>>())
+            foreach (var instanceRef in SystemAPI.Query<AnimatorInstanceRef>())
             {
-                var sineSpeed = 1f + Mathf.Sin(Time.time);
-                anim.Value.speed = sineSpeed;
+                instanceRef.Animator.Value.speed = sineSpeed;
             }
         }
     }
 #endregion
-
-#endif
 }

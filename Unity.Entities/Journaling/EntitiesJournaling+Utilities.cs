@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -61,7 +61,9 @@ namespace Unity.Entities
             }
 
             var typeIndex = record.ComponentTypes[0].TypeIndex;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (IsManagedComponent(typeIndex))
+            #pragma warning restore 0618
             {
                 componentDataArray = null;
                 return false;
@@ -334,7 +336,9 @@ namespace Unity.Entities
 
         static bool IsManagedComponent(TypeIndex typeIndex)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             return TypeManager.IsSharedComponentType(typeIndex) ? TypeManager.IsManagedSharedComponent(typeIndex) : TypeManager.IsManagedComponent(typeIndex);
+            #pragma warning restore 0618
         }
     }
 }

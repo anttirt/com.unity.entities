@@ -28,11 +28,15 @@ namespace Unity.Entities.PerformanceTests
 
                 m_Query = EntityManager.CreateEntityQuery(typeof(EcsTestFloatData));
                 m_QueryWithFilter = EntityManager.CreateEntityQuery(typeof(EcsTestFloatData), typeof(EcsTestSharedComp));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_QueryWithFilter.SetSharedComponentFilterManaged(new EcsTestSharedComp(1));
+                #pragma warning restore 0618
 
                 m_BufferQuery = EntityManager.CreateEntityQuery(typeof(EcsIntElement));
                 m_BufferQueryWithFilter = EntityManager.CreateEntityQuery(typeof(EcsIntElement), typeof(EcsTestSharedComp));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_BufferQueryWithFilter.SetSharedComponentFilterManaged(new EcsTestSharedComp(1));
+                #pragma warning restore 0618
             }
 
             public void ClearQueries()
@@ -195,7 +199,9 @@ namespace Unity.Entities.PerformanceTests
             var buffer2 = m_Manager.GetBuffer<EcsIntElementEnableable>(m_Entity);
             buffer2.Add(new EcsIntElementEnableable { Value = 42 });
             buffer2.Add(new EcsIntElementEnableable { Value = 56 });
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(m_Entity, new EcsTestSharedComp(1));
+            #pragma warning restore 0618
         }
 
         [TearDown]

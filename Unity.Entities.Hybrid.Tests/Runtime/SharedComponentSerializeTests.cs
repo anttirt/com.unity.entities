@@ -22,7 +22,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i != 20; i++)
             {
                 var entity = m_Manager.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddSharedComponentManaged(entity, new MockSharedData { Value = i });
+                #pragma warning restore 0618
                 m_Manager.AddComponentData(entity, new EcsTestData(i));
                 var buffer = m_Manager.AddBuffer<EcsIntElement>(entity);
                 foreach (var val in Enumerable.Range(i, i + 5))
@@ -49,7 +51,9 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i != 20; i++)
                 {
                     Assert.AreEqual(i, newWorldEntities.GetComponentData<EcsTestData>(entities[i]).value);
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual(i, newWorldEntities.GetSharedComponentManaged<MockSharedData>(entities[i]).Value);
+                    #pragma warning restore 0618
                     var buffer = newWorldEntities.GetBuffer<EcsIntElement>(entities[i]);
                     Assert.That(
                         buffer.AsNativeArray().ToArray(),
@@ -65,6 +69,7 @@ namespace Unity.Entities.Tests
             Assert.IsTrue(newWorldEntities.Debug.IsSharedComponentManagerEmpty());
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         public struct SharedComponentWithUnityObject : ISharedComponentData, IEquatable<SharedComponentWithUnityObject>
         {
             public Object obj;
@@ -84,6 +89,7 @@ namespace Unity.Entities.Tests
                 return (obj != null ? obj.GetHashCode() : 0);
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         // https://fogbugz.unity3d.com/f/cases/1204153/
@@ -93,7 +99,9 @@ namespace Unity.Entities.Tests
             var go2 = new GameObject();
             var shared = new SharedComponentWithUnityObject { obj = go1 };
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, shared);
+            #pragma warning restore 0618
 
             using var world = new World("temp");
 
@@ -114,9 +122,13 @@ namespace Unity.Entities.Tests
             var newWorldEntities = world.EntityManager;
             var uniqueShared = new List<SharedComponentWithUnityObject>();
             using var query = newWorldEntities.CreateEntityQuery(ComponentType.ReadWrite<SharedComponentWithUnityObject>());
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             newWorldEntities.GetAllUniqueSharedComponentsManaged(uniqueShared);
+            #pragma warning restore 0618
             Assert.AreEqual(2, uniqueShared.Count);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             query.SetSharedComponentFilterManaged(uniqueShared[1]);
+            #pragma warning restore 0618
             Assert.AreEqual(1, query.CalculateEntityCount());
         }
 
@@ -136,7 +148,9 @@ namespace Unity.Entities.Tests
                 UnityEngine.Texture2D tex = new UnityEngine.Texture2D(i + 1, i + 1);
                 var expectedManagedComponent = new ManagedComponentWithObjectReference { Texture = tex };
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(e1, expectedManagedComponent);
+                #pragma warning restore 0618
             }
 
             using var world = new World("temp");
@@ -159,7 +173,9 @@ namespace Unity.Entities.Tests
                 {
                     var e = entities[i];
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var actualManagedComponent = newWorldEntities.GetComponentData<ManagedComponentWithObjectReference>(e);
+                    #pragma warning restore 0618
                     Assert.NotNull(actualManagedComponent);
                     var tex = actualManagedComponent.Texture;
                     seenWidths[tex.width - 1] = true;

@@ -81,11 +81,7 @@ namespace Unity.Entities.Editor
             if (target.panel?.contextualMenuManager != null)
             {
                 target.panel.contextualMenuManager.DisplayMenu(triggerEvent, target);
-#if !UNITY_2023_2_OR_NEWER
-                triggerEvent.PreventDefault();
-#else
                 triggerEvent.StopPropagation();
-#endif
             }
         }
 
@@ -122,7 +118,7 @@ namespace Unity.Entities.Editor
 
             if (currentNode.Kind is NodeKind.Scene)
             {
-                var scene = EditorSceneManagerBridge.GetSceneByHandle(currentNode.Index);
+                var scene = EditorSceneManagerBridge.GetSceneByEntityId(currentNode.ToEntityId());
                 BuildSceneContextMenu(evt.menu, scene);
                 // Let users add extra items.
                 SceneHierarchyHooksBridge.AddCustomSceneHeaderContextMenuItems(evt.menu, scene);

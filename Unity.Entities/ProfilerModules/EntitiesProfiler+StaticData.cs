@@ -16,6 +16,7 @@ namespace Unity.Entities
             UnsafeList<WorldData> m_WorldsData;
             UnsafeList<SystemData> m_SystemsData;
             UnsafeList<ArchetypeData> m_ArchetypesData;
+            UnsafeList<ArchetypeComponentData> m_ArchetypeComponentsData;
             SpinLock m_ArchetypesDataLock;
             bool m_LastProfilerEnabled;
 
@@ -24,9 +25,10 @@ namespace Unity.Entities
             public StaticData(int worldCount, int systemCount, int archetypeCount)
             {
                 m_Guid = new Guid("5ac699399f504fa189b6a3758e252685");
-                m_WorldsData = new UnsafeList<WorldData>(worldCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                m_SystemsData = new UnsafeList<SystemData>(systemCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                m_ArchetypesData = new UnsafeList<ArchetypeData>(archetypeCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                m_WorldsData = new UnsafeList<WorldData>(worldCount, Allocator.Persistent);
+                m_SystemsData = new UnsafeList<SystemData>(systemCount, Allocator.Persistent);
+                m_ArchetypesData = new UnsafeList<ArchetypeData>(archetypeCount, Allocator.Persistent);
+                m_ArchetypeComponentsData = new UnsafeList<ArchetypeComponentData>(archetypeCount * 16, Allocator.Persistent);
                 m_ArchetypesDataLock = new SpinLock();
                 m_LastProfilerEnabled = false;
                 m_Initialized = true;
@@ -37,6 +39,7 @@ namespace Unity.Entities
                 m_WorldsData.Dispose();
                 m_SystemsData.Dispose();
                 m_ArchetypesData.Dispose();
+                m_ArchetypeComponentsData.Dispose();
                 m_Initialized = false;
             }
 
@@ -66,6 +69,16 @@ namespace Unity.Entities
                 try
                 {
                     m_ArchetypesData.Add(new ArchetypeData(archetype));
+
+                    // Add component type records for this archetype
+                    var archetypeStableHash = archetype->StableHash;
+                    for (var i = 0; i < archetype->TypesCount; ++i)
+                    {
+                        var typeIndex = archetype->Types[i].TypeIndex;
+                        var stableTypeHash = TypeManager.GetTypeInfo(typeIndex).StableTypeHash;
+                        var flags = TypeManager.IsChunkComponent(typeIndex) ? ComponentTypeFlags.ChunkComponent : ComponentTypeFlags.None;
+                        m_ArchetypeComponentsData.Add(new ArchetypeComponentData(archetypeStableHash, stableTypeHash, flags, i));
+                    }
                 }
                 finally
                 {
@@ -79,15 +92,16 @@ namespace Unity.Entities
                     return;
 
                 var enabled = Profiler.enabled;
+                var wasEnabled = m_LastProfilerEnabled;
+                m_LastProfilerEnabled = enabled;
 
                 // If profiler was not enabled last time, we must re-send all session data
-                if (!m_LastProfilerEnabled && enabled)
+                if (!wasEnabled && enabled)
                 {
                     // If we fail to get session data, postpone to next frame
                     if (!ResetSessionMetaData())
                         return;
                 }
-                m_LastProfilerEnabled = enabled;
 
                 if (!enabled)
                     return;
@@ -99,6 +113,7 @@ namespace Unity.Entities
                 try
                 {
                     FlushSessionMetaData(in m_Guid, (int)DataTag.ArchetypeData, ref m_ArchetypesData);
+                    FlushSessionMetaData(in m_Guid, (int)DataTag.ArchetypeComponentData, ref m_ArchetypeComponentsData);
                 }
                 finally
                 {
@@ -114,6 +129,7 @@ namespace Unity.Entities
                     m_WorldsData.Clear();
                     m_SystemsData.Clear();
                     m_ArchetypesData.Clear();
+                    m_ArchetypeComponentsData.Clear();
 
                     for (var i = 0; i < World.All.Count; ++i)
                     {
@@ -143,7 +159,20 @@ namespace Unity.Entities
                         {
                             world.EntityManager.GetAllArchetypes(archetypes);
                             for (var archetypeIter = 0; archetypeIter < archetypes.Length; ++archetypeIter)
-                                m_ArchetypesData.Add(new ArchetypeData(archetypes[archetypeIter].Archetype));
+                            {
+                                var archetype = archetypes[archetypeIter].Archetype;
+                                m_ArchetypesData.Add(new ArchetypeData(archetype));
+
+                                // Add component type records for this archetype
+                                var archetypeStableHash = archetype->StableHash;
+                                for (var componentIter = 0; componentIter < archetype->TypesCount; ++componentIter)
+                                {
+                                    var typeIndex = archetype->Types[componentIter].TypeIndex;
+                                    var stableTypeHash = TypeManager.GetTypeInfo(typeIndex).StableTypeHash;
+                                    var flags = TypeManager.IsChunkComponent(typeIndex) ? ComponentTypeFlags.ChunkComponent : ComponentTypeFlags.None;
+                                    m_ArchetypeComponentsData.Add(new ArchetypeComponentData(archetypeStableHash, stableTypeHash, flags, componentIter));
+                                }
+                            }
                         }
                     }
                 }

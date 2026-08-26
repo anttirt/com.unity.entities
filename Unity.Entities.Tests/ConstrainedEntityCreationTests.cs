@@ -7,7 +7,6 @@ using Unity.Jobs;
 
 namespace Unity.Entities.Tests
 {
-    using static AspectUtils;
     struct Component01 : IComponentData
     {
         public int Value;
@@ -22,13 +21,6 @@ namespace Unity.Entities.Tests
     {
         public int Value;
     }
-
-#pragma warning disable 0618 // Disable Aspects obsolete warnings
-    readonly partial struct EcsTestDataAspect : IAspect
-    {
-        public readonly RefRW<EcsTestData> TestComponent;
-    }
-#pragma warning restore 0618
 
     partial class TestSystemWithEmptyJob : SystemBase
     {
@@ -58,30 +50,55 @@ namespace Unity.Entities.Tests
         }
     }
 
+    // Helper system to run a delegate on each entity that has EcsTestData. This lets us avoid defining a new system for each IFE test case.
+    partial struct OnUpdateCallbackSystem : ISystem
+    {
+        public delegate void OnUpdateDelegate(ref SystemState state, RefRW<EcsTestData> data);
+        public static OnUpdateDelegate OnUpdateAction;
+
+        public void OnUpdate(ref SystemState state)
+        {
+            foreach (var data in SystemAPI.Query<RefRW<EcsTestData>>())
+            {
+                OnUpdateAction?.Invoke(ref state, data);
+            }
+        }
+    }
+
     [TestFixture]
     class ConstrainedEntityCreationTests : ECSTestsFixture
     {
+        EntityQuery m_Component01Query;
+        EntityQuery m_EcsTestDataQuery;
+
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            var emptySystem = World.GetOrCreateSystemManaged<EmptySystem>();
+            m_Component01Query = new EntityQueryBuilder(Allocator.Temp).WithAll<Component01>().Build(ref emptySystem.CheckedStateRef);
+            m_EcsTestDataQuery = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(ref emptySystem.CheckedStateRef);
+        }
+
         [Test]
         public void CreateEntity_WithArchetypeNotMatchingQuery_Works()
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
+            var notMatchingArchetype = World.EntityManager.CreateArchetype(typeof(Component01));
 
-            // We enumerate with a query for EcsTestData, but create an entity CreateComponent.
+            // We enumerate with a query for EcsTestData, but create an entity with Component01.
             // Since those two will never match each other, it is safe to create an entity in this loop
-            var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
-                m_Manager.CreateEntity();
-                m_Manager.CreateEntity(notMatchingArchetype);
-                m_Manager.CreateEntity(typeof(Component01));
-                m_Manager.CreateEntity(notMatchingArchetype, TmpNA(2));
-                m_Manager.CreateEntity(notMatchingArchetype, 2, World.UpdateAllocator.ToAllocator);
-                m_Manager.CreateEntity(notMatchingArchetype, 2);
-            }
+                state.EntityManager.CreateEntity();
+                state.EntityManager.CreateEntity(notMatchingArchetype);
+                state.EntityManager.CreateEntity(typeof(Component01));
+                state.EntityManager.CreateEntity(notMatchingArchetype, TmpNA(2));
+                state.EntityManager.CreateEntity(notMatchingArchetype, 2, state.WorldUpdateAllocator);
+                state.EntityManager.CreateEntity(notMatchingArchetype, 2);
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
             Assert.AreEqual(OriginalEntitiesCount * 8, Component01EntitiesCount);
@@ -93,26 +110,25 @@ namespace Unity.Entities.Tests
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
+            var entityManager = World.EntityManager;
+            var allocator = World.UpdateAllocator.ToAllocator;
+            var matchingArchetype = entityManager.CreateArchetype(typeof(EcsTestData));
+
             // We enumerate with a query for EcsTestData, and then also create an entity with EcsTestData
             // If we were to allow this, it would mean that depending on where you are in the iteration
             // (the new entity gets added to a new chunk vs the chunk we are currently iterating over) you get different behaviour.
             // While this is fully deterministic, it is quite unexpected and not controlled behaviour.
             // So instead we throw an exception when creating an entity whose archetype matches what we are currently enumerating
-            var matchingArchetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState _, RefRW<EcsTestData> _) =>
             {
-                AssertValueConsistency(aspect);
-
-                Assert.Throws<InvalidOperationException>(() => m_Manager.CreateEntity(matchingArchetype));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.CreateEntity(typeof(EcsTestData)));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.CreateEntity(matchingArchetype, TmpNA(2)));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.CreateEntity(matchingArchetype, 2, World.UpdateAllocator.ToAllocator));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.CreateEntity(matchingArchetype, 2));
-            }
+                Assert.Throws<InvalidOperationException>(() => entityManager.CreateEntity(matchingArchetype));
+                Assert.Throws<InvalidOperationException>(() => entityManager.CreateEntity(typeof(EcsTestData)));
+                Assert.Throws<InvalidOperationException>(() => entityManager.CreateEntity(matchingArchetype, TmpNA(2)));
+                Assert.Throws<InvalidOperationException>(() => entityManager.CreateEntity(matchingArchetype, 2, allocator));
+                Assert.Throws<InvalidOperationException>(() => entityManager.CreateEntity(matchingArchetype, 2));
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -124,15 +140,12 @@ namespace Unity.Entities.Tests
 
             var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity());
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity(typeof(Component01)));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, TmpNA(2)));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, 2, World.UpdateAllocator.ToAllocator));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, 2));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity(notMatchingArchetype));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity());
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity(typeof(Component01)));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity(notMatchingArchetype, TmpNA(2)));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity(notMatchingArchetype, 2, World.UpdateAllocator.ToAllocator));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateEntity(notMatchingArchetype, 2));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
             Assert.AreEqual(OriginalEntitiesCount * 8, Component01EntitiesCount);
@@ -143,17 +156,16 @@ namespace Unity.Entities.Tests
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
-            var toInstantiate = m_Manager.CreateEntity(typeof(Component01));
+            var toInstantiate = World.EntityManager.CreateEntity(typeof(Component01));
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
-                m_Manager.Instantiate(toInstantiate);
-                m_Manager.Instantiate(toInstantiate, TmpNA(2));
-                m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator);
-            }
+                state.EntityManager.Instantiate(toInstantiate);
+                state.EntityManager.Instantiate(toInstantiate, TmpNA(2));
+                state.EntityManager.Instantiate(toInstantiate, 2, state.WorldUpdateAllocator);
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
             Assert.AreEqual(OriginalEntitiesCount * 5 + 1, Component01EntitiesCount);
@@ -167,15 +179,14 @@ namespace Unity.Entities.Tests
 
             var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
 
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity());
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity(typeof(EcsTestData)));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, TmpNA(2)));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, 2, World.UpdateAllocator.ToAllocator));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateEntity(notMatchingArchetype, 2));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity(notMatchingArchetype));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity());
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity(typeof(EcsTestData)));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity(notMatchingArchetype, TmpNA(2)));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity(notMatchingArchetype, 2, World.UpdateAllocator.ToAllocator));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateEntity(notMatchingArchetype, 2));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -186,19 +197,19 @@ namespace Unity.Entities.Tests
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
-            var toInstantiate = m_Manager.GetAllEntities()[0];
+            var toInstantiate = World.EntityManager.GetAllEntities()[0];
+            var entityManager = World.EntityManager;
+            var allocator = World.UpdateAllocator.ToAllocator;
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> data) =>
             {
-                AssertValueConsistency(aspect);
-
-                Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(toInstantiate));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(toInstantiate, TmpNA(2)));
-                Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator));
-            }
+                AssertValueConsistency(data);
+                Assert.Throws<InvalidOperationException>(() => entityManager.Instantiate(toInstantiate));
+                Assert.Throws<InvalidOperationException>(() => entityManager.Instantiate(toInstantiate, TmpNA(2)));
+                Assert.Throws<InvalidOperationException>(() => entityManager.Instantiate(toInstantiate, 2, allocator));
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -210,13 +221,10 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toInstantiate = m_Manager.CreateEntity(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.Instantiate(toInstantiate));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.Instantiate(toInstantiate, TmpNA(2)));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator));
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.Instantiate(toInstantiate));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.Instantiate(toInstantiate, TmpNA(2)));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -228,13 +236,10 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toInstantiate = m_Manager.CreateEntity(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.Instantiate(toInstantiate));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.Instantiate(toInstantiate, TmpNA(2)));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator));
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.Instantiate(toInstantiate));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.Instantiate(toInstantiate, TmpNA(2)));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.Instantiate(toInstantiate, 2, World.UpdateAllocator.ToAllocator));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
             Assert.AreEqual(OriginalEntitiesCount * 5 + 1, Component01EntitiesCount);
@@ -246,14 +251,13 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toCopy = m_Manager.CreateEntity(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 m_Manager.CopyEntitiesInternal(TmpNA(toCopy, toCopy), TmpNA(2));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
             Assert.AreEqual(OriginalEntitiesCount * 2 + 1, Component01EntitiesCount);
@@ -266,15 +270,14 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toCopy = m_Manager.GetAllEntities()[0];
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> data) =>
             {
-                AssertValueConsistency(aspect);
+                AssertValueConsistency(data);
                 Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(toCopy));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -286,11 +289,9 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toCopy = m_Manager.CreateEntity(typeof(Component01));
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CopyEntitiesInternal(TmpNA(toCopy, toCopy), TmpNA(2)));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CopyEntitiesInternal(TmpNA(toCopy, toCopy), TmpNA(2)));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -307,15 +308,14 @@ namespace Unity.Entities.Tests
         public void CreateArchetype_WithArchetypeNotMatchingQuery_Works()
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 m_Manager.CreateArchetype(typeof(Component01));
                 m_Manager.CreateArchetype(TmpNA(typeof(Component01)));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -325,15 +325,14 @@ namespace Unity.Entities.Tests
         public void CreateArchetype_WithArchetypeMatchingQuery_Throws()
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 Assert.Throws<InvalidOperationException>(() => m_Manager.CreateArchetype(typeof(EcsTestData)));
                 Assert.Throws<InvalidOperationException>(() => m_Manager.CreateArchetype(TmpNA(typeof(EcsTestData))));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -342,12 +341,9 @@ namespace Unity.Entities.Tests
         public void CreateArchetype_WithArchetypeNotMatchingQuery_CompletesAllScheduledJobs()
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateArchetype(typeof(Component01)));
-            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(query, ref typeHandle, () => m_Manager.CreateArchetype(TmpNA(typeof(Component01))));
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateArchetype(typeof(Component01)));
+            CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(() => m_Manager.CreateArchetype(TmpNA(typeof(Component01))));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -357,12 +353,9 @@ namespace Unity.Entities.Tests
         public void CreateArchetype_WhileUnregisteredJobIsScheduled_Throws()
         {
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateArchetype(typeof(Component01)));
-            ScheduleJobAndAssertCodeThrows(query, typeHandle, () => m_Manager.CreateArchetype(TmpNA(typeof(Component01))));
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateArchetype(typeof(Component01)));
+            ScheduleJobAndAssertCodeThrows(query, () => m_Manager.CreateArchetype(TmpNA(typeof(Component01))));
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -373,16 +366,15 @@ namespace Unity.Entities.Tests
         {
             var prefabEntity = m_Manager.CreateEntity(typeof(EcsTestData), typeof(Prefab));
             m_Manager.CreateEntity(typeof(EcsTestData));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(prefabEntity));
                 Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(prefabEntity, TmpNA(2)));
                 Assert.Throws<InvalidOperationException>(() => m_Manager.Instantiate(prefabEntity, 2, World.UpdateAllocator.ToAllocator));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
         }
 
         [Test]
@@ -396,11 +388,11 @@ namespace Unity.Entities.Tests
                 m_Manager.CreateEntity(typeof(EcsTestData), typeof(Prefab))
             };
 
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
                 m_Manager.CopyEntitiesInternal(TmpNA(prefabs), TmpNA(2));
+            systemRef.Update(World.Unmanaged);
         }
 
         [Test]
@@ -410,15 +402,14 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 var entity = m_Manager.CreateEntity(notMatchingArchetype);
                 Assert.Throws<InvalidOperationException>(() => m_Manager.AddComponent(entity, typeof(Component02)));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -430,15 +421,14 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 var entity = m_Manager.CreateEntity(notMatchingArchetype);
                 Assert.Throws<InvalidOperationException>(() => m_Manager.RemoveComponent(entity, typeof(Component01)));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -450,15 +440,14 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var notMatchingArchetype = m_Manager.CreateArchetype(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 var entity = m_Manager.CreateEntity(notMatchingArchetype);
                 Assert.Throws<InvalidOperationException>(() => m_Manager.DestroyEntity(entity));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
             Assert.AreEqual(OriginalEntitiesCount, EcsTestDataEntitiesCount);
         }
@@ -470,19 +459,17 @@ namespace Unity.Entities.Tests
             SetupEntitiesForConsistencyCheck(OriginalEntitiesCount);
 
             var toInstantiate = m_Manager.CreateEntity(typeof(Component01));
-
-            var typeHandle = new EcsTestDataAspect.TypeHandle(ref EmptySystem.CheckedStateRef);
-            var query = EmptySystem.GetEntityQuery(GetRequiredComponents<EcsTestDataAspect>());
-
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
             var commandBuffer = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState state, RefRW<EcsTestData> _) =>
             {
                 var entity = commandBuffer.Instantiate(toInstantiate);
                 commandBuffer.SetComponent(entity, new Component01());
 
                 Assert.Throws<InvalidOperationException>(() => commandBuffer.Playback(m_Manager));
-            }
+            };
+            systemRef.Update(World.Unmanaged);
         }
 
         private const int OriginalEntitiesCount = 256;
@@ -503,10 +490,10 @@ namespace Unity.Entities.Tests
             return CollectionHelper.CreateNativeArray<ComponentType>(componentTypes, World.UpdateAllocator.ToAllocator);
         }
 
-        private static void AssertValueConsistency(EcsTestDataAspect aspect)
+        private static void AssertValueConsistency(RefRW<EcsTestData> data)
         {
             Assert.AreEqual(
-                EcsTestDataValue, aspect.TestComponent.ValueRO.value,
+                EcsTestDataValue, data.ValueRO.value,
                 "EcsTestData value is not consistent with the expected one. Entities may have been shuffled or unexpected entities where added to the manager.");
         }
 
@@ -519,9 +506,9 @@ namespace Unity.Entities.Tests
             }
         }
 
-        private int Component01EntitiesCount => EmptySystem.GetEntityQuery(typeof(Component01)).CalculateEntityCount();
+        private int Component01EntitiesCount => m_Component01Query.CalculateEntityCount();
 
-        private int EcsTestDataEntitiesCount => EmptySystem.GetEntityQuery(typeof(EcsTestData)).CalculateEntityCount();
+        private int EcsTestDataEntitiesCount => m_EcsTestDataQuery.CalculateEntityCount();
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
         // Uses the job debugger to check that the job has been explicitly completed.
@@ -532,28 +519,32 @@ namespace Unity.Entities.Tests
         }
 #endif
 
-        private void CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(EntityQuery query, ref EcsTestDataAspect.TypeHandle typeHandle, Action code)
+        private void CreateSystemAndAssertAllScheduledJobsAreCompletedAfterRunningCode(Action code)
         {
             var system = World.CreateSystemManaged<TestSystemWithEmptyJob>();
-
-            system.Update();
+            system.SystemHandle.Update(World.Unmanaged);
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             Assert.IsFalse(IsJobExplicitlyCompleted(system.ScheduledJobHandle));
 #endif
 
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle)) code();
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState _, RefRW<EcsTestData> _) =>
+            {
+                code();
+            };
+            systemRef.Update(World.Unmanaged);
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             Assert.IsTrue(IsJobExplicitlyCompleted(system.ScheduledJobHandle));
 #endif
-
             World.DestroySystemManaged(system);
-            typeHandle.Update(ref EmptySystem.CheckedStateRef);
         }
 
-        private void ScheduleJobAndAssertCodeThrows(EntityQuery query, EcsTestDataAspect.TypeHandle typeHandle, Action code)
+        private void ScheduleJobAndAssertCodeThrows(EntityQuery query, Action code)
         {
+            var systemRef = World.GetOrCreateSystem<OnUpdateCallbackSystem>();
+
             var job = new EmptyJob();
             var handle = job.Schedule(query, default);
 
@@ -561,10 +552,11 @@ namespace Unity.Entities.Tests
             Assert.IsFalse(IsJobExplicitlyCompleted(handle));
 #endif
 
-            foreach (var aspect in EcsTestDataAspect.Query(query, typeHandle))
+            OnUpdateCallbackSystem.OnUpdateAction = (ref SystemState _, RefRW<EcsTestData> _) =>
             {
                 Assert.Throws<InvalidOperationException>(() => code());
-            }
+            };
+            systemRef.Update(World.Unmanaged);
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             Assert.IsFalse(IsJobExplicitlyCompleted(handle));

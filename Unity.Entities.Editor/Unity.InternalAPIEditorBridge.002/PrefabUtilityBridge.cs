@@ -24,27 +24,27 @@ namespace Unity.Editor.Bridge
         // Kept around for debugging. You have no idea how useful that method is!
         public static void DumpPrefabInfo(UnityObject prefab)
         {
-            var prefabInstanceID = prefab.GetInstanceID();
+            var prefabInstanceID = prefab.GetEntityId();
             var prefabAssetHandle = PrefabUtility.GetPrefabAssetHandle(prefab);
             var prefabAssetPath = AssetDatabase.GetAssetPath(prefabInstanceID);
             var prefabAsGameObject = prefab as GameObject;
 
             var objFromSource = PrefabUtility.GetCorrespondingObjectFromSource(prefab);
-            var objFromSourceID = objFromSource ? objFromSource.GetInstanceID() : 0;
+            var objFromSourceID = objFromSource ? objFromSource.GetEntityId() : EntityId.None;
             var objFromOrigSource = PrefabUtility.GetCorrespondingObjectFromOriginalSource(prefab);
-            var objFromOrigSourceID = objFromOrigSource ? objFromOrigSource.GetInstanceID() : 0;
+            var objFromOrigSourceID = objFromOrigSource ? objFromOrigSource.GetEntityId() : EntityId.None;
             var objFromSourcePath = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(prefab, prefabAssetPath);
-            var objFromSourcePathID = objFromSourcePath ? objFromSourcePath.GetInstanceID() : 0;
+            var objFromSourcePathID = objFromSourcePath ? objFromSourcePath.GetEntityId() : EntityId.None;
             var objFromSourceInAsset = PrefabUtility.GetCorrespondingObjectFromSourceInAsset(prefab, prefabAssetHandle);
-            var objFromSourceInAssetID = objFromSourceInAsset ? objFromSourceInAsset.GetInstanceID() : 0;
+            var objFromSourceInAssetID = objFromSourceInAsset ? objFromSourceInAsset.GetEntityId() : EntityId.None;
 
             var prefabRootGameObject = PrefabUtility.GetPrefabAssetRootGameObject(prefab);
-            var prefabRootGameObjectID = prefabRootGameObject ? prefabRootGameObject.GetInstanceID() : 0;
+            var prefabRootGameObjectID = prefabRootGameObject ? prefabRootGameObject.GetEntityId() : EntityId.None;
             var originalSourceOrVariantRoot = PrefabUtility.GetOriginalSourceOrVariantRoot(prefab);
-            var originalSourceOrVariantRootID = originalSourceOrVariantRoot ? originalSourceOrVariantRoot.GetInstanceID() : 0;
+            var originalSourceOrVariantRootID = originalSourceOrVariantRoot ? originalSourceOrVariantRoot.GetEntityId() : EntityId.None;
 
             var nearestPrefabRoot = PrefabUtility.GetNearestPrefabInstanceRoot(prefab);
-            var nearestPrefabRootID = nearestPrefabRoot ? nearestPrefabRoot.GetInstanceID() : 0;
+            var nearestPrefabRootID = nearestPrefabRoot ? nearestPrefabRoot.GetEntityId() : EntityId.None;
 
             Debug.Log("Prefab state:\n" +
                               $"    IsPartOfAnyPrefab = {PrefabUtility.IsPartOfAnyPrefab(prefab)}\n" +

@@ -47,41 +47,6 @@ namespace Unity.Entities.Analyzer
         }
 
         [TestMethod]
-        public async Task Aspect()
-        {
-            var test = @"
-                using Unity.Entities;
-                struct {|#0:TestAspect|} : IAspect {}";
-            var fixedSource = @"
-                using Unity.Entities;
-                partial struct TestAspect : IAspect {}";
-            var expected = VerifyTypeAnalyzer.Diagnostic(EntitiesDiagnostics.k_Ea0007Descriptor).WithLocation(0).WithArguments("IAspect", "global::TestAspect");
-            await VerifyTypeAnalyzer.VerifyCodeFixAsync(test, expected, fixedSource);
-        }
-
-        [TestMethod]
-        public async Task AspectParent()
-        {
-            var test = @"
-                using Unity.Entities;
-                struct {|#0:A|} {
-                    struct {|#1:B|} {
-                        partial struct TestAspect : IAspect {}
-                    }
-                }";
-            var fixedSource = @"
-                using Unity.Entities;
-                partial struct A {
-                    partial struct B {
-                        partial struct TestAspect : IAspect {}
-                    }
-                }";
-            var expectedA = VerifyTypeAnalyzer.Diagnostic(EntitiesDiagnostics.k_Ea0008Descriptor).WithLocation(0).WithArguments("IAspect", "global::A.B.TestAspect", "global::A");
-            var expectedB = VerifyTypeAnalyzer.Diagnostic(EntitiesDiagnostics.k_Ea0008Descriptor).WithLocation(1).WithArguments("IAspect", "global::A.B.TestAspect", "global::A.B");
-            await VerifyTypeAnalyzer.VerifyCodeFixAsync(test, new[]{expectedA, expectedB}, fixedSource);
-        }
-
-        [TestMethod]
         public async Task JobEntity()
         {
             var test = @"

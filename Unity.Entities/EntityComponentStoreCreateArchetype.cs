@@ -155,7 +155,7 @@ namespace Unity.Entities
         // INTERNAL
         // ----------------------------------------------------------------------------------------------------------
 
-        struct ArchetypeChunkFilter
+        internal struct ArchetypeChunkFilter
         {
             public Archetype* Archetype;
 #pragma warning disable 649
@@ -209,7 +209,7 @@ namespace Unity.Entities
             return GetChunkWithEmptySlots(ref archetypeChunkFilter);
         }
 
-        ChunkIndex GetChunkWithEmptySlots(ref ArchetypeChunkFilter archetypeChunkFilter)
+        internal ChunkIndex GetChunkWithEmptySlots(ref ArchetypeChunkFilter archetypeChunkFilter)
         {
             var archetype = archetypeChunkFilter.Archetype;
             fixed(int* sharedComponentValues = archetypeChunkFilter.SharedComponentValues)

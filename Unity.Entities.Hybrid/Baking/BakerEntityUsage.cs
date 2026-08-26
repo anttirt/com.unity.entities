@@ -1,6 +1,7 @@
 using System;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using UnityEngine;
 
 namespace Unity.Entities
 {
@@ -50,7 +51,7 @@ namespace Unity.Entities
             ReferencedEntityUsages.Clear();
         }
 
-        public void AddTransformUsage(ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> bakedEntityData, ref bool usageDirty, int component)
+        public void AddTransformUsage(ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> bakedEntityData, ref bool usageDirty, EntityId component)
         {
             // Revert primary entity transform usage flags
             if (!PrimaryEntityFlags.IsUnused)
@@ -124,7 +125,7 @@ namespace Unity.Entities
             ReferencedEntityUsages.CopyFrom(input.ReferencedEntityUsages);
         }
 
-        public static bool Update(ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> referencedEntities, ref bool dirtyUsage, ref BakerEntityUsage bakerStateUsage, ref BakerEntityUsage tempUsage, int component, out bool revertTransformComponents)
+        public static bool Update(ref UnsafeParallelHashMap<Entity, TransformUsageFlagCounters> referencedEntities, ref bool dirtyUsage, ref BakerEntityUsage bakerStateUsage, ref BakerEntityUsage tempUsage, EntityId component, out bool revertTransformComponents)
         {
             if (bakerStateUsage.Equals(tempUsage))
             {

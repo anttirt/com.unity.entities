@@ -20,6 +20,8 @@ You must use the [BlobArray](xref:Unity.Entities.BlobArray`1) type to create an 
 
 [!code-cs[blobs](../DocCodeSamples.Tests/BlobAssetExamples.cs#CreateBlobAssetWithArray)]
 
+`BlobBuilder.Allocate` returns a [`BlobBuilderArray<T>`](xref:Unity.Entities.BlobBuilderArray`1). Use this returned array to read and write the array elements. Unity assigns the internal offset and length of the `BlobArray<T>` field only when you call `CreateBlobAssetReference`, so until then the field's [`Length`](xref:Unity.Entities.BlobArray`1.Length) property returns 0, and its [`GetUnsafePtr`](xref:Unity.Entities.BlobArray`1.GetUnsafePtr) method returns a pointer to the field itself instead of to the array data.
+
 ## Strings in blob assets
 You must use the [BlobString](xref:Unity.Entities.BlobString) type to create a string within a blob asset. The following is an example of a string allocated with the `BlobBuilder` API.
 

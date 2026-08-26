@@ -6,6 +6,8 @@ using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Unity.Entities
 {
@@ -20,10 +22,16 @@ namespace Unity.Entities
         // ReSharper disable InconsistentNaming
         /// <summary>This field, when combined with `b`, is for working with EntityGuid as opaque bits (the packing may
         /// change again in the future, as there are still unused bits remaining).</summary>
-        public ulong a;
+        [Obsolete("'a' is obsolete, it is now split up into the fields: 'OriginatingEntityId' and 'OriginatingSubEntityId'.", true)]
+        public ulong a { get => throw new InvalidOperationException("a is obsolete."); set => throw new InvalidOperationException("a is obsolete."); }
         /// <summary>Use same as `a` field.</summary>
-        public ulong b;
+        [Obsolete("'b' is obsolete, please use 'FullNamespaceId' and 'Serial' instead.", true)]
+        public ulong b { get => throw new InvalidOperationException("b is obsolete."); set => throw new InvalidOperationException("b is obsolete."); }
         // ReSharper restore InconsistentNaming
+
+        //Backing fields for the public properties
+        [SerializeField] internal EntityId _OriginatingEntityId;
+        [SerializeField] internal EntityId _OriginatingSubEntityId;
 
         /// <summary>Static value that represents an invalid EntityGuid.</summary>
         public static readonly EntityGuid Null = new EntityGuid();
@@ -35,23 +43,55 @@ namespace Unity.Entities
         /// <param name="originatingSubId">Secondary session-unique ID for the originating object. This is typically the authoring Component's InstanceID.</param>
         /// <param name="namespaceId">A unique number to identify the namespace</param>
         /// <param name="serial">A unique number used to differentiate Entities associated with the same originating object and namespace</param>
-        public EntityGuid(int originatingId, int originatingSubId, uint namespaceId, uint serial)
-        {
-            a = ((ulong)originatingId & 0x00000000FFFFFFFF) | ((ulong)originatingSubId << 32);
-            b = serial | ((ulong)namespaceId << 32);
+        [Obsolete("EntityGuid(int originatingId, int originatingSubId, uint namespaceId, uint serial) is obsolete please use EntityGuid(EntityId originatingId, EntityId originatingSubId, uint namespaceId, uint serial) instead.", true)]
+        public EntityGuid(int originatingId, int originatingSubId, uint namespaceId, uint serial) => throw new InvalidOperationException("EntityGuid(int originatingId, int originatingSubId, uint namespaceId, uint serial), this constructor is obsolete, use the EntityId version.");
 
-            Assert.AreEqual(originatingId, OriginatingId);
-            Assert.AreEqual(originatingSubId, OriginatingSubId);
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EntityGuid"/>.
+        /// </summary>
+        /// <param name="originatingId">Session-unique ID for the originating object. This is typically the authoring GameObject's EntityId.</param>
+        /// <param name="originatingSubId">Secondary session-unique ID for the originating object. This is typically the authoring Component's EntityId.</param>
+        /// <param name="namespaceId">A unique number to identify the namespace</param>
+        /// <param name="serial">A unique number used to differentiate Entities associated with the same originating object and namespace</param>
+        public EntityGuid(EntityId originatingId, EntityId originatingSubId, uint namespaceId, uint serial)
+        {
+            _OriginatingEntityId = originatingId;
+            _OriginatingSubEntityId = originatingSubId;
+            FullNamespaceId = namespaceId;
+            Serial = serial;
         }
 
         /// <summary>Session-unique ID for originating object (typically the authoring GameObject's InstanceID).</summary>
-        public int OriginatingId => (int)(a & 0xffffffff);
+        [Obsolete("OriginatingId is deprecated, use OriginatingEntityId instead.", true)]
+        public int OriginatingId{get => throw new InvalidOperationException("OriginatingId is obsolete, use OriginatingEntityId instead."); set => throw new InvalidOperationException("OriginatingId is obsolete, use OriginatingEntityId instead."); }
+
+        /// <summary>Session-unique ID for originating object (typically the authoring GameObject's EntityId).</summary>
+        public EntityId OriginatingEntityId
+        {
+            get => _OriginatingEntityId;
+            set => _OriginatingEntityId = value;
+        }
+
         /// <summary>Secondary session-unique ID for the originating object. This is typically the authoring Component's InstanceID.</summary>
-        public int OriginatingSubId => (int)(a >> 32);
+        [Obsolete("OriginatingSubId is deprecated, use OriginatingSubEntityId", true)]
+        public int OriginatingSubId{get => throw new InvalidOperationException("OriginatingSubId is obsolete, use OriginatingSubEntityId instead."); set => throw new InvalidOperationException("OriginatingSubId is obsolete, use OriginatingSubEntityId instead."); }
+
+        /// <summary>Secondary session-unique ID for the originating object. This is typically the authoring Component's EntityId.</summary>
+        public EntityId OriginatingSubEntityId
+        {
+            get => _OriginatingSubEntityId;
+            set => _OriginatingSubEntityId = value;
+        }
+
         /// <summary>A unique number to identify the namespace.</summary>
-        internal uint FullNamespaceId => (uint) (b >> 32);
+        internal uint FullNamespaceId { get; set; }
+
         /// <summary>A unique number used to differentiate Entities associated with the same originating object and namespace.</summary>
-        public uint Serial => (uint)b;
+        public uint Serial { get; set; }
+
+        /// <summary>A unique number combining the FullNamespaceId and Serial into a ulong.</summary>
+        public ulong NamespaceAndSerial => (((ulong)FullNamespaceId << 32) | (Serial));
 
         /// <summary>
         /// Checks if two EntityGuid instances are equal.
@@ -59,14 +99,14 @@ namespace Unity.Entities
         /// <param name="lhs">An EntityGuid</param>
         /// <param name="rhs">Another EntityGuid</param>
         /// <returns>True, if both EntityGuid instances contain the same opaque bits.</returns>
-        public static bool operator==(in EntityGuid lhs, in EntityGuid rhs) => lhs.a == rhs.a && lhs.b == rhs.b;
+        public static bool operator==(in EntityGuid lhs, in EntityGuid rhs) => lhs.Equals(rhs);
         /// <summary>
         /// Checks if two EntityGuid instances aren't equal.
         /// </summary>
         /// <param name="lhs">An EntityGuid</param>
         /// <param name="rhs">Another EntityGuid</param>
         /// <returns>True, if any of the opaque bits contained in the EntityGuid instances is different.</returns>
-        public static bool operator!=(in EntityGuid lhs, in EntityGuid rhs) => !(lhs == rhs);
+        public static bool operator!=(in EntityGuid lhs, in EntityGuid rhs) => !(lhs.Equals(rhs));
 
         /// <summary>
         /// Checks if two objects are EntityGuid instances and if they are equal.
@@ -80,7 +120,14 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="other">An EntityGuid to compare with</param>
         /// <returns>True if <paramref name="other"/> contains the same opaque bits.</returns>
-        public bool Equals(EntityGuid other) => a == other.a && b == other.b;
+        public bool Equals(EntityGuid other)
+        {
+            return OriginatingEntityId == other.OriginatingEntityId &&
+                   OriginatingSubEntityId == other.OriginatingSubEntityId &&
+                   FullNamespaceId == other.FullNamespaceId &&
+                   Serial == other.Serial;
+        }
+
 
         /// <summary>
         /// Computes a hashcode to support hash-based collections.
@@ -88,9 +135,11 @@ namespace Unity.Entities
         /// <returns>The computed hash.</returns>
         public override int GetHashCode()
         {
-            // ReSharper disable NonReadonlyMemberInGetHashCode (readonly fields will not get serialized by unity)
-            unchecked { return (a.GetHashCode() * 397) ^ b.GetHashCode(); }
-            // ReSharper restore NonReadonlyMemberInGetHashCode
+            int hashCode = OriginatingEntityId.GetHashCode();
+            hashCode = (hashCode * 397) ^ OriginatingSubEntityId.GetHashCode();
+            hashCode = (hashCode * 397) ^ FullNamespaceId.GetHashCode();
+            hashCode = (hashCode * 397) ^ Serial.GetHashCode();
+            return hashCode;
         }
 
         /// <summary>
@@ -100,11 +149,25 @@ namespace Unity.Entities
         /// <returns>Returns -1 if this EntityGuid goes first in the sort order, or 1 if the other should goes first in the sort order. Otherwise returns 0 if they are equal.</returns>
         public int CompareTo(EntityGuid other)
         {
-            if (a != other.a)
-                return a > other.a ? 1 : -1;
+            if (OriginatingEntityId != other.OriginatingEntityId)
+            {
+                return EntityId.ToULong(OriginatingEntityId) > EntityId.ToULong(other.OriginatingEntityId) ? 1 : -1;
+            }
 
-            if (b != other.b)
-                return b > other.b ? 1 : -1;
+            if (OriginatingSubEntityId != other.OriginatingSubEntityId)
+            {
+                return EntityId.ToULong(OriginatingSubEntityId) > EntityId.ToULong(other.OriginatingSubEntityId) ? 1 : -1;
+            }
+
+            if (FullNamespaceId != other.FullNamespaceId)
+            {
+                return FullNamespaceId > other.FullNamespaceId ? 1 : -1;
+            }
+
+            if (Serial != other.Serial)
+            {
+                return Serial > other.Serial ? 1 : -1;
+            }
 
             return 0;
         }
@@ -113,7 +176,7 @@ namespace Unity.Entities
         /// Converts this EntityGuid to a standard C# <see cref="string"/> representation.
         /// </summary>
         /// <returns>The C# string.</returns>
-        public override string ToString() => $"{OriginatingId}:{OriginatingSubId}:{FullNamespaceId:x8}:{Serial:x8}";
+        public override string ToString() => $"{EntityId.ToULong(OriginatingEntityId)}:{EntityId.ToULong(OriginatingSubEntityId)}:{FullNamespaceId:x8}:{Serial:x8}";
     }
 
     /// <summary>

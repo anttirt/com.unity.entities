@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Unity.Entities.Serialization;
 using Unity.Properties;
-using Unity.Serialization.Editor;
+using UnityEditor;
+using UnityEngine;
 
 namespace Unity.Entities.UI
 {
@@ -21,10 +23,19 @@ namespace Unity.Entities.UI
         [CreateProperty]
         readonly Dictionary<int, PaginationData> PaginationState = new Dictionary<int, PaginationData>();
 
+        static UiPersistentState s_Cached;
+
+        static UiPersistentState()
+        {
+            EditorApplication.quitting += Save;
+            AssemblyReloadEvents.beforeAssemblyReload += Save;
+        }
+
         //[MenuItem("Properties/UI/Clear PersistentState")]
         public static void ClearState()
         {
-            UserSettings<UiPersistentState>.Clear(Key);
+            s_Cached = null;
+            EditorUserSettings.SetConfigValue(Key, null);
         }
 
         public static void SetFoldoutState(Type type, PropertyPath path, bool foldout)
@@ -32,8 +43,7 @@ namespace Unity.Entities.UI
             if (null == type || path.IsEmpty)
                 return;
 
-            var state = UserSettings<UiPersistentState>.GetOrCreate(Key);
-            state.FoldoutState[ComputeHash(type, path)] = foldout;
+            GetOrLoad().FoldoutState[ComputeHash(type, path)] = foldout;
         }
 
         public static bool GetFoldoutState(Type type, PropertyPath path, bool defaultValue = false)
@@ -41,8 +51,7 @@ namespace Unity.Entities.UI
             if (null == type || path.IsEmpty)
                 return defaultValue;
 
-            var state = UserSettings<UiPersistentState>.GetOrCreate(Key);
-            return state.FoldoutState.TryGetValue(ComputeHash(type, path), out var foldout) ? foldout : defaultValue;
+            return GetOrLoad().FoldoutState.TryGetValue(ComputeHash(type, path), out var foldout) ? foldout : defaultValue;
         }
 
         public static void SetPaginationState(Type type, PropertyPath path, int size, int page)
@@ -50,8 +59,7 @@ namespace Unity.Entities.UI
             if (null == type || path.IsEmpty)
                 return;
 
-            var state = UserSettings<UiPersistentState>.GetOrCreate(Key);
-            state.PaginationState[ComputeHash(type, path)] = new PaginationData {PaginationSize = size, CurrentPage = page};
+            GetOrLoad().PaginationState[ComputeHash(type, path)] = new PaginationData {PaginationSize = size, CurrentPage = page};
         }
 
         public static PaginationData GetPaginationState(Type type, PropertyPath path)
@@ -59,8 +67,7 @@ namespace Unity.Entities.UI
             if (null == type || path.IsEmpty)
                 return default;
 
-            var state = UserSettings<UiPersistentState>.GetOrCreate(Key);
-            return state.PaginationState.TryGetValue(ComputeHash(type, path), out var data) ? data : default;
+            return GetOrLoad().PaginationState.TryGetValue(ComputeHash(type, path), out var data) ? data : default;
         }
 
         static int ComputeHash(Type type, PropertyPath path)
@@ -69,6 +76,32 @@ namespace Unity.Entities.UI
             hash = hash * 31 + type.FullName.GetHashCode();
             hash = hash * 31 + path.GetHashCode();
             return hash;
+        }
+
+        static UiPersistentState GetOrLoad()
+        {
+            if (s_Cached != null)
+                return s_Cached;
+
+            var json = EditorUserSettings.GetConfigValue(Key) ?? string.Empty;
+            try
+            {
+                s_Cached = string.IsNullOrEmpty(json) ? new UiPersistentState() : EntitiesJson.Deserialize<UiPersistentState>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"{nameof(UiPersistentState)}: Could not load at key `{Key}`.\nException `{exception}`");
+                s_Cached = new UiPersistentState();
+            }
+
+            return s_Cached;
+        }
+
+        static void Save()
+        {
+            if (s_Cached == null)
+                return;
+            EditorUserSettings.SetConfigValue(Key, EntitiesJson.Serialize(s_Cached));
         }
     }
 }

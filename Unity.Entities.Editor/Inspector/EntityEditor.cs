@@ -124,8 +124,12 @@ namespace Unity.Entities.Editor
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
             var inspectorRoot = m_Root.parent.parent;
-            var header = (IMGUIContainer) inspectorRoot.Children().First();
-            header.MarkDirtyLayout();
+            var children = inspectorRoot.Children();
+            foreach (var child in children)
+            {
+                if (child is IMGUIContainer imguiContainer)
+                    imguiContainer.MarkDirtyLayout();
+            }
             m_Root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         }
 
@@ -186,9 +190,7 @@ namespace Unity.Entities.Editor
             {
                 Tabs = new ITabContent[]
                 {
-                    new ComponentsTab(entityInspectorContext),
-                    new AspectsTab(entityInspectorContext),
-                    new RelationshipsTab(entityInspectorContext)
+                    new ComponentsTab(entityInspectorContext)
                 };
             }
         }

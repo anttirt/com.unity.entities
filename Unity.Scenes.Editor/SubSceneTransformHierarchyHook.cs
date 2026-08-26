@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Hierarchy.Editor;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.UI;
@@ -19,7 +20,44 @@ namespace Unity.Scenes.Editor
             SceneHierarchyHooks.addItemsToGameObjectContextMenu += SubSceneContextMenu.AddExtraGameObjectContextMenuItems;
             SceneHierarchyHooks.addItemsToSceneHeaderContextMenu += SubSceneContextMenu.AddExtraSceneHeaderContextMenuItems;
             SceneHierarchyHooks.addItemsToCreateMenu += SubSceneContextMenu.AddExtraItemsToCreateDropdown;
-            EditorApplication.hierarchyWindowItemOnGUI += HierarchyOverlay.HierarchyWindowItemOnGUI;
+            EditorApplication.hierarchyWindowItemByEntityIdOnGUI += HierarchyOverlay.HierarchyWindowItemOnGUI;
+
+            HierarchySubSceneAuthoringHandler.OpenSubScene = OnOpenSubScene;
+            HierarchySubSceneAuthoringHandler.CloseSubScene = OnCloseSubScene;
+            HierarchySubSceneAuthoringHandler.ReimportSubScene = OnReimportSubScene;
+            HierarchySubSceneAuthoringHandler.IsSubSceneOpen = OnIsSubSceneOpen;
+            HierarchySubSceneAuthoringHandler.OnSubSceneDoubleClick = OnToggleSubScene;
+        }
+
+        static void OnOpenSubScene(GameObject go)
+        {
+            if (go != null && go.TryGetComponent(out SubScene subscene))
+                SubSceneUtility.EditScene(subscene);
+        }
+
+        static void OnCloseSubScene(GameObject go)
+        {
+            if (go != null && go.TryGetComponent(out SubScene subscene))
+                SubSceneInspectorUtility.CloseAndAskSaveIfUserWantsTo(subscene);
+        }
+
+        static void OnReimportSubScene(GameObject go)
+        {
+            if (go != null && go.TryGetComponent(out SubScene subscene))
+                SubSceneInspectorUtility.ForceReimport(subscene);
+        }
+
+        static bool OnIsSubSceneOpen(GameObject go)
+        {
+            return go != null && go.TryGetComponent(out SubScene subscene) && subscene.IsLoaded;
+        }
+
+        static void OnToggleSubScene(GameObject go)
+        {
+            if (OnIsSubSceneOpen(go))
+                OnCloseSubScene(go);
+            else
+                OnOpenSubScene(go);
         }
 
         static string GetSceneName(SceneAsset sceneAsset, Scene scene)
@@ -64,7 +102,6 @@ namespace Unity.Scenes.Editor
                 scenes[index].transform = subScene.transform;
                 scenes[index].scene = loadedScene;
                 scenes[index].sceneAsset = subScene.SceneAsset;
-                scenes[index].color = subScene.HierarchyColor;
                 index++;
             }
 

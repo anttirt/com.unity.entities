@@ -1,12 +1,13 @@
 using System;
 using UnityEditor;
+using UnityEngine;
 
 namespace Unity.Scenes.Editor
 {
     /// <summary>
     /// Settings controlling the live conversion.
     /// </summary>
-    public static class LiveConversionEditorSettings
+    public static partial class LiveConversionEditorSettings
     {
         /// <summary>
         /// The current live conversion mode.
@@ -58,5 +59,11 @@ namespace Unity.Scenes.Editor
         }
 
         internal static event Action LiveConversionModeChanged = delegate {};
+
+        [OnEnteringPlayMode]
+        static void ResetStaticsOnLoad()
+        {
+            LiveConversionModeChanged = delegate {};
+        }
     }
 }

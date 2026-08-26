@@ -1,24 +1,11 @@
 ﻿using System;
-using JetBrains.Annotations;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
 {
-#if UNITY_2023_3_OR_NEWER
     [UxmlElement]
-#endif
     partial class SpinnerElement : VisualElement
     {
-#if !UNITY_2023_3_OR_NEWER
-        [UsedImplicitly]
-        class SpinnerElementFactory : UxmlFactory<SpinnerElement, SpinnerElementTraits> { }
-
-        [UsedImplicitly]
-        class SpinnerElementTraits : UxmlTraits
-        {
-        }
-#endif
-
         static readonly VisualElementTemplate k_Template = new(Resources.PackageId, "Spinner/spinner");
 
         readonly IVisualElementScheduledItem m_ScheduledItem;

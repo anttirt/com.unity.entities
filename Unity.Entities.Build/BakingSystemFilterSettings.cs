@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Assembly = System.Reflection.Assembly;
+using UnityEngine.Assemblies;
 
 namespace Unity.Entities.Build
 {
@@ -126,7 +127,7 @@ namespace Unity.Entities.Build
 
             m_ExcludedDomainAssemblies = new HashSet<Assembly>();
 
-            var domainAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var domainAssemblies = CurrentAssemblies.GetLoadedAssemblies();
             foreach (var excludedAssembly in ExcludedBakingSystemAssemblies.Select(lazy => lazy.asset))
             {
                 if (excludedAssembly != null)

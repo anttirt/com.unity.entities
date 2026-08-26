@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AspectGenerator", "AspectGenerator\AspectGenerator.csproj", "{B5BE583B-2613-4C0C-B9A3-CA9349609B18}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Common", "Common\Common.csproj", "{A4E2BD63-8220-49FF-A2EE-4D481E0CB912}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SystemGenerator.EntityQueryBulkOperations", "SystemGenerator.EntityQueryBulkOperations\SystemGenerator.EntityQueryBulkOperations.csproj", "{F72A3E86-40A0-49EC-8835-678AA2B761D9}"
@@ -12,8 +10,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SystemGenerator.SystemAPI.Query", "SystemGenerator.SystemAPI.Query\SystemGenerator.SystemAPI.Query.csproj", "{6B299371-AD2C-4C78-8644-B41638ED8244}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JobEntityGenerator", "JobEntityGenerator\JobEntityGenerator.csproj", "{983DC9C5-96F8-450E-BCEE-C36CEEB7C60C}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SystemGenerator.LambdaJobs", "SystemGenerator.LambdaJobs\SystemGenerator.LambdaJobs.csproj", "{3D96E430-7446-47A5-9217-3273AD16D305}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SystemGenerator.SystemAPI", "SystemGenerator.SystemAPI\SystemGenerator.SystemAPI.csproj", "{6A23DEFF-EBF0-4D7F-8392-3AA950EE983D}"
 EndProject

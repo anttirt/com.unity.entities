@@ -1,35 +1,47 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-﻿using Unity.Entities.Tests;
+using Unity.Burst;
+using Unity.Entities.Tests;
 using Unity.Mathematics;
 
 namespace Unity.Entities.Editor.Tests
 {
     partial class UpdateSingleLiveProperties : SystemBase
     {
-        protected override void OnUpdate()
+        [BurstCompile]
+        partial struct UpdateSingleLivePropertiesJob : IJobEntity
         {
-            Entities.ForEach((ref ManualConversionComponentTest comp) =>
+            void Execute(ref ManualConversionComponentTest comp)
             {
                 comp.BindInt = 1;
                 comp.BindFloat = 1.5f;
                 comp.BindBool = false;
                 comp.BindQuaternion.value = new float4(3.0f, 4.0f, 5.0f, 6.0f);
                 comp.BindVector3 = new float3(3.0f, 4.0f, 5.0f);
-            }).Schedule();
+            }
+        }
+
+        protected override void OnUpdate()
+        {
+            new UpdateSingleLivePropertiesJob().Schedule();
         }
     }
 
     partial class UpdateMultipleLiveProperties : SystemBase
     {
-        protected override void OnUpdate()
+        [BurstCompile]
+        partial struct UpdateMultipleLivePropertiesJob : IJobEntity
         {
-            Entities.ForEach((ref BindingRegistryIntComponent comp) =>
+            void Execute(ref BindingRegistryIntComponent comp)
             {
                 comp.Int1  = 1;
                 comp.Int2  = new int2(1, 2);
                 comp.Int3 = new int3(1, 2, 3);
                 comp.Int4 = new int4(1, 2, 3, 4);
-            }).Schedule();
+            }
+        }
+
+        protected override void OnUpdate()
+        {
+            new UpdateMultipleLivePropertiesJob().Schedule();
         }
     }
 }

@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.UI
@@ -9,9 +8,7 @@ namespace Unity.Entities.UI
     /// properties of the target, inspector types deriving from <see cref="PropertyInspector{TValue}"/> and
     /// <see cref="PropertyInspector{TValue, TAttribute}"/> will be considered.
     /// </summary>
-#if UNITY_2023_3_OR_NEWER
     [UxmlElement]
-#endif
     internal sealed partial class InspectorElement : BindingContextElement
     {
         /// <summary>
@@ -26,22 +23,5 @@ namespace Unity.Entities.UI
             element.SetTarget(value);
             return element;
         }
-
-#if !UNITY_2023_3_OR_NEWER
-        /// <summary>
-        ///   <para>Instantiates a <see cref="InspectorElement"/> using the data read from a UXML file.</para>
-        /// </summary>
-        [UsedImplicitly]
-        class InspectorElementFactory : UxmlFactory<InspectorElement, InspectorElementTraits>
-        {
-        }
-
-        /// <summary>
-        ///   <para>Defines UxmlTraits for the <see cref="InspectorElement"/>.</para>
-        /// </summary>
-        class InspectorElementTraits : UxmlTraits
-        {
-        }
-#endif
     }
 }

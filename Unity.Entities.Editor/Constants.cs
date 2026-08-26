@@ -19,20 +19,14 @@ namespace Unity.Entities.Editor
             // The rest doesn't specially matter, but we keep Archetypes next to the above because it is thematically close to those
             const int k_BaseWindowPriority = 3006;
 
-            public const string HierarchyWindow = k_WindowRoot + "Hierarchy";
+            public const string HierarchyWindow = k_WindowRoot + "Hierarchy (Deprecated)";
             public const int HierarchyWindowPriority = k_BaseWindowPriority;
 
-            public const string ComponentsWindow = k_WindowRoot + "Components";
-            public const int ComponentsWindowPriority = k_BaseWindowPriority + 1;
-
             public const string SystemScheduleWindow = k_WindowRoot + "Systems";
-            public const int SystemScheduleWindowPriority = k_BaseWindowPriority + 2;
+            public const int SystemScheduleWindowPriority = k_BaseWindowPriority + 1;
 
-            public const string ArchetypesWindow = k_WindowRoot + "Archetypes";
-            public const int ArchetypesWindowPriority = k_BaseWindowPriority + 3;
-
-            public const string JournalingWindow = k_WindowRoot + "Journaling";
-            public const int JournalingWindowPriority = k_BaseWindowPriority + 4;
+            public const string JournalingWindow = k_WindowRoot + "Journaling (Deprecated)";
+            public const int JournalingWindowPriority = k_BaseWindowPriority + 2;
         }
 
         public static class ListView
@@ -88,9 +82,7 @@ namespace Unity.Entities.Editor
             public const int MaxVisibleSystemCount = 50;
             public const double CoolDownTime = 300;
             public static readonly string EmptyRelationshipMessage = L10n.Tr("No relationships.");
-            public static readonly string EmptyAspectsMessage = L10n.Tr("No aspects.");
             public const string k_ComponentToken = "c:";
-            public const string k_AspectToken = "aspect:";
         }
     }
 }

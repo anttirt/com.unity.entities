@@ -80,7 +80,7 @@ namespace Unity.Entities.Editor
                                             bool includeCreateEmptyChild,
                                             bool useCreateEmptyParentMenuItem,
                                             bool includeGameObjectInPath,
-                                            int targetSceneHandle,
+                                            SceneHandle targetSceneHandle,
                                             MenuUtilsBridge.ContextMenuOrigin origin)
         {
             MenuUtilsBridge.AddCreateGameObjectItemsToMenu(k_MenuWrapper.GenericMenu, context, includeCreateEmptyChild, useCreateEmptyParentMenuItem, includeGameObjectInPath, targetSceneHandle, origin);

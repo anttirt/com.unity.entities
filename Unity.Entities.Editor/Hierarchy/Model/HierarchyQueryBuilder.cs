@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using UnityEngine.Pool;
 
 namespace Unity.Entities.Editor
 {
@@ -21,7 +22,7 @@ namespace Unity.Entities.Editor
             if (matches.Count == 0)
                 return Result.Valid(null, input);
 
-            using var componentTypes = PooledHashSet<ComponentType>.Make();
+            using var _ = HashSetPool<ComponentType>.Get(out var componentTypes);
 
             k_UnmatchedInputBuilder.Clear();
 
@@ -45,7 +46,7 @@ namespace Unity.Entities.Editor
                 foreach (var result in results)
                 {
                     resultFound = true;
-                    componentTypes.Set.Add(result);
+                    componentTypes.Add(result);
                 }
 
                 if (!resultFound)
@@ -55,18 +56,18 @@ namespace Unity.Entities.Editor
             if (input.Length - pos > 0)
                 k_UnmatchedInputBuilder.Append(input.Substring(pos));
 
-            if (componentTypes.Set.Count == 0 && k_UnmatchedInputBuilder.Length == 0)
+            if (componentTypes.Count == 0 && k_UnmatchedInputBuilder.Length == 0)
                 return Result.Invalid(string.Empty);
 
             // Entity type is legal in UI, but not allowed in EntityQuery, so remove it.
             var entityTypeIndex = TypeManager.GetTypeIndex<Entity>();
-            componentTypes.Set.RemoveWhere(t => t.TypeIndex == entityTypeIndex);
+            componentTypes.RemoveWhere(t => t.TypeIndex == entityTypeIndex);
 
             return Result.Valid(new EntityQueryDesc
             {
                 // Temp patch: Using `All` since most users seem to prefer that behaviour.
                 // The real solution is to properly support entity queries in search.
-                All = componentTypes.Set.ToArray(),
+                All = componentTypes.ToArray(),
                 Options = EntityQueryOptions.IncludePrefab | EntityQueryOptions.IncludeDisabledEntities
             }, k_UnmatchedInputBuilder.ToString());
         }

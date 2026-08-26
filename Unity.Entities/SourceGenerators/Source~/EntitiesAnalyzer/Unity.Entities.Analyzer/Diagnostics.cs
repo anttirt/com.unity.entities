@@ -108,5 +108,11 @@ namespace Unity.Entities.Analyzer
             = new DiagnosticDescriptor(ID_EA0016, "SystemState must be passed by ref",
                 "SystemState must be passed by ref",
                 "Type", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
+        public const string ID_EA0017 = "EA0017";
+        public static readonly DiagnosticDescriptor k_Ea0017Descriptor
+            = new DiagnosticDescriptor(ID_EA0017, "Struct ISharedComponentData contains managed fields",
+                "Struct '{0}' implements ISharedComponentData but contains managed fields. The managed-shared-component code path is deprecated and will be removed. Convert managed fields to UnityObjectRef<T> (for UnityEngine.Object references) or otherwise make the struct unmanaged. Define UNITY_DISABLE_MANAGED_SHARED_COMPONENT_WARNINGS to silence this warning. First deprecated in 6.6.",
+                "Type", DiagnosticSeverity.Warning, isEnabledByDefault: true);
     }
 }

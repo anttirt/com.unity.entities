@@ -172,6 +172,19 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
             if (triviaKind == SyntaxKind.EndOfLineTrivia)
                 _currentMethodAndPropertyWriter.WriteLine();
 
+            // Preserve user-authored #pragma warning disable/restore so suppressions
+            // wrapping source-gen-rewritten code survive into the generated method.
+            // The trailing newline is absorbed inside the directive's structured trivia,
+            // so emit one explicitly — pragmas must end their line. Also emit a leading
+            // newline because the pragma's leading whitespace can land mid-expression
+            // (e.g. inside a rewritten invocation's argument list), and pragmas must
+            // begin a line.
+            else if (triviaKind == SyntaxKind.PragmaWarningDirectiveTrivia)
+            {
+                _currentMethodAndPropertyWriter.WriteLine();
+                _currentMethodAndPropertyWriter.WriteLine(trivia.ToString());
+            }
+
             else if (triviaKind != SyntaxKind.DisabledTextTrivia &&
                 triviaKind != SyntaxKind.PreprocessingMessageTrivia &&
                 triviaKind != SyntaxKind.IfDirectiveTrivia &&

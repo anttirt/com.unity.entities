@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
@@ -44,13 +43,12 @@ partial class DeleteComponentBakingSystem : SystemBase
     protected override void OnUpdate()
     {
         NativeList<Entity> toDelete = new NativeList<Entity>(Allocator.Temp);
-        Entities.ForEach((Entity entity, in TestDeletePrimaryComponent auth) =>
+
+        foreach (var (auth, entity) in SystemAPI.Query<RefRO<TestDeletePrimaryComponent>>().WithEntityAccess())
         {
-            if (auth.delete)
-            {
+            if (auth.ValueRO.delete)
                 toDelete.Add(entity);
-            }
-        }).Run();
+        }
 
         if (toDelete.Length > 0)
         {

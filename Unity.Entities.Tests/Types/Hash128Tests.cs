@@ -93,10 +93,10 @@ namespace Unity.Entities.Tests.Types
         public void Conversions_MatchUnityEditor()
         {
             var hashEntities = new Hash128(1, 2, 3, 4);
-            var hashUnity = new UnityEditor.GUID("10000000200000003000000040000000");
+            var hashUnity = new UnityEngine.GUID("10000000200000003000000040000000");
 
             var hashUnityToEntities = (Hash128)hashUnity;
-            var hashEntitiesToUnity = (UnityEditor.GUID)hashEntities;
+            var hashEntitiesToUnity = (UnityEngine.GUID)hashEntities;
 
             Assert.That(hashEntities, Is.EqualTo(hashUnityToEntities));
             Assert.That(hashUnity, Is.EqualTo(hashEntitiesToUnity));

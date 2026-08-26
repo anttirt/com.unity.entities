@@ -132,9 +132,16 @@ namespace Unity.Entities.SourceGen.SystemGenerator.Common
                 }
             }
 
+            // Generator-emitted helpers (IFE_* structs, type handles, OnCreateForCompiler) may
+            // mention types the user has marked [Obsolete]. The user-source warning already fires
+            // at the original call site; re-disable here so a user-authored `restore 0618` inside
+            // a method body — pragmas are file-level, not scoped — doesn't re-enable CS0618 across
+            // the helpers below.
+            indentedTextWriter.WriteLine("#pragma warning disable 0618");
             AddMiscellaneousMembers(indentedTextWriter, allDescriptionsForTheSameSystem);
             AddEntityCommandBufferSystemFields(indentedTextWriter, allDescriptionsForTheSameSystem);
             AddOnCreateForCompilerWithFields(indentedTextWriter, allDescriptionsForTheSameSystem, description.SystemType == SystemType.ISystem);
+            indentedTextWriter.WriteLine("#pragma warning restore 0618");
 
             for (int i = 0; i < result.NumNotClosedIfDirectives; i++)
                 indentedTextWriter.WriteLine("#endif");

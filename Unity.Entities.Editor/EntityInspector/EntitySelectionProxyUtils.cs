@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Unity.Entities;
 using Unity.Entities.Editor;
@@ -11,32 +10,50 @@ static class EntitySelectionProxyUtility
     [InitializeOnLoadMethod]
     static void Subscribe()
     {
-        HandleUtility.getEntitiesForAuthoringObject += GetEntitiesForAuthoringObject;
+        Unity.Editor.Bridge.HandleUtilityBridge.RegisterEntityIdFromIndexResolver(GetEntityIdFromIndex);
+        HandleUtility.getEntityIdsForAuthoringObject += GetEntitiesForAuthoringObject;
         HandleUtility.getAuthoringObjectForEntity += GetAuthoringObjectForEntity;
     }
 
-    static IEnumerable<int> GetEntitiesForAuthoringObject(UnityObject obj)
+    /// <summary>
+    /// Resolves an entity index to an EntityId.
+    /// </summary>
+    /// <param name="index">The entity index to resolve.</param>
+    /// <returns>The EntityId of the entity at the given index, or EntityId.None if not found in any world.</returns>
+    static EntityId GetEntityIdFromIndex(int index)
+    {
+        var allWorlds = World.All;
+        for (var i = 0; i < allWorlds.Count; ++i)
+        {
+            var entity = allWorlds[i].EntityManager.GetEntityByEntityIndex(index);
+            if (entity != Entity.Null)
+                return (EntityId)entity;
+        }
+        return EntityId.None;
+    }
+
+    static IEnumerable<EntityId> GetEntitiesForAuthoringObject(UnityObject obj)
     {
         World world = World.DefaultGameObjectInjectionWorld;
 
         if (world == null)
         {
-            yield return 0;
+            yield return EntityId.None;
         }
         else if (obj is GameObject gameObject)
         {
             var debug = world.EntityManager.Debug;
             var map = debug.GetCachedEntityGUIDToEntityIndexLookup();
-            var instanceID = gameObject.GetInstanceID();
+            var entityId = gameObject.GetEntityId();
 
-            foreach (var entity in map.GetValuesForKey(instanceID))
+            foreach (var entity in map.GetValuesForKey(entityId))
             {
-                yield return entity.Index;
+                yield return entity;
             }
         }
         else if (obj is EntitySelectionProxy proxy)
         {
-            yield return proxy.Entity.Index;
+            yield return proxy.Entity;
         }
     }
 
@@ -54,11 +71,15 @@ static class EntitySelectionProxyUtility
             }
         }
 
-        Debug.Assert(entity != Entity.Null, "Entity is invalid.");
-        Debug.Assert(world != null, "Entity does not belong to any world.");
-
-        UnityObject authoringObject = world.EntityManager.Debug.GetAuthoringObjectForEntity(entity);
-
+        UnityObject authoringObject = null;
+        
+        if (entity == Entity.Null)
+            Debug.LogWarning($"Could not find the entity with index: {entityIndex}");
+        else if (world == null)
+            Debug.LogWarning($"Could not find a world which Entity {entity} belongs to.");
+        else
+            authoringObject = world.EntityManager.Debug.GetAuthoringObjectForEntity(entity);
+        
         // If we did not find the GameObject associated with this entity, try to find it in the current selection.
         // We don't want to create a new EntitySelectionProxy for an Entity that is already selected. Otherwise some features like Ctrl+click to deselect an Entity won't work.
         // For example, Ctrl+click is basically checking if the newly picked object is already in the Selection.objects in list. If this is the case, then it deselects it.
@@ -78,7 +99,7 @@ static class EntitySelectionProxyUtility
             }
         }
 
-        if (authoringObject == null)
+        if (authoringObject == null && world != null)
             authoringObject = EntitySelectionProxy.CreateInstance(world, entity);
 
         return authoringObject;

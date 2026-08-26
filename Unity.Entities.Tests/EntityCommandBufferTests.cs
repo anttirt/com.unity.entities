@@ -60,7 +60,7 @@ namespace Unity.Entities.Tests
         [Test]
         public void Playback_WithSinglePlaybackPolicy_ThrowsOnMultiplePlaybacks()
         {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.SinglePlayback);
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             // First playback should succeed
             Assert.DoesNotThrow(() => {cmds.Playback(m_Manager); });
             // Subsequent playback attempts fail
@@ -72,13 +72,63 @@ namespace Unity.Entities.Tests
         [Test]
         public void Playback_WithMultiPlaybackPolicy_DoesNotThrow()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             // First playback should succeed
             Assert.DoesNotThrow(() => {cmds.Playback(m_Manager); });
             // Subsequent playback attempts should not fail
             Assert.DoesNotThrow(() => {cmds.Playback(m_Manager); });
             // Playback on a second EntityManager also does not fail
             Assert.DoesNotThrow(() => {cmds.Playback(m_Manager2); });
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void Playback_InterruptedByException_DoesNotDoubleDisposeDynamicBuffers()
+        {
+            // repro case for UUM-131632
+
+            var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            var x = m_Manager.CreateEntity();
+            var y = m_Manager.CreateEntity();
+
+            var bx = cmds.AddBuffer<EcsIntElement>(x);
+            var by = cmds.AddBuffer<EcsIntElement>(y);
+
+            // add enough elements to the buffers to make them
+            // exceed their internal capacity and rely on heap allocations
+
+            for (int i = 0; i < 20; ++i)
+            {
+                bx.Add(i);
+                by.Add(i);
+            }
+
+            // destroy the SECOND entity, this way the ECB playback will throw
+            m_Manager.DestroyEntity(y);
+
+            // this will store the first buffer just fine
+            // but since the second entity is missing, it'll throw afterward
+
+            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
+
+            // because the ECB playback has thrown, the ECB has m_DidPlayback == false
+            // when cleaning up the ECB, the unassigned dynamic buffers should be disposed
+            // this test is about making sure it will not also dispose of the buffer that
+            // now belongs to the entity, and will only dispose the one for the second entity
+
+            cmds.Dispose();
+
+            // destroying the first entity will dispose of its dynamic buffer
+            // which is expected to have survived the cleanup of the ECB
+
+            m_Manager.DestroyEntity(x);
+
+            // the problem this regression test guards against is that the ECB used to
+            // indiscriminately dispose all of the dynamic buffers, and destroying the first
+            // entity would cause a double free (and a crash)
         }
 
         unsafe bool CleanupListsAreEmpty(EntityCommandBufferChain* chain)
@@ -99,11 +149,7 @@ namespace Unity.Entities.Tests
                 return false;
             if (ecb.m_Data->m_ThreadedChains != null)
             {
-#if UNITY_2022_2_14F1_OR_NEWER
                 int maxThreadCount = JobsUtility.ThreadIndexCount;
-#else
-                int maxThreadCount = JobsUtility.MaxJobThreadCount;
-#endif
                 for (int i = 0; i < maxThreadCount; ++i)
                 {
                     if (!CleanupListsAreEmpty(&ecb.m_Data->m_ThreadedChains[i]))
@@ -118,7 +164,7 @@ namespace Unity.Entities.Tests
         {
             // Create an ECB with a pathologically large number of chains
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.SinglePlayback);
+            var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             var ecbp = ecb.AsParallelWriter();
             for (int sortKey = 10000; sortKey > 0; --sortKey)
             {
@@ -133,7 +179,7 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
             m_Manager.CreateEntity(archetype, 100);
             using(var query = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
-            using(var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.SinglePlayback))
+            using(var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 cmds.AddComponent<EcsTestTag>(query, EntityQueryCaptureMode.AtRecord);
@@ -156,7 +202,7 @@ namespace Unity.Entities.Tests
             m_Manager.CreateEntity(archetype, 100);
             var ent = m_Manager.CreateEntity(archetype);
             using(var query = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
-            using(var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.SinglePlayback))
+            using(var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
                 cmds.AddComponent<EcsTestData2>(ent);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
@@ -249,15 +295,15 @@ namespace Unity.Entities.Tests
         [BurstCompile]
         internal partial struct TestECBSystemInteractionSystem : ISystem
         {
-            public Entity DeferredEntity;
+            public Entity CreatedEntity;
 
             [BurstCompile]
             public void OnUpdate(ref SystemState state)
             {
                 var ecb = SystemAPI.GetSingletonRW<TestEntityCommandBufferSystem.Singleton>().ValueRW.CreateCommandBuffer(state.WorldUnmanaged);
 
-                DeferredEntity = ecb.CreateEntity();
-                ecb.AddComponent(DeferredEntity, new EcsTestData(43));
+                CreatedEntity = ecb.CreateEntity();
+                ecb.AddComponent(CreatedEntity, new EcsTestData(43));
             }
         }
 
@@ -318,7 +364,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void SingleWriterEnforced()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var job = new TestJob {Buffer = cmds};
 
             var e = cmds.CreateEntity();
@@ -435,7 +483,7 @@ namespace Unity.Entities.Tests
             var sharedGroup = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp));
             var entities = sharedGroup.ToEntityArray(World.UpdateAllocator.ToAllocator);
             Assert.AreEqual(1, entities.Length);
-            Assert.AreEqual(19, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[0]).value);
+            Assert.AreEqual(19, m_Manager.GetSharedComponent<EcsTestSharedComp>(entities[0]).value);
             sharedGroup.Dispose();
         }
 
@@ -482,8 +530,15 @@ namespace Unity.Entities.Tests
         [Test]
         public void CreateEntity()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
+            var e2 = cmds.CreateEntity();
+            var e3 = cmds.CreateEntity();
+            var e4 = cmds.CreateEntity();
+            cmds.DestroyEntity(e3);
+            var e5 = cmds.CreateEntity();
             cmds.AddComponent(e, new EcsTestData { value = 12 });
             cmds.Playback(m_Manager);
             cmds.Playback(m_Manager2);
@@ -504,11 +559,85 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public void CreateEntity_CreatesRealEntity()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            var e = cmds.CreateEntity();
+
+            Assert.IsTrue(EntityComponentStore.s_entityStore.Data.Exists(e));
+
+            cmds.AddComponent(e, new Character { Entity = e, MovementSpeed = 12});
+            cmds.Playback(m_Manager);
+
+            Assert.IsTrue(m_Manager.HasComponent<Character>(e));
+            var com = m_Manager.GetComponentData<Character>(e);
+            Assert.AreEqual(12, com.MovementSpeed);
+            Assert.AreEqual(e, com.Entity);
+        }
+
+        [Test]
+        public void CreateEntity_WithReturnedNativeArray_CreatesRealEntity()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            int count = 10;
+            NativeArray<Entity> entities = cmds.CreateEntity(count, Allocator.Persistent);
+
+            for (int i = 0; i < count; i++)
+            {
+                Assert.IsTrue(EntityComponentStore.s_entityStore.Data.Exists(entities[i]));
+                cmds.AddComponent(entities[i], new Character { Entity = entities[i], MovementSpeed = 12});
+            }
+
+            cmds.Playback(m_Manager);
+
+            for (int i = 0; i < count; i++)
+            {
+                Assert.IsTrue(m_Manager.HasComponent<Character>(entities[i]));
+                var com = m_Manager.GetComponentData<Character>(entities[i]);
+                Assert.AreEqual(12, com.MovementSpeed);
+                Assert.AreEqual(entities[i], com.Entity);
+            }
+
+            entities.Dispose();
+        }
+
+        [Test]
+        public void CreateEntity_WithPassedInNativeArray_CreatesRealEntity()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            int count = 10;
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
+            NativeArray<Entity> entities =  new NativeArray<Entity>(count, Allocator.Persistent);
+            cmds.CreateEntity(archetype, entities);
+
+            for (int i = 0; i < count; i++)
+            {
+                Assert.IsTrue(EntityComponentStore.s_entityStore.Data.Exists(entities[i]));
+                cmds.AddComponent(entities[i], new Character { Entity = entities[i], MovementSpeed = 12});
+            }
+
+            cmds.Playback(m_Manager);
+
+            for (int i = 0; i < count; i++)
+            {
+                Assert.IsTrue(m_Manager.HasComponent<Character>(entities[i]));
+                Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(entities[i]));
+                var com = m_Manager.GetComponentData<Character>(entities[i]);
+                Assert.AreEqual(12, com.MovementSpeed);
+                Assert.AreEqual(entities[i], com.Entity);
+            }
+
+            entities.Dispose();
+        }
+
+        [Test]
         public void CreateEntityWithArchetype()
         {
             var a = m_Manager.CreateArchetype(typeof(EcsTestData));
 
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity(a);
             cmds.SetComponent(e, new EcsTestData { value = 12 });
             cmds.Playback(m_Manager);
@@ -546,7 +675,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void CreateTwoComponents()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
             cmds.AddComponent(e, new EcsTestData { value = 12 });
             cmds.AddComponent(e, new EcsTestData2 { value0 = 1, value1 = 2 });
@@ -593,7 +724,9 @@ namespace Unity.Entities.Tests
         {
             const int count = 65536;
 
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             cmds.MinimumChunkSize = 512;
 
             for (int i = 0; i < count; i++)
@@ -657,7 +790,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void AddSharedComponentDefault()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
 
             var e = cmds.CreateEntity();
             cmds.AddSharedComponent(e, new EcsTestSharedComp(10));
@@ -670,8 +805,10 @@ namespace Unity.Entities.Tests
                 var sharedComp1List = new List<EcsTestSharedComp>();
                 var sharedComp2List = new List<EcsTestSharedComp2>();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.GetAllUniqueSharedComponentsManaged(sharedComp1List);
                 m_Manager.GetAllUniqueSharedComponentsManaged(sharedComp2List);
+                #pragma warning restore 0618
 
                 // the count must be 2 - the default value of the shared component and the one we actually set
                 Assert.AreEqual(2, sharedComp1List.Count);
@@ -684,8 +821,10 @@ namespace Unity.Entities.Tests
                 var sharedComp1List = new List<EcsTestSharedComp>();
                 var sharedComp2List = new List<EcsTestSharedComp2>();
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager2.GetAllUniqueSharedComponentsManaged(sharedComp1List);
                 m_Manager2.GetAllUniqueSharedComponentsManaged(sharedComp2List);
+                #pragma warning restore 0618
 
                 // the count must be 2 - the default value of the shared component and the one we actually set
                 Assert.AreEqual(2, sharedComp1List.Count);
@@ -975,10 +1114,12 @@ namespace Unity.Entities.Tests
             cmds.Playback(m_Manager);
 
             var sharedCompList = new List<EcsTestSharedComp>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp>(sharedCompList);
+            #pragma warning restore 0618
 
             Assert.AreEqual(1, sharedCompList.Count);
-            Assert.AreEqual(0, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e).value);
+            Assert.AreEqual(0, m_Manager.GetSharedComponent<EcsTestSharedComp>(e).value);
         }
 
         [Test]
@@ -1008,7 +1149,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void SetSharedComponentDefault()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
 
             var e = cmds.CreateEntity();
             cmds.AddSharedComponent(e, new EcsTestSharedComp(10));
@@ -1019,14 +1162,18 @@ namespace Unity.Entities.Tests
 
             {
                 var sharedCompList = new List<EcsTestSharedComp>();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp>(sharedCompList);
+                #pragma warning restore 0618
 
                 Assert.AreEqual(1, sharedCompList.Count);
                 Assert.AreEqual(0, sharedCompList[0].value);
             }
             {
                 var sharedCompList = new List<EcsTestSharedComp>();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager2.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp>(sharedCompList);
+                #pragma warning restore 0618
 
                 Assert.AreEqual(1, sharedCompList.Count);
                 Assert.AreEqual(0, sharedCompList[0].value);
@@ -1037,7 +1184,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void SetSharedComponentNonDefault()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var index = TypeManager.GetTypeIndex<EcsTestSharedComp>();
 
             var e = cmds.CreateEntity();
@@ -1049,14 +1198,18 @@ namespace Unity.Entities.Tests
 
             {
                 var sharedCompList = new List<EcsTestSharedComp>();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp>(sharedCompList);
+                #pragma warning restore 0618
 
                 Assert.AreEqual(2, sharedCompList.Count);
                 Assert.AreEqual(10, sharedCompList[1].value);
             }
             {
                 var sharedCompList = new List<EcsTestSharedComp>();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager2.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp>(sharedCompList);
+                #pragma warning restore 0618
 
                 Assert.AreEqual(2, sharedCompList.Count);
                 Assert.AreEqual(10, sharedCompList[1].value);
@@ -1070,7 +1223,7 @@ namespace Unity.Entities.Tests
 
             var entity = m_Manager.CreateEntity();
             var sharedComponent = new EcsTestSharedComp(10);
-            m_Manager.AddSharedComponentManaged(entity, sharedComponent);
+            m_Manager.AddSharedComponent(entity, sharedComponent);
 
             cmds.RemoveComponent<EcsTestSharedComp>(entity);
 
@@ -1235,7 +1388,7 @@ namespace Unity.Entities.Tests
 
             Assert.DoesNotThrow(() => { cmds.Playback(m_Manager); });
 
-            Assert.AreEqual(42, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+            Assert.AreEqual(42, m_Manager.GetSharedComponent<EcsTestSharedComp>(entity).value);
         }
 
         [Test]
@@ -1250,22 +1403,6 @@ namespace Unity.Entities.Tests
             Assert.DoesNotThrow(() => { cmds.Playback(m_Manager); });
 
             Assert.AreEqual(42, m_Manager.GetSharedComponent<EcsTestSharedComp>(entity).value);
-        }
-
-        [Test]
-        public void AddSharedComponent_WithEntityFixup_Works()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            var entity = m_Manager.CreateEntity();
-            var e2 = cmds.CreateEntity();
-            cmds.AddComponent<EcsTestTag>(e2);
-            cmds.AddSharedComponent(entity, new EcsTestSharedCompEntity(e2));
-
-            Assert.DoesNotThrow(() => { cmds.Playback(m_Manager); });
-
-            var actualValue = m_Manager.GetSharedComponent<EcsTestSharedCompEntity>(entity);
-            Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value));
         }
 
         [Test]
@@ -1313,7 +1450,9 @@ namespace Unity.Entities.Tests
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
             {
                 var originalVal = new EcsTestManagedComponent();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddComponentObject(entityQuery, originalVal);
+                #pragma warning restore 0618
 
                 // modifying entities between record and playback should be OK
                 m_Manager.AddComponent<EcsTestData5>(originalEntities[0]);
@@ -1328,7 +1467,9 @@ namespace Unity.Entities.Tests
                     for (int i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var val = m_Manager.GetComponentObject<EcsTestManagedComponent>(e);
+                        #pragma warning restore 0618
                         Assert.AreSame(originalVal, val);
                     }
                 }
@@ -1345,7 +1486,9 @@ namespace Unity.Entities.Tests
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
             {
                 var originalVal = new EcsTestManagedComponent();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddComponentObject(entityQuery, originalVal);
+                #pragma warning restore 0618
 
                 // modifying entities between record and playback should be OK
                 m_Manager.AddComponent<EcsTestData5>(originalEntities[0]);
@@ -1360,7 +1503,9 @@ namespace Unity.Entities.Tests
                     for (int i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var val = m_Manager.GetComponentObject<EcsTestManagedComponent>(e);
+                        #pragma warning restore 0618
                         Assert.AreSame(originalVal, val);
                     }
                 }
@@ -1377,7 +1522,9 @@ namespace Unity.Entities.Tests
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
             {
                 var originalVal = new EcsTestManagedComponent();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetComponentObject(entityQuery, originalVal);
+                #pragma warning restore 0618
 
                 // modifying entities between record and playback should be OK
                 m_Manager.AddComponent<EcsTestData5>(originalEntities[0]);
@@ -1392,7 +1539,9 @@ namespace Unity.Entities.Tests
                     for (int i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var val = m_Manager.GetComponentObject<EcsTestManagedComponent>(e);
+                        #pragma warning restore 0618
                         Assert.AreSame(originalVal, val);
                     }
                 }
@@ -1451,8 +1600,8 @@ namespace Unity.Entities.Tests
             m_Manager.AddComponentData(entity, data1);
             m_Manager.AddComponentData(entity2, data1);
             m_Manager.AddComponentData(entity3, data1);
-            m_Manager.AddSharedComponentManaged(entity2, new EcsTestSharedComp(8));  // entity that already has the component should have it set
-            m_Manager.AddSharedComponentManaged(entity3, new EcsTestSharedComp(9));  // entity that already has the component should have it set
+            m_Manager.AddSharedComponent(entity2, new EcsTestSharedComp(8));  // entity that already has the component should have it set
+            m_Manager.AddSharedComponent(entity3, new EcsTestSharedComp(9));  // entity that already has the component should have it set
 
             // these entities don't match the query and so should remain unaffected
             m_Manager.CreateEntity();
@@ -1476,7 +1625,7 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < entities.Length; i++)
                 {
                     var e = entities[i];
-                    Assert.AreEqual(5, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e).value,
+                    Assert.AreEqual(5, m_Manager.GetSharedComponent<EcsTestSharedComp>(e).value,
                         "A component did not have the correct value.");
 
                     Assert.AreEqual(3, m_Manager.GetComponentCount(e)); // +1 for Simulate tag
@@ -1495,9 +1644,9 @@ namespace Unity.Entities.Tests
             m_Manager.AddComponentData(entity, data1);
             m_Manager.AddComponentData(entity2, data1);
             m_Manager.AddComponentData(entity3, data1);
-            m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp(10));
-            m_Manager.AddSharedComponentManaged(entity2, new EcsTestSharedComp(8));
-            m_Manager.AddSharedComponentManaged(entity3, new EcsTestSharedComp(9));  // entity that already has the component should have it set
+            m_Manager.AddSharedComponent(entity, new EcsTestSharedComp(10));
+            m_Manager.AddSharedComponent(entity2, new EcsTestSharedComp(8));
+            m_Manager.AddSharedComponent(entity3, new EcsTestSharedComp(9));  // entity that already has the component should have it set
 
             // these entities don't match the query and so should remain unaffected
             m_Manager.CreateEntity();
@@ -1521,7 +1670,7 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < entities.Length; i++)
                 {
                     var e = entities[i];
-                    Assert.AreEqual(5, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e).value,
+                    Assert.AreEqual(5, m_Manager.GetSharedComponent<EcsTestSharedComp>(e).value,
                          "A component did not have the correct value.");
 
                     Assert.AreEqual(3, m_Manager.GetComponentCount(e)); // +1 for Simulate tag
@@ -1551,7 +1700,7 @@ namespace Unity.Entities.Tests
             var data1 = new EcsTestData();
             m_Manager.AddComponentData(entity, data1);
             m_Manager.AddComponentData(entity2, data1);
-            m_Manager.AddSharedComponentManaged(entity2, new EcsTestSharedComp(8));
+            m_Manager.AddSharedComponent(entity2, new EcsTestSharedComp(8));
 
             // these entities don't match the query and so should remain unaffected
             m_Manager.CreateEntity();
@@ -1846,24 +1995,24 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             var entity3 = m_Manager.CreateEntity(archetype);
-            m_Manager.SetSharedComponentManaged(entity3, sharedComponent2);
+            m_Manager.SetSharedComponent(entity3, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.AddComponent(entityQuery, typeof(EcsTestData2), queryCaptureMode);
 
                 // modifying an entity in between recording and playback means it won't be processed by AtPlayback,
                 // but will still be processed by AtRecord
-                m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp { value = 200 });
+                m_Manager.SetSharedComponent(entity2, new EcsTestSharedComp { value = 200 });
                 m_Manager.AddComponent<EcsTestData3>(entity2);
 
                 cmds.Playback(m_Manager);
@@ -1886,16 +2035,16 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.AddComponent(entityQuery, new ComponentTypeSet(typeof(EcsTestData2), typeof(EcsTestData3)),
                     queryCaptureMode);
 
@@ -1904,7 +2053,7 @@ namespace Unity.Entities.Tests
 #pragma warning restore
                 {
                     // modifying the entity in between recording and playback should be OK
-                    m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp { value = 200 });
+                    m_Manager.SetSharedComponent(entity2, new EcsTestSharedComp { value = 200 });
                     m_Manager.AddComponent<EcsTestData3>(entity2);
                 }
 
@@ -1917,7 +2066,7 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
-                        var shared = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e);
+                        var shared = m_Manager.GetSharedComponent<EcsTestSharedComp>(e);
                         if (shared.value == 10)
                         {
                             Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(e));
@@ -1960,24 +2109,24 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             var entity3 = m_Manager.CreateEntity(archetype);
-            m_Manager.SetSharedComponentManaged(entity3, sharedComponent2);
+            m_Manager.SetSharedComponent(entity3, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestData)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.RemoveComponent(entityQuery, typeof(EcsTestData), queryCaptureMode);
 
                 // modifying an entity in between recording and playback means it won't be processed by AtPlayback,
                 // but will still be processed by AtRecord
-                m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp { value = 200 });
+                m_Manager.SetSharedComponent(entity2, new EcsTestSharedComp { value = 200 });
                 m_Manager.AddComponent<EcsTestData3>(entity2);
 
                 cmds.Playback(m_Manager);
@@ -2000,25 +2149,25 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             var entity3 = m_Manager.CreateEntity(archetype);
-            m_Manager.SetSharedComponentManaged(entity3, sharedComponent2);
+            m_Manager.SetSharedComponent(entity3, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestData)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.RemoveComponent(entityQuery, new ComponentTypeSet(typeof(EcsTestData), typeof(EcsTestData2)),
                     queryCaptureMode);
 
                 // modifying an entity in between recording and playback means it won't be processed by AtPlayback,
                 // but will still be processed by AtRecord
-                m_Manager.SetSharedComponentManaged(entity2, new EcsTestSharedComp { value = 200 });
+                m_Manager.SetSharedComponent(entity2, new EcsTestSharedComp { value = 200 });
                 m_Manager.AddComponent<EcsTestData3>(entity2);
 
                 cmds.Playback(m_Manager);
@@ -2051,19 +2200,19 @@ namespace Unity.Entities.Tests
                 m_Manager.SetComponentData(entity, new EcsTestData());
                 if (i % 2 == 0)
                 {
-                    m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(0));
+                    m_Manager.SetSharedComponent(entity, new EcsTestSharedComp(0));
                     originalEntities[i / 2] = entity;
                 }
                 else
                 {
-                    m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(1));
+                    m_Manager.SetSharedComponent(entity, new EcsTestSharedComp(1));
                 }
             }
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestData)))
             {
-                entityQuery.SetSharedComponentFilterManaged(new EcsTestSharedComp(0));
+                entityQuery.SetSharedComponentFilter(new EcsTestSharedComp(0));
                 var shared2 = new EcsTestSharedComp2();
                 cmds.AddSharedComponent(entityQuery, shared2, queryCaptureMode);
 
@@ -2078,7 +2227,7 @@ namespace Unity.Entities.Tests
                     CollectionAssert.AreEquivalent(entities, originalEntities);
                     for (int i = 0; i < entities.Length; i++)
                     {
-                        var value = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value;
+                        var value = m_Manager.GetSharedComponent<EcsTestSharedComp>(entities[i]).value;
                         Assert.AreEqual(0, value, "The shared component was not correctly added based on the EntityQueryFilter.");
                     }
                 }
@@ -2127,13 +2276,13 @@ namespace Unity.Entities.Tests
                 var entity = m_Manager.CreateEntity(archetype);
 
                 m_Manager.SetComponentData(entity, new EcsTestData());
-                m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp(i % 2));
+                m_Manager.SetSharedComponent(entity, new EcsTestSharedComp(i % 2));
             }
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestData)))
             {
-                entityQuery.SetSharedComponentFilterManaged(new EcsTestSharedComp(0));
+                entityQuery.SetSharedComponentFilter(new EcsTestSharedComp(0));
                 cmds.DestroyEntity(entityQuery, queryCaptureMode);
 
                 // modifying the entity in between recording and playback should be OK
@@ -2147,7 +2296,7 @@ namespace Unity.Entities.Tests
                         "Half of the entities should be deleted based on the filter of the EntityQuery.");
                     for (int i = 0; i < entities.Length; i++)
                     {
-                        var value = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entities[i]).value;
+                        var value = m_Manager.GetSharedComponent<EcsTestSharedComp>(entities[i]).value;
                         Assert.AreEqual(1, value, "Entity should have been deleted based on the EntityQueryFilter.");
                     }
                 }
@@ -2161,20 +2310,20 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 cmds.AddComponent(entityQuery, typeof(EcsTestData2), EntityQueryCaptureMode.AtRecord);
 #pragma warning restore
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent1);
+                entityQuery.SetSharedComponentFilter(sharedComponent1);
 
                 // modifying the entity in between recording and playback should be OK
                 m_Manager.AddComponent<EcsTestData3>(entityQuery);
@@ -2188,7 +2337,7 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
-                        var shared = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e);
+                        var shared = m_Manager.GetSharedComponent<EcsTestSharedComp>(e);
                         if (shared.value == 10)
                         {
                             Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(e));
@@ -2209,16 +2358,16 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
                 var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp));
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
 #pragma warning disable 0618 // EntityQueryCaptureMode.AtRecord is obsolete.
                 cmds.AddComponent(entityQuery, typeof(EcsTestData2), EntityQueryCaptureMode.AtRecord);
 #pragma warning restore
@@ -2237,7 +2386,7 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
-                        var shared = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e);
+                        var shared = m_Manager.GetSharedComponent<EcsTestSharedComp>(e);
                         if (shared.value == 10)
                         {
                             Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(e));
@@ -2274,7 +2423,9 @@ namespace Unity.Entities.Tests
             cmds.Playback(m_Manager);
 
             var list = new List<EcsTestSharedComp2>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.GetAllUniqueSharedComponentsManaged<EcsTestSharedComp2>(list);
+            #pragma warning restore 0618
 
             Assert.AreEqual(2, list.Count);
             Assert.AreEqual(0, list[0].value0);
@@ -2409,6 +2560,22 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public void Instantiate_CreatesRealEntity()
+        {
+            var srcEntity = m_Manager.CreateEntity();
+
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            var e = cmds.Instantiate(srcEntity);
+            cmds.AddComponent(e, new Character { Entity = e, MovementSpeed = 12});
+            cmds.Playback(m_Manager);
+
+            Assert.IsTrue(m_Manager.HasComponent<Character>(e));
+            var com = m_Manager.GetComponentData<Character>(e);
+            Assert.AreEqual(12, com.MovementSpeed);
+            Assert.AreEqual(e, com.Entity);
+        }
+
+        [Test]
         public void InstantiateWithNativeArray()
         {
             var e = m_Manager.CreateEntity();
@@ -2420,6 +2587,35 @@ namespace Unity.Entities.Tests
             cmds.Playback(m_Manager);
 
             VerifyEcsTestData(3, 5);
+        }
+
+        [Test]
+        public void InstantiateWithNativeArray_CreatesRealEntities()
+        {
+            var count = 20;
+            var srcEntity = m_Manager.CreateEntity();
+            var entities = CollectionHelper.CreateNativeArray<Entity>(count, World.UpdateAllocator.ToAllocator);
+
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            cmds.Instantiate(srcEntity, entities);
+
+            for (int i = 0; i < count; i++)
+            {
+                var e = entities[i];
+                cmds.AddComponent(e, new Character { Entity = e, MovementSpeed = i});
+            }
+
+            cmds.Playback(m_Manager);
+
+            for (int i = 0; i < count; i++)
+            {
+                var e = entities[i];
+                Assert.IsTrue(m_Manager.HasComponent<Character>(e));
+                var com = m_Manager.GetComponentData<Character>(e);
+                Assert.AreEqual(i, com.MovementSpeed);
+                Assert.AreEqual(e, com.Entity);
+            }
         }
 
         [Test]
@@ -2471,29 +2667,6 @@ namespace Unity.Entities.Tests
             cmds.Playback(m_Manager);
 
             Assert.AreEqual(es, m_Manager.GetSharedComponent<EcsTestSharedCompEntity>(es).value);
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DestroyInvalidEntity()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            var entityBuffer = CollectionHelper.CreateNativeArray<Entity, RewindableAllocator>(1, ref World.UpdateAllocator);
-            var e = cmds.CreateEntity();
-            cmds.AddComponent(e, new EcsTestData { value = 12 });
-            entityBuffer[0] = e;
-            cmds.Playback(m_Manager);
-
-            var savedEntity = entityBuffer[0];
-
-            using var cmds2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds2.DestroyEntity(savedEntity);
-
-            // savedEntity is invalid, so playing back this ECB should throw an exception
-            Assert.Throws<InvalidOperationException>(() =>
-            {
-                cmds2.Playback(m_Manager);
-            });
         }
 
         [Test]
@@ -2669,7 +2842,9 @@ namespace Unity.Entities.Tests
         [Test(Description = "Once a buffer command is played back, it has no side effects on the ECB.")]
         public void BufferChanged_BetweenPlaybacks_HasNoEffectOnECB()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
             DynamicBuffer<EcsIntElement> buffer = cmds.AddBuffer<EcsIntElement>(e);
             buffer.CopyFrom(new EcsIntElement[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
@@ -2737,7 +2912,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void AddBufferNoOverflow_MultiplePlaybacks()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
             DynamicBuffer<EcsIntElement> buffer = cmds.AddBuffer<EcsIntElement>(e);
             buffer.CopyFrom(new EcsIntElement[] { 1, 2, 3 });
@@ -2761,7 +2938,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void AddBufferOverflow_MultiplePlaybacks()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
             DynamicBuffer<EcsIntElement> buffer = cmds.AddBuffer<EcsIntElement>(e);
             buffer.CopyFrom(new EcsIntElement[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
@@ -2774,7 +2953,9 @@ namespace Unity.Entities.Tests
         [Test]
         public void AddBufferOverflow_MultiplePlaybacks_SingleManager()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
             DynamicBuffer<EcsIntElement> buffer = cmds.AddBuffer<EcsIntElement>(e);
             buffer.CopyFrom(new EcsIntElement[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
@@ -2880,43 +3061,6 @@ namespace Unity.Entities.Tests
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.AppendToBuffer(e, new EcsIntElement {Value = 9});
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-        }
-
-        [Test]
-        public void AppendToBufferWithEntity_DelayedFixup_ContainsRealizedEntity()
-        {
-            int kNumOfBuffers = 12; // Must be > 2
-            int kNumOfDeferredEntities = 12;
-
-            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity[] e = new Entity[kNumOfBuffers];
-
-            for (int n = 0; n < kNumOfBuffers; n++)
-            {
-                e[n] = m_Manager.CreateEntity();
-                m_Manager.AddBuffer<EcsComplexEntityRefElement>(e[n]);
-                for (int i = 0; i < kNumOfDeferredEntities; i++)
-                    cmds.AppendToBuffer(e[n], new EcsComplexEntityRefElement() {Entity = cmds.CreateEntity()});
-            }
-
-            cmds.RemoveComponent<EcsComplexEntityRefElement>(e[0]);
-            cmds.DestroyEntity(e[1]);
-
-            cmds.Playback(m_Manager);
-
-            Assert.IsFalse(m_Manager.HasComponent<EcsComplexEntityRefElement>(e[0]));
-            Assert.IsFalse(m_Manager.Exists(e[1]));
-
-            for (int n = 2; n < kNumOfBuffers; n++)
-            {
-                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e[n]);
-                Assert.AreEqual(kNumOfDeferredEntities, outbuf.Length);
-                for (int i = 0; i < outbuf.Length; i++)
-                {
-                    Assert.IsTrue(m_Manager.Exists(outbuf[i].Entity));
-                }
-            }
         }
 
         [BurstCompile(CompileSynchronously = true)]
@@ -3036,21 +3180,9 @@ namespace Unity.Entities.Tests
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
-            //Add Component With Fixup
-            cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds.AddComponent<EcsTestDataEntity>(e);
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            cmds.Dispose();
-
             //Add Buffer
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.AddBuffer<EcsIntElement>(e);
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            cmds.Dispose();
-
-            // Add Buffer With Fixup
-            cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds.AddBuffer<EcsComplexEntityRefElement>(e);
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3062,7 +3194,9 @@ namespace Unity.Entities.Tests
 
             // Add Shared Component
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddSharedComponentManaged(e, new EcsStringSharedComponent {Value = "test"});
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3089,7 +3223,9 @@ namespace Unity.Entities.Tests
 
             // Add Shared Component For Multiple Entities
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddSharedComponentManaged(entities, new EcsStringSharedComponent {Value = "test"});
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3103,14 +3239,18 @@ namespace Unity.Entities.Tests
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
             // Add Managed Component
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent<EcsTestManagedComponent>(e);
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
             // Add Managed Component For Multiple Entities
             var query = m_Manager.CreateEntityQuery(typeof(Prefab));
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(query, new EcsTestManagedComponent());
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 #endif
@@ -3170,33 +3310,15 @@ namespace Unity.Entities.Tests
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
-            //Set Component With Fixup
-            cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds.SetComponent(e, new EcsTestDataEntity());
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            cmds.Dispose();
-
             //Set Buffer
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.SetBuffer<EcsIntElement>(e);
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
-            // Set Buffer With Fixup
-            cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds.SetBuffer<EcsComplexEntityRefElement>(e);
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            cmds.Dispose();
-
             //Append to Buffer
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.AppendToBuffer(e, new EcsIntElement());
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            cmds.Dispose();
-
-            // Append to Buffer With Fixup
-            cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds.AppendToBuffer(e, new EcsComplexEntityRefElement());
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3208,7 +3330,9 @@ namespace Unity.Entities.Tests
 
             // Set Shared Component
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetSharedComponentManaged(e, new EcsStringSharedComponent {Value = "test"});
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3223,7 +3347,9 @@ namespace Unity.Entities.Tests
 
             // Set Shared Component For Multiple Entities
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetSharedComponentManaged(entities, new EcsStringSharedComponent {Value = "test"});
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
@@ -3265,14 +3391,18 @@ namespace Unity.Entities.Tests
             // Set Managed Component
             m_Manager.AddComponent<EcsTestManagedComponent>(e);
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent<EcsTestManagedComponent>(e, new EcsTestManagedComponent());
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 
             // Set Managed Component For Multiple Entities
             var query = m_Manager.CreateEntityQuery(typeof(Prefab));
             cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent(query, new EcsTestManagedComponent());
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
             cmds.Dispose();
 #endif
@@ -3630,203 +3760,6 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_FromDifferentCommandBuffer_WithNoDeferredEntities_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb1 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            using (var ecb2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var deferredEnt = ecb1.CreateEntity(archetype);
-                ecb1.SetComponent(deferredEnt, new EcsTestData(17));
-                ecb1.Playback(m_Manager);
-
-                ecb2.SetComponent(deferredEnt, new EcsTestData(23));
-                Assert.Throws<InvalidOperationException>(() => ecb2.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_CreatedFromDifferentCommandBuffer_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb1 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            using (var ecb2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var deferredEnt = ecb1.CreateEntity(archetype);
-                ecb1.SetComponent(deferredEnt, new EcsTestData(17));
-                ecb1.Playback(m_Manager);
-
-                // Create one deferred entity in ecb2, so that deferredEnt's index isn't out of range
-                var dummyEnt = ecb2.CreateEntity(archetype);
-                ecb2.SetComponent(deferredEnt, new EcsTestData(23));
-                Assert.Throws<InvalidOperationException>(() => ecb2.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_InstantiatedFromDifferentCommandBuffer_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb1 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            using (var ecb2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var prefab = m_Manager.CreateEntity(archetype);
-                var deferredEnt = ecb1.Instantiate(prefab);
-                ecb1.SetComponent(deferredEnt, new EcsTestData(17));
-                ecb1.Playback(m_Manager);
-
-                // Create one deferred entity in ecb2, so that deferredEnt's index isn't out of range
-                var dummyEnt = ecb2.CreateEntity(archetype);
-                ecb2.SetComponent(deferredEnt, new EcsTestData(23));
-                Assert.Throws<InvalidOperationException>(() => ecb2.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_CreatedFromDifferentCommandBuffer_ParallelWriter_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb1 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            using (var ecb2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var writer1 = ecb1.AsParallelWriter();
-                var deferredEnt = writer1.CreateEntity(0, archetype);
-                writer1.SetComponent(0, deferredEnt, new EcsTestData(17));
-                ecb1.Playback(m_Manager);
-
-                // Create one deferred entity in ecb2, so that deferredEnt's index isn't out of range
-                var dummyEnt = ecb2.CreateEntity(archetype);
-                ecb2.SetComponent(deferredEnt, new EcsTestData(23));
-                Assert.Throws<InvalidOperationException>(() => ecb2.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_InstantiatedFromDifferentCommandBuffer_ParallelWriter_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb1 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            using (var ecb2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var prefab = m_Manager.CreateEntity(archetype);
-                var writer1 = ecb1.AsParallelWriter();
-                var deferredEnt = writer1.Instantiate(0, prefab);
-                writer1.SetComponent(0, deferredEnt, new EcsTestData(17));
-                ecb1.Playback(m_Manager);
-
-                // Create one deferred entity in ecb2, so that deferredEnt's index isn't out of range
-                var dummyEnt = ecb2.CreateEntity(archetype);
-                ecb2.SetComponent(deferredEnt, new EcsTestData(23));
-                Assert.Throws<InvalidOperationException>(() => ecb2.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntity_OutOfRangeIndex_Throws()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            using(var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var deferredEnt = ecb.CreateEntity(archetype);
-                deferredEnt.Index = -1000;
-                ecb.SetComponent(deferredEnt, new EcsTestData(17));
-                Assert.Throws<InvalidOperationException>(() => ecb.Playback(m_Manager));
-            }
-        }
-
-        [Test]
-        public void AddComponent_WhenDataContainsDeferredEntity_ThrowsOnMultiplePlaybacks()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity e0 = cmds.CreateEntity();
-            cmds.AddComponent(e0, new EcsTestDataEntity(1, e0));
-
-            Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager2));
-        }
-
-        [Test]
-        public void AddComponents_WhenDataContainsDeferredEntity_ThrowsOnMultiplePlaybacks()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity e0 = cmds.CreateEntity();
-            cmds.AddComponent(e0, new ComponentTypeSet(typeof(EcsTestData), typeof(EcsTestData2)));
-
-            Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager2));
-        }
-
-        [Test]
-        public void AddComponent_WhenDataContainsDeferredEntity_DeferredEntityIsResolved()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity e0 = cmds.CreateEntity();
-            cmds.AddComponent(e0, new EcsTestDataEntity(1, e0));
-
-            cmds.Playback(m_Manager);
-
-            using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)))
-            {
-                var e = group.GetSingletonEntity();
-                Assert.AreEqual(e, m_Manager.GetComponentData<EcsTestDataEntity>(e).value1);
-            }
-        }
-
-        [Test]
-        public void AddComponents_WhenDataContainsDeferredEntity_DeferredEntityIsResolved()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            Entity e0 = cmds.CreateEntity();
-            cmds.AddComponent(e0, new ComponentTypeSet(typeof(EcsTestDataEntity)));
-            cmds.SetComponent(e0, new EcsTestDataEntity(1, e0));
-            cmds.Playback(m_Manager);
-
-            using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)))
-            {
-                var e = group.GetSingletonEntity();
-                Assert.AreEqual(e, m_Manager.GetComponentData<EcsTestDataEntity>(e).value1);
-            }
-        }
-
-        [Test]
-        public void EntityCommands_WithManyDeferredEntities_PerformAsExpected()
-        {
-            using EntityCommandBuffer cmds = new EntityCommandBuffer(Allocator.Persistent);
-
-#if UNITY_DOTSPLAYER_IL2CPP && !DEVELOP    // IL2CPP is a little slow in debug; reduce the number of tests in DEBUG (but not DEVELOP).
-            const int step = 100;
-#else
-            const int step = 1;
-#endif
-
-            for (int i = 0; i < 2500; i += step)
-            {
-                Entity e = cmds.CreateEntity();
-                cmds.AddComponent(e, new EcsTestData(i));
-                cmds.SetComponent(e, new EcsTestData(i + 1));
-                cmds.AddBuffer<EcsIntElement>(e);
-                cmds.SetBuffer<EcsIntElement>(e);
-                cmds.DestroyEntity(e);
-            }
-            cmds.Playback(m_Manager);
-
-            var allEntities = m_Manager.GetAllEntities();
-            Assert.AreEqual(0, allEntities.Length);
-            allEntities.Dispose();
-        }
-
-        [Test]
         public void InstantiateEntity_BatchMode_DisabledIfEntityDirty()
         {
             using EntityCommandBuffer cmds = new EntityCommandBuffer(Allocator.Persistent);
@@ -3859,115 +3792,6 @@ namespace Unity.Entities.Tests
             EntityCommandBuffer.ParallelWriter cmds = new EntityCommandBuffer.ParallelWriter();
             var exception = Assert.Throws<NullReferenceException>(() => cmds.CreateEntity(0));
             Assert.AreEqual("The EntityCommandBuffer has not been initialized! The EntityCommandBuffer needs to be passed an Allocator when created!", exception.Message);
-        }
-
-        [Test]
-        public void AddOrSetBufferWithEntity_NeedsFixup_ThrowsOnMultiplePlayback([Values(true, false)] bool setBuffer)
-        {
-            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity e0 = m_Manager.CreateEntity();
-            Entity e1 = m_Manager.CreateEntity();
-            Entity e2 = m_Manager.CreateEntity();
-
-            if (setBuffer)
-                m_Manager.AddComponent(e1, typeof(EcsComplexEntityRefElement));
-
-            var deferred0 = cmds.CreateEntity();
-            var deferred1 = cmds.CreateEntity();
-            var deferred2 = cmds.CreateEntity();
-
-            cmds.AddComponent(e0, new EcsTestDataEntity() { value1 = deferred0 });
-            cmds.AddComponent(e1, new EcsTestDataEntity() { value1 = deferred1 });
-            cmds.AddComponent(e2, new EcsTestDataEntity() { value1 = deferred2 });
-
-            var buf = setBuffer ? cmds.SetBuffer<EcsComplexEntityRefElement>(e1) : cmds.AddBuffer<EcsComplexEntityRefElement>(e1);
-            buf.Add(new EcsComplexEntityRefElement() {Entity = e0});
-            buf.Add(new EcsComplexEntityRefElement() {Entity = deferred1});
-            buf.Add(new EcsComplexEntityRefElement() {Entity = deferred2});
-            buf.Add(new EcsComplexEntityRefElement() {Entity = deferred0});
-
-            Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
-            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager2));
-        }
-
-        [Test]
-        public void AddOrSetBufferWithEntity_NeedsFixup_ContainsRealizedEntity([Values(true, false)] bool setBuffer)
-        {
-            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity e0 = m_Manager.CreateEntity();
-            Entity e1 = m_Manager.CreateEntity();
-            Entity e2 = m_Manager.CreateEntity();
-
-            if (setBuffer)
-                m_Manager.AddComponent(e1, typeof(EcsComplexEntityRefElement));
-
-            {
-                var deferred0 = cmds.CreateEntity();
-                var deferred1 = cmds.CreateEntity();
-                var deferred2 = cmds.CreateEntity();
-
-                cmds.AddComponent(e0, new EcsTestDataEntity() { value1 = deferred0 });
-                cmds.AddComponent(e1, new EcsTestDataEntity() { value1 = deferred1 });
-                cmds.AddComponent(e2, new EcsTestDataEntity() { value1 = deferred2 });
-
-                var buf = setBuffer ? cmds.SetBuffer<EcsComplexEntityRefElement>(e1) : cmds.AddBuffer<EcsComplexEntityRefElement>(e1);
-                buf.Add(new EcsComplexEntityRefElement() {Entity = e0});
-                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred1});
-                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred2});
-                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred0});
-                cmds.Playback(m_Manager);
-            }
-            {
-                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e1);
-                Assert.AreEqual(4, outbuf.Length);
-                var expect0 = m_Manager.GetComponentData<EcsTestDataEntity>(e0).value1;
-                var expect1 = m_Manager.GetComponentData<EcsTestDataEntity>(e1).value1;
-                var expect2 = m_Manager.GetComponentData<EcsTestDataEntity>(e2).value1;
-                Assert.AreEqual(e0, outbuf[0].Entity);
-                Assert.AreEqual(expect1, outbuf[1].Entity);
-                Assert.AreEqual(expect2, outbuf[2].Entity);
-                Assert.AreEqual(expect0, outbuf[3].Entity);
-            }
-        }
-
-        [Test]
-        public void BufferWithEntity_DelayedFixup_ContainsRealizedEntity()
-        {
-            int kNumOfBuffers = 12; // Must be > 2
-            int kNumOfDeferredEntities = 12;
-
-            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-
-            Entity[] e = new Entity[kNumOfBuffers];
-
-            for (int n = 0; n < kNumOfBuffers; n++)
-            {
-                e[n] = m_Manager.CreateEntity();
-                var buf = cmds.AddBuffer<EcsComplexEntityRefElement>(e[n]);
-                for (int i = 0; i < kNumOfDeferredEntities; i++)
-                    buf.Add(new EcsComplexEntityRefElement() {Entity = cmds.CreateEntity()});
-            }
-
-            cmds.RemoveComponent<EcsComplexEntityRefElement>(e[0]);
-            cmds.DestroyEntity(e[1]);
-
-            cmds.Playback(m_Manager);
-
-            Assert.IsFalse(m_Manager.HasComponent<EcsComplexEntityRefElement>(e[0]));
-            Assert.IsFalse(m_Manager.Exists(e[1]));
-
-            for (int n = 2; n < kNumOfBuffers; n++)
-            {
-                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e[n]);
-                Assert.AreEqual(kNumOfDeferredEntities, outbuf.Length);
-                for (int i = 0; i < outbuf.Length; i++)
-                {
-                    Assert.IsTrue(m_Manager.Exists(outbuf[i].Entity));
-                }
-            }
         }
 
         [Test]
@@ -4009,55 +3833,6 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < results.Length; i++)
                 {
                     Assert.AreEqual(42, m_Manager.GetComponentData<EcsTestData2>(results[i]).value0);
-                }
-            }
-
-            array.Dispose();
-        }
-
-        [Test]
-        public void AddComponentForLinkedEntityGroup_WithEntityFixup_Works()
-        {
-            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
-            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
-
-            for (var i = 0; i < 10; i++)
-            {
-                var child = m_Manager.CreateEntity();
-                if (i % 2 == 0)
-                    m_Manager.AddComponent<EcsTestData>(child);
-                array[i] = child;
-            }
-
-            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
-            linkedBuffer.Add(rootEntity);
-            for (var i = 0; i < 10; i++)
-            {
-                linkedBuffer.Add(new LinkedEntityGroup {Value = array[i]});
-            }
-
-            var instance = m_Manager.Instantiate(rootEntity);
-
-            var mask = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<EcsTestData>()).GetEntityQueryMask();
-
-            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e2 = cmds.CreateEntity();
-                cmds.AddComponent<EcsTestTag>(e2);
-                cmds.AddComponentForLinkedEntityGroup(instance, mask, new EcsTestDataEntity(17,e2));
-                cmds.Playback(m_Manager);
-            }
-
-            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData,EcsTestDataEntity>()
-                .Build(m_Manager);
-            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
-            {
-                Assert.AreEqual(5, results.Length);
-                for (int i = 0; i < results.Length; i++)
-                {
-                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
-                    Assert.AreEqual(17, value.value0);
-                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
                 }
             }
 
@@ -4189,54 +3964,6 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        public void SetComponentForLinkedEntityGroup_WithEntityFixup_Works()
-        {
-            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
-            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
-
-            for (var i = 0; i < 10; i++)
-            {
-                var child = m_Manager.CreateEntity(typeof(Prefab));
-                if (i % 2 == 0)
-                    m_Manager.AddComponent<EcsTestDataEntity>(child);
-                array[i] = child;
-            }
-
-            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
-            linkedBuffer.Add(rootEntity);
-            for (var i = 0; i < 10; i++)
-            {
-                linkedBuffer.Add(new LinkedEntityGroup { Value = array[i] });
-            }
-
-            var instance = m_Manager.Instantiate(rootEntity);
-            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestDataEntity>()
-                .Build(m_Manager);
-            var mask = query.GetEntityQueryMask();
-
-            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e2 = cmds.CreateEntity();
-                cmds.AddComponent<EcsTestTag>(e2);
-                cmds.SetComponentForLinkedEntityGroup(instance, mask, new EcsTestDataEntity(42, e2));
-                cmds.Playback(m_Manager);
-            }
-
-            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
-            {
-                Assert.AreEqual(5, results.Length);
-                for (int i = 0; i < results.Length; i++)
-                {
-                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
-                    Assert.AreEqual(42, value.value0);
-                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
-                }
-            }
-
-            array.Dispose();
-        }
-
-        [Test]
         public void SetComponentForLinkedEntityGroup_AfterNewArchetypesAdded_Works()
         {
             var prefabEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
@@ -4311,52 +4038,6 @@ namespace Unity.Entities.Tests
                 for (int i = 0; i < results.Length; i++)
                 {
                     Assert.AreEqual(42, m_Manager.GetComponentData<EcsTestData>(results[i]).value);
-                }
-            }
-
-            array.Dispose();
-        }
-
-        [Test]
-        public void ReplaceComponentForLinkedEntityGroup_WithEntityFixup_Works()
-        {
-            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
-            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
-
-            for (var i = 0; i < 10; i++)
-            {
-                var child = m_Manager.CreateEntity(typeof(Prefab));
-                if (i % 2 == 0)
-                    m_Manager.AddComponent<EcsTestDataEntity>(child);
-                array[i] = child;
-            }
-
-            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
-            linkedBuffer.Add(rootEntity);
-            for (var i = 0; i < 10; i++)
-            {
-                linkedBuffer.Add(new LinkedEntityGroup {Value = array[i]});
-            }
-
-            var instance = m_Manager.Instantiate(rootEntity);
-
-            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e2 = cmds.CreateEntity();
-                cmds.AddComponent<EcsTestTag>(e2);
-                cmds.ReplaceComponentForLinkedEntityGroup(instance, new EcsTestDataEntity(42,e2));
-                cmds.Playback(m_Manager);
-            }
-
-            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestDataEntity>().Build(m_Manager);
-            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
-            {
-                Assert.AreEqual(5, results.Length);
-                for (int i = 0; i < results.Length; i++)
-                {
-                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
-                    Assert.AreEqual(42, value.value0);
-                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
                 }
             }
 
@@ -4552,10 +4233,10 @@ namespace Unity.Entities.Tests
             var mask = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<EcsTestData>()).GetEntityQueryMask();
 
             using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            var deferredEntity = cmds.CreateEntity();
-            cmds.AddComponentForLinkedEntityGroup(rootEntity, mask, new EcsTestDataEntity{value0 = 17, value1 = deferredEntity});
-            cmds.SetComponentForLinkedEntityGroup(rootEntity, mask, new EcsTestDataEntity{value0 = 42, value1 = deferredEntity});
-            cmds.ReplaceComponentForLinkedEntityGroup(rootEntity, new EcsTestDataEntity{value0 = 23, value1 = deferredEntity});
+            var createdEntity = cmds.CreateEntity();
+            cmds.AddComponentForLinkedEntityGroup(rootEntity, mask, new EcsTestDataEntity{value0 = 17, value1 = createdEntity});
+            cmds.SetComponentForLinkedEntityGroup(rootEntity, mask, new EcsTestDataEntity{value0 = 42, value1 = createdEntity});
+            cmds.ReplaceComponentForLinkedEntityGroup(rootEntity, new EcsTestDataEntity{value0 = 23, value1 = createdEntity});
             cmds.Playback(m_Manager);
 
             for (int i = 0; i < array.Length; ++i)
@@ -4573,131 +4254,6 @@ namespace Unity.Entities.Tests
             }
 
             array.Dispose();
-        }
-
-        void VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(bool shouldThrow, TestDelegate code)
-        {
-            if (shouldThrow)
-            {
-                var ex = Assert.Throws<ArgumentException>(code);
-                Assert.IsTrue(ex.Message.Contains("deferred"));
-            }
-            else
-            {
-                code();
-            }
-        }
-
-        void RunDeferredTest(Entity entity)
-        {
-            bool isDeferredEntity = entity.Index < 0;
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.AddComponent(entity, typeof(EcsTestData)));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.RemoveComponent(entity, typeof(EcsTestData)));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.AddComponent(entity, new ComponentTypeSet(typeof(EcsTestData), typeof(EcsTestData2))));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.AddComponentData(entity, new EcsTestData()));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetComponentData(entity, new EcsTestData()));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetComponentData<EcsTestData>(entity));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.IsComponentEnabled<EcsTestDataEnableable>(entity));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.IsComponentEnabled(entity, typeof(EcsTestDataEnableable)));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetComponentEnabled<EcsTestDataEnableable>(entity, true));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetComponentEnabled(entity, typeof(EcsTestDataEnableable), true));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp()));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetSharedComponentManaged(entity, new EcsTestSharedComp()));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.RemoveComponent(entity, typeof(EcsTestSharedComp)));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.AddBuffer<EcsIntElement>(entity));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetBuffer<EcsIntElement>(entity));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.Exists(entity));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.HasComponent(entity, typeof(EcsTestData2)));
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetComponentCount(entity));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.DestroyEntity(entity));
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetName(entity,"Name"));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.SetName(entity,new FixedString64Bytes("Name")));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetName(entity));
-
-            VerifyCommand_Or_CheckThatItThrowsIfEntityIsDeferred(
-                isDeferredEntity,
-                () => m_Manager.GetName(entity, out var fixed_name));
-#endif
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DeferredEntities_UsedInTheEntityManager_ShouldThrow()
-        {
-            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var archetype = m_Manager.CreateArchetype(typeof(EcsTestDataEnableable));
-                var deferred = cmds.CreateEntity(archetype);
-                cmds.AddComponent(cmds.CreateEntity(), new EcsTestDataEntity()
-                {
-                    value1 = deferred
-                });
-
-                RunDeferredTest(deferred);
-
-                cmds.Playback(m_Manager);
-                using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)))
-                using (var arr = group.ToComponentDataArray<EcsTestDataEntity>(World.UpdateAllocator.ToAllocator))
-                {
-                    RunDeferredTest(arr[0].value1);
-                }
-            }
         }
 
         [Test]
@@ -4767,7 +4323,9 @@ namespace Unity.Entities.Tests
 
             for (int i = 0; i < length; ++i)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var component = m_Manager.GetComponentData<EcsTestManagedComponent>(allEntities[i]);
+                #pragma warning restore 0618
                 Assert.AreEqual(expectedValue, component.value);
             }
             allEntities.Dispose();
@@ -4791,22 +4349,30 @@ namespace Unity.Entities.Tests
         [Test]
         public void CreateEntity_ManagedComponents()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(e, new EcsTestManagedComponent { value = "SomeString" });
+            #pragma warning restore 0618
             cmds.Playback(m_Manager);
             cmds.Playback(m_Manager2);
 
             {
                 var group = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var arr = group.ToComponentDataArray<EcsTestManagedComponent>();
+                #pragma warning restore 0618
                 Assert.AreEqual(1, arr.Length);
                 Assert.AreEqual("SomeString", arr[0].value);
                 group.Dispose();
             }
             {
                 var group = m_Manager2.CreateEntityQuery(typeof(EcsTestManagedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var arr = group.ToComponentDataArray<EcsTestManagedComponent>();
+                #pragma warning restore 0618
                 Assert.AreEqual(1, arr.Length);
                 Assert.AreEqual("SomeString", arr[0].value);
                 group.Dispose();
@@ -4820,11 +4386,15 @@ namespace Unity.Entities.Tests
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             var e = cmds.CreateEntity(a);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent(e, new EcsTestManagedComponent { value = "SomeString" });
+            #pragma warning restore 0618
             cmds.Playback(m_Manager);
 
             var group = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var arr = group.ToComponentDataArray<EcsTestManagedComponent>();
+            #pragma warning restore 0618
             Assert.AreEqual(1, arr.Length);
             Assert.AreEqual("SomeString", arr[0].value);
             group.Dispose();
@@ -4833,13 +4403,18 @@ namespace Unity.Entities.Tests
         [Test]
         public void CreateTwoComponents_ManagedComponents()
         {
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+#pragma warning restore 618
             var e = cmds.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(e, new EcsTestManagedComponent { value = "SomeString" });
             cmds.AddComponent(e, new EcsTestManagedComponent2 { value = "SomeString", value2 = "SomeOtherString" });
+            #pragma warning restore 0618
             cmds.Playback(m_Manager);
             cmds.Playback(m_Manager2);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             using(var group = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent)))
             {
                 var component = EntityQueryManagedComponentExtensions.GetSingleton<EcsTestManagedComponent>(group);
@@ -4864,6 +4439,7 @@ namespace Unity.Entities.Tests
                 Assert.AreEqual("SomeString", component.value);
                 Assert.AreEqual("SomeOtherString", component.value2);
             }
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -4873,13 +4449,17 @@ namespace Unity.Entities.Tests
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(e, new EcsTestManagedComponent() { value = "SomeString" });
+            #pragma warning restore 0618
             cmds.AddComponent<EcsTestTag>(e);
             cmds.AddComponent(e, ComponentType.ReadWrite<EcsTestManagedComponent3>());
 
             cmds.Playback(m_Manager);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(e).value);
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(e));
             Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(e));
         }
@@ -4891,10 +4471,14 @@ namespace Unity.Entities.Tests
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.AddComponent(e, new ComponentTypeSet(typeof(EcsTestManagedComponent), typeof(EcsTestTag), typeof(EcsTestManagedComponent3)));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent(e, new EcsTestManagedComponent() { value = "SomeString" });
+            #pragma warning restore 0618
             cmds.Playback(m_Manager);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(e).value);
+            #pragma warning restore 0618
             Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(e));
             Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(e));
         }
@@ -4904,7 +4488,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
             var data1 = new EcsTestManagedComponent();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, data1);
+            #pragma warning restore 0618
             m_Manager.AddComponent(entity, typeof(EcsTestManagedComponent));
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
@@ -4932,19 +4518,19 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp { value = 10 };
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp { value = 130 };
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             var entity3 = m_Manager.CreateEntity(archetype);
-            m_Manager.SetSharedComponentManaged(entity3, sharedComponent2);
+            m_Manager.SetSharedComponent(entity3, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.AddComponent(entityQuery, typeof(EcsTestManagedComponent2), queryCaptureMode);
 
                 // modifying an entity in between recording and playback means it won't be processed by AtPlayback,
@@ -4972,19 +4558,19 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp { value = 10 };
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp { value = 130 };
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             var entity3 = m_Manager.CreateEntity(archetype);
-            m_Manager.SetSharedComponentManaged(entity3, sharedComponent2);
+            m_Manager.SetSharedComponent(entity3, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.AddComponent(entityQuery, new ComponentTypeSet(typeof(EcsTestManagedComponent2)),
                     queryCaptureMode);
 
@@ -5012,7 +4598,9 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype(typeof(EcsTestSharedComp), typeof(EcsTestManagedComponent));
             var entity = m_Manager.CreateEntity(archetype);
             var data1 = new EcsTestManagedComponent();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, data1);
+            #pragma warning restore 0618
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent)))
@@ -5043,10 +4631,12 @@ namespace Unity.Entities.Tests
             var data2 = new EcsTestManagedComponent2() { value = "SomeOtherString" };
             var data3 = new EcsTestManagedComponent3() { value = "YetAnotherString" };
             var data4 = new EcsTestManagedComponent4() { value = "SoManyStrings" };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, data1);
             m_Manager.SetComponentData(entity, data2);
             m_Manager.SetComponentData(entity, data3);
             m_Manager.SetComponentData(entity, data4);
+            #pragma warning restore 0618
 
             {
                 var entities = m_Manager.GetAllEntities(World.UpdateAllocator.ToAllocator);
@@ -5055,10 +4645,12 @@ namespace Unity.Entities.Tests
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent2>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent4>(entities[0]));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(entities[0]).value);
                 Assert.AreEqual("SomeOtherString", m_Manager.GetComponentData<EcsTestManagedComponent2>(entities[0]).value);
                 Assert.AreEqual("YetAnotherString", m_Manager.GetComponentData<EcsTestManagedComponent3>(entities[0]).value);
                 Assert.AreEqual("SoManyStrings", m_Manager.GetComponentData<EcsTestManagedComponent4>(entities[0]).value);
+                #pragma warning restore 0618
             }
 
             var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent));
@@ -5077,12 +4669,18 @@ namespace Unity.Entities.Tests
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestManagedComponent2>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent4>(entities[0]));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(entities[0]).value);
+                #pragma warning restore 0618
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<ArgumentException>(() => { m_Manager.GetComponentData<EcsTestManagedComponent2>(entities[0]); });
+                #pragma warning restore 0618
 #endif
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("YetAnotherString", m_Manager.GetComponentData<EcsTestManagedComponent3>(entities[0]).value);
                 Assert.AreEqual("SoManyStrings", m_Manager.GetComponentData<EcsTestManagedComponent4>(entities[0]).value);
+                #pragma warning restore 0618
             }
             entityQuery.Dispose();
         }
@@ -5094,17 +4692,17 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp {value = 10};
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp {value = 130};
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery =
                 m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestManagedComponent)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.RemoveComponent(entityQuery, typeof(EcsTestManagedComponent), queryCaptureMode);
 
                 // modifying the entity in between recording and playback should be OK
@@ -5119,7 +4717,7 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
-                        var shared = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e);
+                        var shared = m_Manager.GetSharedComponent<EcsTestSharedComp>(e);
                         if (shared.value == 10)
                         {
                             Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent>(e));
@@ -5140,16 +4738,16 @@ namespace Unity.Entities.Tests
 
             var entity1 = m_Manager.CreateEntity(archetype);
             var sharedComponent1 = new EcsTestSharedComp { value = 10 };
-            m_Manager.SetSharedComponentManaged(entity1, sharedComponent1);
+            m_Manager.SetSharedComponent(entity1, sharedComponent1);
 
             var entity2 = m_Manager.CreateEntity(archetype);
             var sharedComponent2 = new EcsTestSharedComp { value = 130 };
-            m_Manager.SetSharedComponentManaged(entity2, sharedComponent2);
+            m_Manager.SetSharedComponent(entity2, sharedComponent2);
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestSharedComp), typeof(EcsTestManagedComponent)))
             {
-                entityQuery.SetSharedComponentFilterManaged(sharedComponent2);
+                entityQuery.SetSharedComponentFilter(sharedComponent2);
                 cmds.RemoveComponent(entityQuery, new ComponentTypeSet(typeof(EcsTestManagedComponent)),
                     queryCaptureMode);
 
@@ -5165,7 +4763,7 @@ namespace Unity.Entities.Tests
                     for (var i = 0; i < entities.Length; i++)
                     {
                         var e = entities[i];
-                        var shared = m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(e);
+                        var shared = m_Manager.GetSharedComponent<EcsTestSharedComp>(e);
                         if (shared.value == 10)
                         {
                             Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent>(e));
@@ -5186,7 +4784,9 @@ namespace Unity.Entities.Tests
 
             var entity = m_Manager.CreateEntity(archetype);
             var data1 = new EcsTestManagedComponent();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, data1);
+            #pragma warning restore 0618
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent)))
@@ -5216,10 +4816,12 @@ namespace Unity.Entities.Tests
             var data2 = new EcsTestManagedComponent2() { value = "SomeOtherString" };
             var data3 = new EcsTestManagedComponent3() { value = "YetAnotherString" };
             var data4 = new EcsTestManagedComponent4() { value = "SoManyStrings" };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, data1);
             m_Manager.SetComponentData(entity, data2);
             m_Manager.SetComponentData(entity, data3);
             m_Manager.SetComponentData(entity, data4);
+            #pragma warning restore 0618
 
             {
                 var entities = m_Manager.GetAllEntities(World.UpdateAllocator.ToAllocator);
@@ -5228,10 +4830,12 @@ namespace Unity.Entities.Tests
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent2>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent4>(entities[0]));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(entities[0]).value);
                 Assert.AreEqual("SomeOtherString", m_Manager.GetComponentData<EcsTestManagedComponent2>(entities[0]).value);
                 Assert.AreEqual("YetAnotherString", m_Manager.GetComponentData<EcsTestManagedComponent3>(entities[0]).value);
                 Assert.AreEqual("SoManyStrings", m_Manager.GetComponentData<EcsTestManagedComponent4>(entities[0]).value);
+                #pragma warning restore 0618
             }
 
             var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent));
@@ -5251,12 +4855,18 @@ namespace Unity.Entities.Tests
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestManagedComponent2>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent3>(entities[0]));
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent4>(entities[0]));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("SomeString", m_Manager.GetComponentData<EcsTestManagedComponent>(entities[0]).value);
+                #pragma warning restore 0618
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<ArgumentException>(() => { m_Manager.GetComponentData<EcsTestManagedComponent2>(entities[0]); });
+                #pragma warning restore 0618
 #endif
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual("YetAnotherString", m_Manager.GetComponentData<EcsTestManagedComponent3>(entities[0]).value);
                 Assert.AreEqual("SoManyStrings", m_Manager.GetComponentData<EcsTestManagedComponent4>(entities[0]).value);
+                #pragma warning restore 0618
             }
             entityQuery.Dispose();
         }
@@ -5266,7 +4876,9 @@ namespace Unity.Entities.Tests
         {
             var e = m_Manager.CreateEntity();
             var component = new EcsTestManagedComponent() { value = "SomeString" };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e, component);
+            #pragma warning restore 0618
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             cmds.Instantiate(e);
@@ -5280,15 +4892,21 @@ namespace Unity.Entities.Tests
         public void InstantiateWithSetComponentDataWorks_ManagedComponents()
         {
             var e = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e, new EcsTestManagedComponent() { value = "SomeString" });
+            #pragma warning restore 0618
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
 
             var e1 = cmds.Instantiate(e);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent(e1, new EcsTestManagedComponent() { value = "SomeOtherString" });
+            #pragma warning restore 0618
 
             var e2 = cmds.Instantiate(e);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.SetComponent(e2, new EcsTestManagedComponent() { value = "SomeOtherString" });
+            #pragma warning restore 0618
 
             cmds.Playback(m_Manager);
 
@@ -5301,7 +4919,9 @@ namespace Unity.Entities.Tests
         public void DestroyEntityTwiceWorks_ManagedComponents()
         {
             var e = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(e, new EcsTestManagedComponent());
+            #pragma warning restore 0618
 
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
 
@@ -5314,36 +4934,15 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void DestroyInvalidEntity_ManagedComponents()
-        {
-            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            var entityBuffer = CollectionHelper.CreateNativeArray<Entity, RewindableAllocator>(1, ref World.UpdateAllocator);
-            var e = cmds.CreateEntity();
-            cmds.AddComponent(e, new EcsTestManagedComponent { value = "SomeString" });
-            entityBuffer[0] = e;
-            cmds.Playback(m_Manager);
-
-            var savedEntity = entityBuffer[0];
-
-            using var cmds2 = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            cmds2.DestroyEntity(savedEntity);
-
-            // savedEntity is invalid, so playing back this ECB should throw an exception
-            Assert.Throws<System.InvalidOperationException>(() =>
-            {
-                cmds2.Playback(m_Manager);
-            });
-        }
-
-        [Test]
         public void PlaybackWithExclusiveEntityTransactionInJob_ManagedComponents()
         {
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             var job = new TestJob {Buffer = cmds};
 
             var e = cmds.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(e, new EcsTestManagedComponent { value = "SomeString" });
+            #pragma warning restore 0618
 
             var jobHandle = job.Schedule();
 
@@ -5365,7 +4964,9 @@ namespace Unity.Entities.Tests
             group.Dispose();
 
             var managedGroup = m_Manager.CreateEntityQuery(typeof(EcsTestManagedComponent));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var managedComponentArray = managedGroup.ToComponentDataArray<EcsTestManagedComponent>();
+            #pragma warning restore 0618
             Assert.AreEqual(1, managedComponentArray.Length);
             Assert.AreEqual("SomeString", managedComponentArray[0].value);
             managedGroup.Dispose();
@@ -5380,14 +4981,50 @@ namespace Unity.Entities.Tests
             using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
 
             Entity e0 = cmds.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(e0, new EcsTestManagedDataEntity {value1 = e0});
+            #pragma warning restore 0618
 
             cmds.Playback(m_Manager);
 
             using(var group = m_Manager.CreateEntityQuery(typeof(EcsTestManagedDataEntity)))
             {
                 var e = group.GetSingletonEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(e, m_Manager.GetComponentData<EcsTestManagedDataEntity>(e).value1);
+                #pragma warning restore 0618
+            }
+        }
+
+        [Test]
+        public void AddManagedComponent_WithEntityPatch_AndSelfReference_DoesNotRecurseInfinitely()
+        {
+            // This is a regression test for UUM-132101
+
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity deferred = cmds.CreateEntity();
+            var managed = new EcsTestManagedDataCyclicEntityRef
+            {
+                RefToDeferred = deferred,
+            };
+            managed.Self = managed;
+
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            cmds.AddComponent(deferred, managed);
+            #pragma warning restore 0618
+
+            // The following line used to crash on infinite recursion
+            cmds.Playback(m_Manager);
+
+            using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestManagedDataCyclicEntityRef)))
+            {
+                var e = group.GetSingletonEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+                var comp = m_Manager.GetComponentData<EcsTestManagedDataCyclicEntityRef>(e);
+                #pragma warning restore 0618
+                Assert.AreEqual(e, comp.RefToDeferred);
+                Assert.AreSame(comp, comp.Self);
             }
         }
 
@@ -5404,8 +5041,10 @@ namespace Unity.Entities.Tests
             // toggle "enabled" state on both components of both entities
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetComponentEnabled<EcsTestManagedComponentEnableable>(e0, false);
                 cmds.SetComponentEnabled<EcsTestManagedComponentEnableable2>(e0, true);
+                #pragma warning restore 0618
                 cmds.SetComponentEnabled(e1, typeof(EcsTestManagedComponentEnableable), true);
                 cmds.SetComponentEnabled(e1, typeof(EcsTestManagedComponentEnableable2), false);
                 cmds.Playback(m_Manager);
@@ -5462,8 +5101,10 @@ namespace Unity.Entities.Tests
             Assert.Throws<InvalidOperationException>(() => cmds.RemoveComponent(query, ComponentType.ReadOnly<EcsTestData>(), EntityQueryCaptureMode.AtPlayback));
             Assert.Throws<InvalidOperationException>(() => cmds.RemoveComponent(e, new ComponentTypeSet(ComponentType.ReadOnly<EcsTestData>())));
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<InvalidOperationException>(() => cmds.AddComponent(e, new EcsTestManagedComponent()));
             Assert.Throws<InvalidOperationException>(() => cmds.SetComponent(e, new EcsTestManagedComponent()));
+            #pragma warning restore 0618
             Assert.Throws<InvalidOperationException>(() => cmds.RemoveComponent<EcsTestManagedComponent>(e));
 #endif
             query.Dispose();
@@ -5474,13 +5115,13 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public void Execute()
             {
                 Ecb.DestroyEntity(0, TestEntities);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.DestroyEntity(0, DeferredEntities);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.DestroyEntity(0, InstantiatedEntities);
             }
         }
 
@@ -5493,17 +5134,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.DestroyEntity(testEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.DestroyEntity(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.DestroyEntity(instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT));
             // Test ParallelWriter
             new DestroyEntity_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
                 Prefab = prefab,
             }.Run();
 
@@ -5522,13 +5163,13 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public void Execute()
             {
                 Ecb.AddComponent<EcsTestData2>(0, TestEntities);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.AddComponent<EcsTestData2>(0, DeferredEntities);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.AddComponent<EcsTestData2>(0, InstantiatedEntities);
             }
         }
 
@@ -5541,17 +5182,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.AddComponent<EcsTestData2>(testEntities.GetSubArray(0, testEntityCount));
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, testEntityCount));
-            ecb.AddComponent<EcsTestData2>(deferredEntities.GetSubArray(0, testEntityCount));
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, testEntityCount));
+            ecb.AddComponent<EcsTestData2>(instantiatedEntities.GetSubArray(0, testEntityCount));
             // Test ParallelWriter
             new AddComponent_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(testEntityCount, testEntityCount),
-                DeferredEntities = deferredEntities.GetSubArray(testEntityCount, testEntityCount),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(testEntityCount, testEntityCount),
                 Prefab = prefab,
             }.Run();
 
@@ -5562,7 +5203,7 @@ namespace Unity.Entities.Tests
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestData2));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
         }
 
         [BurstCompile(CompileSynchronously = true)]
@@ -5570,14 +5211,14 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public ComponentTypeSet TypeSetToAdd;
             public void Execute()
             {
                 Ecb.AddComponent(0, TestEntities, TypeSetToAdd);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.AddComponent(0, DeferredEntities, TypeSetToAdd);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.AddComponent(0, InstantiatedEntities, TypeSetToAdd);
             }
         }
 
@@ -5591,17 +5232,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.AddComponent(testEntities.GetSubArray(0, testEntityCount), typesToAdd);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, testEntityCount));
-            ecb.AddComponent(deferredEntities.GetSubArray(0, testEntityCount), typesToAdd);
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, testEntityCount));
+            ecb.AddComponent(instantiatedEntities.GetSubArray(0, testEntityCount), typesToAdd);
             // Test ParallelWriter
             new AddComponents_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(testEntityCount, testEntityCount),
-                DeferredEntities = deferredEntities.GetSubArray(testEntityCount, testEntityCount),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(testEntityCount, testEntityCount),
                 Prefab = prefab,
                 TypeSetToAdd = typesToAdd,
             }.Run();
@@ -5613,7 +5254,7 @@ namespace Unity.Entities.Tests
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestData2));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
         }
 
         [BurstCompile(CompileSynchronously = true)]
@@ -5621,33 +5262,14 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public EcsTestData2 Value;
             public void Execute()
             {
                 Ecb.AddComponent(0, TestEntities, Value);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.AddComponent(0, DeferredEntities, Value);
-            }
-        }
-
-        [BurstCompile(CompileSynchronously = true)]
-        struct AddComponentWithValue_EntityArray_WithEntityFixup_Job : IJob
-        {
-            public EntityCommandBuffer.ParallelWriter Ecb;
-            public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
-            public Entity Prefab;
-            public int Value0;
-            public void Execute()
-            {
-                var e2 = Ecb.CreateEntity(0);
-                Ecb.AddComponent<EcsTestTag>(0, e2);
-                var value = new EcsTestDataEntity(Value0, e2);
-                Ecb.AddComponent(0, TestEntities, value);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.AddComponent(0, DeferredEntities, value);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.AddComponent(0, InstantiatedEntities, Value);
             }
         }
 
@@ -5661,17 +5283,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.AddComponent(testEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.AddComponent(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.AddComponent(instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
             // Test ParallelWriter
             new AddComponentWithValue_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
                 Prefab = prefab,
                 Value = value,
             }.Run();
@@ -5683,71 +5305,24 @@ namespace Unity.Entities.Tests
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestData2>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestData2));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
             for (int i = 0; i < finalEntities.Length; ++i)
                 Assert.AreEqual(value, m_Manager.GetComponentData<EcsTestData2>(finalEntities[i]));
         }
 
-        [Test]
-        public void AddComponentWithValue_TargetIsEntityArray_WithEntityFixup_Works()
-        {
-            const int TEST_ENTITY_COUNT = 10;
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            var prefab = m_Manager.CreateEntity(typeof(EcsTestData3), typeof(Prefab));
-            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
-            var e2 = ecb.CreateEntity();
-            ecb.AddComponent<EcsTestTag>(e2);
-            var value = new EcsTestDataEntity(42,e2);
-            using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            // Test main thread writer
-            ecb.AddComponent(testEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.AddComponent(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
-            // Test ParallelWriter
-            new AddComponentWithValue_EntityArray_WithEntityFixup_Job
-            {
-                Ecb = ecb.AsParallelWriter(),
-                TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                Prefab = prefab,
-                Value0 = 42,
-            }.Run();
-
-            ecb.Playback(m_Manager);
-            for (int i = 0; i < testEntities.Length; ++i)
-            {
-                var actualValue = m_Manager.GetComponentData<EcsTestDataEntity>(testEntities[i]);
-                Assert.AreEqual(value.value0, actualValue.value0);
-                Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value1));
-            }
-
-            for (int i = 0; i < controlEntities.Length; ++i)
-                Assert.IsFalse(m_Manager.HasComponent<EcsTestDataEntity>(controlEntities[i]));
-            using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestDataEntity));
-            using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
-            for (int i = 0; i < finalEntities.Length; ++i)
-            {
-                var actualValue = m_Manager.GetComponentData<EcsTestDataEntity>(finalEntities[i]);
-                Assert.AreEqual(42, actualValue.value0);
-                Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value1));
-            }
-        }
 
         [BurstCompile(CompileSynchronously = true)]
         struct RemoveComponent_EntityArray_Job : IJob
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public void Execute()
             {
                 Ecb.RemoveComponent<EcsTestData2>(0, TestEntities);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.RemoveComponent<EcsTestData2>(0, DeferredEntities);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.RemoveComponent<EcsTestData2>(0, InstantiatedEntities);
             }
         }
 
@@ -5760,17 +5335,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.RemoveComponent<EcsTestData2>(testEntities.GetSubArray(0, testEntityCount));
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, testEntityCount));
-            ecb.RemoveComponent<EcsTestData2>(deferredEntities.GetSubArray(0, testEntityCount));
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, testEntityCount));
+            ecb.RemoveComponent<EcsTestData2>(instantiatedEntities.GetSubArray(0, testEntityCount));
             // Test ParallelWriter
             new RemoveComponent_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(testEntityCount, testEntityCount),
-                DeferredEntities = deferredEntities.GetSubArray(testEntityCount, testEntityCount),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(testEntityCount, testEntityCount),
                 Prefab = prefab,
             }.Run();
 
@@ -5781,7 +5356,7 @@ namespace Unity.Entities.Tests
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), ComponentType.Exclude<EcsTestData2>());
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
         }
 
 
@@ -5790,14 +5365,14 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public ComponentTypeSet TypeSetToRemove;
             public void Execute()
             {
                 Ecb.RemoveComponent(0, TestEntities, TypeSetToRemove);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.RemoveComponent(0, DeferredEntities, TypeSetToRemove);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.RemoveComponent(0, InstantiatedEntities, TypeSetToRemove);
             }
         }
 
@@ -5811,17 +5386,17 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*testEntityCount, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*testEntityCount, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.RemoveComponent(testEntities.GetSubArray(0, testEntityCount), typesToRemove);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, testEntityCount));
-            ecb.RemoveComponent(deferredEntities.GetSubArray(0, testEntityCount), typesToRemove);
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, testEntityCount));
+            ecb.RemoveComponent(instantiatedEntities.GetSubArray(0, testEntityCount), typesToRemove);
             // Test ParallelWriter
             new RemoveComponents_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(testEntityCount, testEntityCount),
-                DeferredEntities = deferredEntities.GetSubArray(testEntityCount, testEntityCount),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(testEntityCount, testEntityCount),
                 Prefab = prefab,
                 TypeSetToRemove = typesToRemove,
             }.Run();
@@ -5833,7 +5408,7 @@ namespace Unity.Entities.Tests
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestData2>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), ComponentType.Exclude<EcsTestData2>());
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
         }
 
         //[BurstCompile(CompileSynchronously = true)]
@@ -5841,14 +5416,14 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public EcsTestSharedComp Value;
             public void Execute()
             {
                 Ecb.AddSharedComponent(0, TestEntities, Value);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.AddSharedComponent(0, DeferredEntities, Value);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.AddSharedComponent(0, InstantiatedEntities, Value);
             }
         }
 
@@ -5862,31 +5437,31 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.AddSharedComponent(testEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.AddSharedComponent(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.AddSharedComponent(instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
             // Test ParallelWriter
             new AddSharedComponentWithValue_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
                 Prefab = prefab,
                 Value = value,
             }.Run();
 
             ecb.Playback(m_Manager);
             for (int i = 0; i < testEntities.Length; ++i)
-                Assert.AreEqual(value.value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(testEntities[i]).value);
+                Assert.AreEqual(value.value, m_Manager.GetSharedComponent<EcsTestSharedComp>(testEntities[i]).value);
             for (int i = 0; i < controlEntities.Length; ++i)
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestSharedComp>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestSharedComp));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
             for (int i = 0; i < finalEntities.Length; ++i)
-                Assert.AreEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(finalEntities[i]));
+                Assert.AreEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(finalEntities[i]));
         }
 
         //[BurstCompile(CompileSynchronously = true)]
@@ -5894,14 +5469,14 @@ namespace Unity.Entities.Tests
         {
             public EntityCommandBuffer.ParallelWriter Ecb;
             public NativeArray<Entity> TestEntities;
-            public NativeArray<Entity> DeferredEntities;
+            public NativeArray<Entity> InstantiatedEntities;
             public Entity Prefab;
             public EcsTestSharedComp Value;
             public void Execute()
             {
                 Ecb.SetSharedComponent(0, TestEntities, Value);
-                Ecb.Instantiate(0, Prefab, DeferredEntities);
-                Ecb.SetSharedComponent(0, DeferredEntities, Value);
+                Ecb.Instantiate(0, Prefab, InstantiatedEntities);
+                Ecb.SetSharedComponent(0, InstantiatedEntities, Value);
             }
         }
 
@@ -5938,31 +5513,31 @@ namespace Unity.Entities.Tests
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
-            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var instantiatedEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
             // Test main thread writer
             ecb.SetSharedComponent(testEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
-            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
-            ecb.SetSharedComponent(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
+            ecb.Instantiate(prefab, instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.SetSharedComponent(instantiatedEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
             // Test ParallelWriter
             new SetSharedComponentWithValue_EntityArray_Job
             {
                 Ecb = ecb.AsParallelWriter(),
                 TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
-                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                InstantiatedEntities = instantiatedEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
                 Prefab = prefab,
                 Value = value,
             }.Run();
 
             ecb.Playback(m_Manager);
             for (int i = 0; i < testEntities.Length; ++i)
-                Assert.AreEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(testEntities[i]));
+                Assert.AreEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(testEntities[i]));
             for (int i = 0; i < controlEntities.Length; ++i)
-                Assert.AreNotEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(controlEntities[i]));
+                Assert.AreNotEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(controlEntities[i]));
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestSharedComp));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            Assert.AreEqual(instantiatedEntities.Length, finalEntities.Length);
             for (int i = 0; i < finalEntities.Length; ++i)
-                Assert.AreEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(finalEntities[i]));
+                Assert.AreEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(finalEntities[i]));
         }
 
         unsafe struct SetSharedComponentWithNonDefaultValue_Job : IJob
@@ -6006,15 +5581,15 @@ namespace Unity.Entities.Tests
             }.Run();
 
             ecb.Playback(m_Manager);
-            Assert.AreEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(testEntity));
-            Assert.AreNotEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(controlEntity));
+            Assert.AreEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(testEntity));
+            Assert.AreNotEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(controlEntity));
 
             using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestSharedComp));
             using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
             Assert.AreEqual(1, finalEntities.Length);
 
             for (int i = 0; i < finalEntities.Length; ++i)
-                Assert.AreEqual(value, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(finalEntities[i]));
+                Assert.AreEqual(value, m_Manager.GetSharedComponent<EcsTestSharedComp>(finalEntities[i]));
         }
 
         [BurstCompile]
@@ -6103,7 +5678,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(1, instances.Length);
             Assert.That(m_Manager.HasComponent<EcsTestManagedComponent>(instances[0]));
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var entityObject = m_Manager.GetComponentObject<EcsTestManagedComponent>(instances[0]);
+            #pragma warning restore 0618
             Assert.AreEqual("Test", entityObject.value);
             Assert.IsFalse(object.ReferenceEquals(prefabObject, entityObject));
         }
@@ -6304,7 +5881,7 @@ namespace Unity.Entities.Tests
                     $"Setting unmanaged shared component on entity {entityName}({index},{version}) for component index {TypeManager.GetTypeIndex<EcsTestSharedComp>()}; recorded from {originSystemDebugName}.");
             }
 
-            Assert.AreEqual(42, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+            Assert.AreEqual(42, m_Manager.GetSharedComponent<EcsTestSharedComp>(entity).value);
 
             EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
         }
@@ -6325,7 +5902,9 @@ namespace Unity.Entities.Tests
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddSharedComponentManaged(entity, new EcsStringSharedComponent {Value = ""});
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
                 LogAssert.Expect(LogType.Log,
@@ -6355,14 +5934,18 @@ namespace Unity.Entities.Tests
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetSharedComponentManaged(entity, new EcsStringSharedComponent {Value = "Test"});
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
                 LogAssert.Expect(LogType.Log,
                     $"Setting shared component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsStringSharedComponent>()}; recorded from {originSystemDebugName}.");
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("Test", m_Manager.GetSharedComponentManaged<EcsStringSharedComponent>(entity).Value);
+            #pragma warning restore 0618
 
             EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
         }
@@ -6532,165 +6115,6 @@ namespace Unity.Entities.Tests
             }
 
             Assert.AreEqual(10, m_Manager.GetBuffer<EcsIntElement>(entity)[0].Value);
-
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void PlaybackWithTrace_AddComponentWithEntityFixup()
-        {
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
-
-            var entity = m_Manager.CreateEntity();
-            FixedString64Bytes entityName = "";
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            entityName = "TestEntity";
-            m_Manager.SetName(entity, entityName);
-#endif
-
-            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                cmds.AddComponent<EcsTestDataEntity>(entity);
-                cmds.Playback(m_Manager);
-                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
-                LogAssert.Expect(LogType.Log,
-                    $"Adding component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestDataEntity>()}; recorded from {originSystemDebugName}.");
-            }
-
-            Assert.IsTrue(m_Manager.HasComponent<EcsTestDataEntity>(entity));
-
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void PlaybackWithTrace_SetComponentWithEntityFixup()
-        {
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
-
-            var entity = m_Manager.CreateEntity(typeof(EcsTestDataEntity));
-            FixedString64Bytes entityName = "";
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            entityName = "TestEntity";
-            m_Manager.SetName(entity, entityName);
-#endif
-
-            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e = cmds.CreateEntity();
-                cmds.SetComponent(entity, new EcsTestDataEntity{value0 = 10, value1 = e});
-                cmds.Playback(m_Manager);
-                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
-                LogAssert.Expect(LogType.Log,
-                    $"Setting component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestDataEntity>()}; recorded from {originSystemDebugName}.");
-            }
-
-            Assert.AreEqual(10, m_Manager.GetComponentData<EcsTestDataEntity>(entity).value0);
-
-#if ENTITY_STORE_V1
-            Assert.AreEqual(1, m_Manager.GetComponentData<EcsTestDataEntity>(entity).value1.Index);
-            Assert.AreEqual(1, m_Manager.GetComponentData<EcsTestDataEntity>(entity).value1.Version);
-#endif
-
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void PlaybackWithTrace_AddBufferComponentWithEntityFixup()
-        {
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
-
-            var entity = m_Manager.CreateEntity();
-            FixedString64Bytes entityName = "";
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            entityName = "TestEntity";
-            m_Manager.SetName(entity, entityName);
-#endif
-
-            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                cmds.AddBuffer<EcsComplexEntityRefElement>(entity);
-                cmds.Playback(m_Manager);
-                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
-                LogAssert.Expect(LogType.Log,
-                    $"Adding dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
-            }
-
-            Assert.IsTrue(m_Manager.HasComponent<EcsComplexEntityRefElement>(entity));
-
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void PlaybackWithTrace_SetBufferComponentWithEntityFixup()
-        {
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
-
-            var entity = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
-            FixedString64Bytes entityName = "";
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            entityName = "TestEntity";
-            m_Manager.SetName(entity, entityName);
-#endif
-
-            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e = cmds.CreateEntity();
-                var buffer = cmds.SetBuffer<EcsComplexEntityRefElement>(entity);
-                buffer.Add(new EcsComplexEntityRefElement {Dummy = 10, Entity = e});
-                cmds.Playback(m_Manager);
-                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
-                LogAssert.Expect(LogType.Log,
-                    $"Setting dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
-            }
-
-            Assert.AreEqual(10, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Dummy);
-
-#if ENTITY_STORE_V1
-            Assert.AreEqual(1, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Entity.Index);
-            Assert.AreEqual(1, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Entity.Version);
-#endif
-
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
-        }
-
-        [Test]
-        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
-        public void PlaybackWithTrace_AppendToBufferWithEntityFixup()
-        {
-            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
-
-            var entity = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
-            FixedString64Bytes entityName = "";
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            entityName = "TestEntity";
-            m_Manager.SetName(entity, entityName);
-#endif
-
-            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
-            {
-                var e = cmds.CreateEntity();
-                cmds.AppendToBuffer(entity, new EcsComplexEntityRefElement {Dummy = 10, Entity = e});
-                cmds.Playback(m_Manager);
-                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
-                LogAssert.Expect(LogType.Log,
-                    $"Appending element to dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
-            }
-
-            Assert.AreEqual(10, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Dummy);
-
-#if ENTITY_STORE_V1
-            Assert.AreEqual(1, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Entity.Index);
-            Assert.AreEqual(1, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Entity.Version);
-#endif
 
             EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
         }
@@ -6907,7 +6331,7 @@ namespace Unity.Entities.Tests
                     LogAssert.Expect(LogType.Log,
                         $"Setting unmanaged shared component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestSharedComp>()}; recorded from {originSystemDebugName}.");
 
-                    Assert.AreEqual(10, m_Manager.GetSharedComponentManaged<EcsTestSharedComp>(entity).value);
+                    Assert.AreEqual(10, m_Manager.GetSharedComponent<EcsTestSharedComp>(entity).value);
                 }
             }
 
@@ -6925,7 +6349,9 @@ namespace Unity.Entities.Tests
             using (var testEntities = m_Manager.CreateEntity(archetype, 5, World.UpdateAllocator.ToAllocator))
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddSharedComponentManaged(testEntities, new EcsStringSharedComponent {Value = "Test"});
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
 
@@ -6954,7 +6380,9 @@ namespace Unity.Entities.Tests
             using (var testEntities = m_Manager.CreateEntity(archetype, 5, World.UpdateAllocator.ToAllocator))
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetSharedComponentManaged(testEntities, new EcsStringSharedComponent {Value = "Test"});
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
 
@@ -6965,8 +6393,10 @@ namespace Unity.Entities.Tests
                     LogAssert.Expect(LogType.Log,
                         $"Setting shared component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsStringSharedComponent>()}; recorded from {originSystemDebugName}.");
 
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     Assert.AreEqual("Test",
                         m_Manager.GetSharedComponentManaged<EcsStringSharedComponent>(entity).Value);
+                    #pragma warning restore 0618
                 }
             }
 
@@ -7264,7 +6694,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
             var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             cmds.AddComponent(entity, new EcsTestManagedComponent());
+            #pragma warning restore 0618
             cmds.Playback(m_Manager);
 
             Assert.IsTrue(m_Manager.HasComponent<EcsTestManagedComponent>(entity));
@@ -7283,78 +6715,116 @@ namespace Unity.Entities.Tests
             {
                 // null src is a recording-time error
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => cmds.MoveComponent<EcsTestDisposableManagedComponent>(Entity.Null, dstEntity));
+                #pragma warning restore 0618
             }
             {
                 // null dst is a recording-time error
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.Throws<InvalidOperationException>(() => cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, Entity.Null));
+                #pragma warning restore 0618
             }
             {
                 // invalid but non-null src is a playback-time error
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(destroyedEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.Throws<ArgumentException>(() => cmds.Playback(m_Manager));
             }
             {
                 // invalid but non-null dst is a playback-time error
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, destroyedEntity);
+                #pragma warning restore 0618
                 Assert.Throws<ArgumentException>(() => cmds.Playback(m_Manager));
             }
             {
                 // missing target component on src is a playback-time error
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.Throws<ArgumentException>(() => cmds.Playback(m_Manager));
             }
 
             var value1 = new EcsTestDisposableManagedComponent { Value = "value1" };
             var value2 = new EcsTestDisposableManagedComponent { Value = "value2" };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(srcEntity, value1);
+            #pragma warning restore 0618
             {
                 // src == dst is a no-op
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, srcEntity);
+                #pragma warning restore 0618
                 Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(srcEntity));
+                #pragma warning restore 0618
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(dstEntity));
             }
             {
                 // If dst doesn't have the target component, it's added, and the value is not disposed
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEntity));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEntity));
+                #pragma warning restore 0618
             }
             {
                 // dst's T is null / default-initialized should work
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(srcEntity, value1);
+                #pragma warning restore 0618
                 m_Manager.AddComponent<EcsTestDisposableManagedComponent>(dstEntity);
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEntity));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEntity));
+                #pragma warning restore 0618
             }
             {
                 // dst's T value matches src's: should work
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(srcEntity, value1);
+                #pragma warning restore 0618
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEntity));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value1, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEntity));
+                #pragma warning restore 0618
             }
             {
                 // dst's T value does not match src. In this case, we need to make sure dst's old value is correctly disposed and doesn't leak.
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData(srcEntity, value2);
+                #pragma warning restore 0618
                 using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+                #pragma warning restore 0618
                 Assert.DoesNotThrow(() => cmds.Playback(m_Manager));
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEntity));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(value2, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEntity));
+                #pragma warning restore 0618
             }
         }
 
@@ -7374,7 +6844,9 @@ namespace Unity.Entities.Tests
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddComponent(entity, new EcsTestManagedComponent());
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
                 LogAssert.Expect(LogType.Log,
@@ -7402,14 +6874,18 @@ namespace Unity.Entities.Tests
 
             using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetComponent(entity, new EcsTestManagedComponent {value = "Test"});
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
                 var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
                 LogAssert.Expect(LogType.Log,
                     $"Setting managed component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestManagedComponent>()}; recorded from {originSystemDebugName}.");
             }
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual("Test", m_Manager.GetComponentData<EcsTestManagedComponent>(entity).value);
+            #pragma warning restore 0618
 
             EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
         }
@@ -7427,7 +6903,9 @@ namespace Unity.Entities.Tests
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
             {
                 var originalVal = new EcsTestManagedComponent();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.AddComponentObject(entityQuery, originalVal);
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
 
                 using (var entities = entityQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
@@ -7440,7 +6918,9 @@ namespace Unity.Entities.Tests
                         LogAssert.Expect(LogType.Log,
                             $"Adding component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestManagedComponent>()}; recorded from {originSystemDebugName}.");
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var val = m_Manager.GetComponentObject<EcsTestManagedComponent>(entity);
+                        #pragma warning restore 0618
                         Assert.AreSame(originalVal, val);
                     }
                 }
@@ -7462,7 +6942,9 @@ namespace Unity.Entities.Tests
             using (var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData)))
             {
                 var originalVal = new EcsTestManagedComponent();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 cmds.SetComponentObject(entityQuery, originalVal);
+                #pragma warning restore 0618
                 cmds.Playback(m_Manager);
 
                 using (var entities = entityQuery.ToEntityArray(World.UpdateAllocator.ToAllocator))
@@ -7475,7 +6957,9 @@ namespace Unity.Entities.Tests
                         LogAssert.Expect(LogType.Log,
                             $"Setting component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestManagedComponent>()}; recorded from {originSystemDebugName}.");
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var val = m_Manager.GetComponentObject<EcsTestManagedComponent>(entity);
+                        #pragma warning restore 0618
                         Assert.AreSame(originalVal, val);
                     }
                 }
@@ -7496,6 +6980,7 @@ namespace Unity.Entities.Tests
             }
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         internal struct TestSharedComponentManaged : ISharedComponentData, IEquatable<TestSharedComponentManaged>
         {
             public int[] managedObject;
@@ -7515,6 +7000,7 @@ namespace Unity.Entities.Tests
                 return managedObject?.Length ?? -1;
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         public unsafe void ChainsContainingManagedObjectsDoesNotLeaks()
@@ -7525,11 +7011,15 @@ namespace Unity.Entities.Tests
                 var commandBuffer = commandBufferSystem.CreateCommandBuffer();
 
                 var entity1 = commandBuffer.CreateEntity();
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 commandBuffer.AddSharedComponentManaged(entity1, new TestSharedComponentManaged { managedObject = new int[1024] });
                 commandBuffer.SetSharedComponentManaged(entity1, new TestSharedComponentManaged { managedObject = new int[1024] });
+                #pragma warning restore 0618
                 var entity2 = commandBuffer.Instantiate(entity1);
                 commandBuffer.DestroyEntity(entity1);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 commandBuffer.SetSharedComponentManaged(entity2, new TestSharedComponentManaged { managedObject = new int[1024] });
+                #pragma warning restore 0618
                 commandBuffer.DestroyEntity(entity2);
 
                 var cleanupList = commandBuffer.m_Data->m_MainThreadChain.m_Cleanup == null
@@ -7564,6 +7054,651 @@ namespace Unity.Entities.Tests
                 }
                 Assert.IsFalse(isValidObjct);
             }
+        }
+
+        [Test]
+        public void AddSharedComponent_WithEntityFixup_Works()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            var entity = m_Manager.CreateEntity();
+            var e2 = cmds.CreateEntity();
+            cmds.AddComponent<EcsTestTag>(e2);
+            cmds.AddSharedComponent(entity, new EcsTestSharedCompEntity(e2));
+
+            Assert.DoesNotThrow(() => { cmds.Playback(m_Manager); });
+
+            var actualValue = m_Manager.GetSharedComponent<EcsTestSharedCompEntity>(entity);
+            Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value));
+        }
+
+        [Test]
+        public void AppendToBufferWithEntity_DelayedFixup_ContainsRealizedEntity()
+        {
+            int kNumOfBuffers = 12; // Must be > 2
+            int kNumOfDeferredEntities = 12;
+
+            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity[] e = new Entity[kNumOfBuffers];
+
+            for (int n = 0; n < kNumOfBuffers; n++)
+            {
+                e[n] = m_Manager.CreateEntity();
+                m_Manager.AddBuffer<EcsComplexEntityRefElement>(e[n]);
+                for (int i = 0; i < kNumOfDeferredEntities; i++)
+                    cmds.AppendToBuffer(e[n], new EcsComplexEntityRefElement() {Entity = cmds.CreateEntity()});
+            }
+
+            cmds.RemoveComponent<EcsComplexEntityRefElement>(e[0]);
+            cmds.DestroyEntity(e[1]);
+
+            cmds.Playback(m_Manager);
+
+            Assert.IsFalse(m_Manager.HasComponent<EcsComplexEntityRefElement>(e[0]));
+            Assert.IsFalse(m_Manager.Exists(e[1]));
+
+            for (int n = 2; n < kNumOfBuffers; n++)
+            {
+                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e[n]);
+                Assert.AreEqual(kNumOfDeferredEntities, outbuf.Length);
+                for (int i = 0; i < outbuf.Length; i++)
+                {
+                    Assert.IsTrue(m_Manager.Exists(outbuf[i].Entity));
+                }
+            }
+        }
+
+        [Test]
+        public void AddComponent_WhenDataContainsDeferredEntity_DeferredEntityIsResolved()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity e0 = cmds.CreateEntity();
+            cmds.AddComponent(e0, new EcsTestDataEntity(1, e0));
+
+            cmds.Playback(m_Manager);
+
+            using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)))
+            {
+                var e = group.GetSingletonEntity();
+                Assert.AreEqual(e, m_Manager.GetComponentData<EcsTestDataEntity>(e).value1);
+            }
+        }
+
+        [Test]
+        public void AddComponents_WhenDataContainsDeferredEntity_DeferredEntityIsResolved()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            Entity e0 = cmds.CreateEntity();
+            cmds.AddComponent(e0, new ComponentTypeSet(typeof(EcsTestDataEntity)));
+            cmds.SetComponent(e0, new EcsTestDataEntity(1, e0));
+            cmds.Playback(m_Manager);
+
+            using (var group = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)))
+            {
+                var e = group.GetSingletonEntity();
+                Assert.AreEqual(e, m_Manager.GetComponentData<EcsTestDataEntity>(e).value1);
+            }
+        }
+
+        [Test]
+        public void AddOrSetBufferWithEntity_NeedsFixup_ContainsRealizedEntity([Values(true, false)] bool setBuffer)
+        {
+            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity e0 = m_Manager.CreateEntity();
+            Entity e1 = m_Manager.CreateEntity();
+            Entity e2 = m_Manager.CreateEntity();
+
+            if (setBuffer)
+                m_Manager.AddComponent(e1, typeof(EcsComplexEntityRefElement));
+
+            {
+                var deferred0 = cmds.CreateEntity();
+                var deferred1 = cmds.CreateEntity();
+                var deferred2 = cmds.CreateEntity();
+
+                cmds.AddComponent(e0, new EcsTestDataEntity() { value1 = deferred0 });
+                cmds.AddComponent(e1, new EcsTestDataEntity() { value1 = deferred1 });
+                cmds.AddComponent(e2, new EcsTestDataEntity() { value1 = deferred2 });
+
+                var buf = setBuffer ? cmds.SetBuffer<EcsComplexEntityRefElement>(e1) : cmds.AddBuffer<EcsComplexEntityRefElement>(e1);
+                buf.Add(new EcsComplexEntityRefElement() {Entity = e0});
+                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred1});
+                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred2});
+                buf.Add(new EcsComplexEntityRefElement() {Entity = deferred0});
+                cmds.Playback(m_Manager);
+            }
+            {
+                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e1);
+                Assert.AreEqual(4, outbuf.Length);
+                var expect0 = m_Manager.GetComponentData<EcsTestDataEntity>(e0).value1;
+                var expect1 = m_Manager.GetComponentData<EcsTestDataEntity>(e1).value1;
+                var expect2 = m_Manager.GetComponentData<EcsTestDataEntity>(e2).value1;
+                Assert.AreEqual(e0, outbuf[0].Entity);
+                Assert.AreEqual(expect1, outbuf[1].Entity);
+                Assert.AreEqual(expect2, outbuf[2].Entity);
+                Assert.AreEqual(expect0, outbuf[3].Entity);
+            }
+        }
+
+        [Test]
+        public void BufferWithEntity_DelayedFixup_ContainsRealizedEntity()
+        {
+            int kNumOfBuffers = 12; // Must be > 2
+            int kNumOfDeferredEntities = 12;
+
+            using EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity[] e = new Entity[kNumOfBuffers];
+
+            for (int n = 0; n < kNumOfBuffers; n++)
+            {
+                e[n] = m_Manager.CreateEntity();
+                var buf = cmds.AddBuffer<EcsComplexEntityRefElement>(e[n]);
+                for (int i = 0; i < kNumOfDeferredEntities; i++)
+                    buf.Add(new EcsComplexEntityRefElement() {Entity = cmds.CreateEntity()});
+            }
+
+            cmds.RemoveComponent<EcsComplexEntityRefElement>(e[0]);
+            cmds.DestroyEntity(e[1]);
+
+            cmds.Playback(m_Manager);
+
+            Assert.IsFalse(m_Manager.HasComponent<EcsComplexEntityRefElement>(e[0]));
+            Assert.IsFalse(m_Manager.Exists(e[1]));
+
+            for (int n = 2; n < kNumOfBuffers; n++)
+            {
+                var outbuf = m_Manager.GetBuffer<EcsComplexEntityRefElement>(e[n]);
+                Assert.AreEqual(kNumOfDeferredEntities, outbuf.Length);
+                for (int i = 0; i < outbuf.Length; i++)
+                {
+                    Assert.IsTrue(m_Manager.Exists(outbuf[i].Entity));
+                }
+            }
+        }
+
+        [Test]
+        public void AddComponentForLinkedEntityGroup_WithEntityFixup_Works()
+        {
+            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
+            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
+
+            for (var i = 0; i < 10; i++)
+            {
+                var child = m_Manager.CreateEntity();
+                if (i % 2 == 0)
+                    m_Manager.AddComponent<EcsTestData>(child);
+                array[i] = child;
+            }
+
+            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
+            linkedBuffer.Add(rootEntity);
+            for (var i = 0; i < 10; i++)
+            {
+                linkedBuffer.Add(new LinkedEntityGroup {Value = array[i]});
+            }
+
+            var instance = m_Manager.Instantiate(rootEntity);
+
+            var mask = m_Manager.CreateEntityQuery(ComponentType.ReadWrite<EcsTestData>()).GetEntityQueryMask();
+
+            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e2 = cmds.CreateEntity();
+                cmds.AddComponent<EcsTestTag>(e2);
+                cmds.AddComponentForLinkedEntityGroup(instance, mask, new EcsTestDataEntity(17,e2));
+                cmds.Playback(m_Manager);
+            }
+
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData,EcsTestDataEntity>()
+                .Build(m_Manager);
+            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(5, results.Length);
+                for (int i = 0; i < results.Length; i++)
+                {
+                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
+                    Assert.AreEqual(17, value.value0);
+                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
+                }
+            }
+
+            array.Dispose();
+        }
+
+        [Test]
+        public void SetComponentForLinkedEntityGroup_WithEntityFixup_Works()
+        {
+            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
+            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
+
+            for (var i = 0; i < 10; i++)
+            {
+                var child = m_Manager.CreateEntity(typeof(Prefab));
+                if (i % 2 == 0)
+                    m_Manager.AddComponent<EcsTestDataEntity>(child);
+                array[i] = child;
+            }
+
+            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
+            linkedBuffer.Add(rootEntity);
+            for (var i = 0; i < 10; i++)
+            {
+                linkedBuffer.Add(new LinkedEntityGroup { Value = array[i] });
+            }
+
+            var instance = m_Manager.Instantiate(rootEntity);
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestDataEntity>()
+                .Build(m_Manager);
+            var mask = query.GetEntityQueryMask();
+
+            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e2 = cmds.CreateEntity();
+                cmds.AddComponent<EcsTestTag>(e2);
+                cmds.SetComponentForLinkedEntityGroup(instance, mask, new EcsTestDataEntity(42, e2));
+                cmds.Playback(m_Manager);
+            }
+
+            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(5, results.Length);
+                for (int i = 0; i < results.Length; i++)
+                {
+                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
+                    Assert.AreEqual(42, value.value0);
+                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
+                }
+            }
+
+            array.Dispose();
+        }
+
+        [Test]
+        public void ReplaceComponentForLinkedEntityGroup_WithEntityFixup_Works()
+        {
+            var rootEntity = m_Manager.CreateEntity(typeof(Prefab), typeof(LinkedEntityGroup));
+            var array = CollectionHelper.CreateNativeArray<Entity>(10, World.UpdateAllocator.ToAllocator);
+
+            for (var i = 0; i < 10; i++)
+            {
+                var child = m_Manager.CreateEntity(typeof(Prefab));
+                if (i % 2 == 0)
+                    m_Manager.AddComponent<EcsTestDataEntity>(child);
+                array[i] = child;
+            }
+
+            var linkedBuffer = m_Manager.AddBuffer<LinkedEntityGroup>(rootEntity);
+            linkedBuffer.Add(rootEntity);
+            for (var i = 0; i < 10; i++)
+            {
+                linkedBuffer.Add(new LinkedEntityGroup {Value = array[i]});
+            }
+
+            var instance = m_Manager.Instantiate(rootEntity);
+
+            using (EntityCommandBuffer cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e2 = cmds.CreateEntity();
+                cmds.AddComponent<EcsTestTag>(e2);
+                cmds.ReplaceComponentForLinkedEntityGroup(instance, new EcsTestDataEntity(42,e2));
+                cmds.Playback(m_Manager);
+            }
+
+            var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestDataEntity>().Build(m_Manager);
+            using (var results = query.ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(5, results.Length);
+                for (int i = 0; i < results.Length; i++)
+                {
+                    var value = m_Manager.GetComponentData<EcsTestDataEntity>(results[i]);
+                    Assert.AreEqual(42, value.value0);
+                    Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(value.value1));
+                }
+            }
+
+            array.Dispose();
+        }
+
+        [BurstCompile(CompileSynchronously = true)]
+        struct AddComponentWithValue_EntityArray_WithEntityFixup_Job : IJob
+        {
+            public EntityCommandBuffer.ParallelWriter Ecb;
+            public NativeArray<Entity> TestEntities;
+            public NativeArray<Entity> DeferredEntities;
+            public Entity Prefab;
+            public int Value0;
+            public void Execute()
+            {
+                var e2 = Ecb.CreateEntity(0);
+                Ecb.AddComponent<EcsTestTag>(0, e2);
+                var value = new EcsTestDataEntity(Value0, e2);
+                Ecb.AddComponent(0, TestEntities, value);
+                Ecb.Instantiate(0, Prefab, DeferredEntities);
+                Ecb.AddComponent(0, DeferredEntities, value);
+            }
+        }
+
+        [Test]
+        public void AddComponentWithValue_TargetIsEntityArray_WithEntityFixup_Works()
+        {
+            const int TEST_ENTITY_COUNT = 10;
+            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
+            var prefab = m_Manager.CreateEntity(typeof(EcsTestData3), typeof(Prefab));
+            using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+            var e2 = ecb.CreateEntity();
+            ecb.AddComponent<EcsTestTag>(e2);
+            var value = new EcsTestDataEntity(42,e2);
+            using var testEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var controlEntities = m_Manager.CreateEntity(archetype, 2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            using var deferredEntities = CollectionHelper.CreateNativeArray<Entity>(2*TEST_ENTITY_COUNT, World.UpdateAllocator.ToAllocator);
+            // Test main thread writer
+            ecb.AddComponent(testEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
+            ecb.Instantiate(prefab, deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT));
+            ecb.AddComponent(deferredEntities.GetSubArray(0, TEST_ENTITY_COUNT), value);
+            // Test ParallelWriter
+            new AddComponentWithValue_EntityArray_WithEntityFixup_Job
+            {
+                Ecb = ecb.AsParallelWriter(),
+                TestEntities = testEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                DeferredEntities = deferredEntities.GetSubArray(TEST_ENTITY_COUNT, TEST_ENTITY_COUNT),
+                Prefab = prefab,
+                Value0 = 42,
+            }.Run();
+
+            ecb.Playback(m_Manager);
+            for (int i = 0; i < testEntities.Length; ++i)
+            {
+                var actualValue = m_Manager.GetComponentData<EcsTestDataEntity>(testEntities[i]);
+                Assert.AreEqual(value.value0, actualValue.value0);
+                Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value1));
+            }
+
+            for (int i = 0; i < controlEntities.Length; ++i)
+                Assert.IsFalse(m_Manager.HasComponent<EcsTestDataEntity>(controlEntities[i]));
+            using var query = m_Manager.CreateEntityQuery(typeof(EcsTestData3), typeof(EcsTestDataEntity));
+            using var finalEntities = query.ToEntityArray(World.UpdateAllocator.ToAllocator);
+            Assert.AreEqual(deferredEntities.Length, finalEntities.Length);
+            for (int i = 0; i < finalEntities.Length; ++i)
+            {
+                var actualValue = m_Manager.GetComponentData<EcsTestDataEntity>(finalEntities[i]);
+                Assert.AreEqual(42, actualValue.value0);
+                Assert.IsTrue(m_Manager.HasComponent<EcsTestTag>(actualValue.value1));
+            }
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void PlaybackWithTrace_AddComponentWithEntityFixup()
+        {
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
+
+            var entity = m_Manager.CreateEntity();
+            FixedString64Bytes entityName = "";
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            entityName = "TestEntity";
+            m_Manager.SetName(entity, entityName);
+#endif
+
+            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                cmds.AddComponent<EcsTestDataEntity>(entity);
+                cmds.Playback(m_Manager);
+                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
+                LogAssert.Expect(LogType.Log,
+                    $"Adding component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestDataEntity>()}; recorded from {originSystemDebugName}.");
+            }
+
+            Assert.IsTrue(m_Manager.HasComponent<EcsTestDataEntity>(entity));
+
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void PlaybackWithTrace_SetComponentWithEntityFixup()
+        {
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
+
+            var entity = m_Manager.CreateEntity(typeof(EcsTestDataEntity));
+            FixedString64Bytes entityName = "";
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            entityName = "TestEntity";
+            m_Manager.SetName(entity, entityName);
+#endif
+
+            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e = cmds.CreateEntity();
+                cmds.SetComponent(entity, new EcsTestDataEntity{value0 = 10, value1 = e});
+                cmds.Playback(m_Manager);
+                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
+                LogAssert.Expect(LogType.Log,
+                    $"Setting component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsTestDataEntity>()}; recorded from {originSystemDebugName}.");
+            }
+
+            Assert.AreEqual(10, m_Manager.GetComponentData<EcsTestDataEntity>(entity).value0);
+
+
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void PlaybackWithTrace_AddBufferComponentWithEntityFixup()
+        {
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
+
+            var entity = m_Manager.CreateEntity();
+            FixedString64Bytes entityName = "";
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            entityName = "TestEntity";
+            m_Manager.SetName(entity, entityName);
+#endif
+
+            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                cmds.AddBuffer<EcsComplexEntityRefElement>(entity);
+                cmds.Playback(m_Manager);
+                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
+                LogAssert.Expect(LogType.Log,
+                    $"Adding dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
+            }
+
+            Assert.IsTrue(m_Manager.HasComponent<EcsComplexEntityRefElement>(entity));
+
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void PlaybackWithTrace_SetBufferComponentWithEntityFixup()
+        {
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
+
+            var entity = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
+            FixedString64Bytes entityName = "";
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            entityName = "TestEntity";
+            m_Manager.SetName(entity, entityName);
+#endif
+
+            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e = cmds.CreateEntity();
+                var buffer = cmds.SetBuffer<EcsComplexEntityRefElement>(entity);
+                buffer.Add(new EcsComplexEntityRefElement {Dummy = 10, Entity = e});
+                cmds.Playback(m_Manager);
+                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
+                LogAssert.Expect(LogType.Log,
+                    $"Setting dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
+            }
+
+            Assert.AreEqual(10, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Dummy);
+
+
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void PlaybackWithTrace_AppendToBufferWithEntityFixup()
+        {
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = true;
+
+            var entity = m_Manager.CreateEntity(typeof(EcsComplexEntityRefElement));
+            FixedString64Bytes entityName = "";
+
+#if !DOTS_DISABLE_DEBUG_NAMES
+            entityName = "TestEntity";
+            m_Manager.SetName(entity, entityName);
+#endif
+
+            using (var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator))
+            {
+                var e = cmds.CreateEntity();
+                cmds.AppendToBuffer(entity, new EcsComplexEntityRefElement {Dummy = 10, Entity = e});
+                cmds.Playback(m_Manager);
+                var originSystemDebugName = GetSystemDebugName(cmds.OriginSystemHandle);
+                LogAssert.Expect(LogType.Log,
+                    $"Appending element to dynamic buffer component on entity {entityName}({entity.Index},{entity.Version}) for component index {TypeManager.GetTypeIndex<EcsComplexEntityRefElement>()}; recorded from {originSystemDebugName}.");
+            }
+
+            Assert.AreEqual(10, m_Manager.GetBuffer<EcsComplexEntityRefElement>(entity)[0].Dummy);
+
+
+            EntityCommandBuffer.PLAYBACK_WITH_TRACE = false;
+        }
+#pragma warning disable 0618 //Remove when PlaybackPolicy is obsolete
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void MultiPlayback_PayloadEntityRefs_ThrowOnSecondPlayback()
+        {
+            // A command whose value references an entity created by the same ECB cannot be
+            // multi-played-back
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+
+            var holder = cmds.CreateEntity();
+            var target = cmds.CreateEntity();
+            cmds.AddComponent(holder, new EcsTestDataEntity(1, target));
+
+            cmds.Playback(m_Manager);
+            var firstHolders = m_Manager.CreateEntityQuery(typeof(EcsTestDataEntity)).ToEntityArray(Allocator.Temp);
+            Assert.AreEqual(1, firstHolders.Length);
+
+            Assert.Throws<InvalidOperationException>(() => cmds.Playback(m_Manager));
+        }
+#pragma warning restore 0618
+
+        [BurstCompile(CompileSynchronously = true)]
+        struct ParallelCreateWithComponentJob : IJobParallelFor
+        {
+            public EntityCommandBuffer.ParallelWriter CommandBuffer;
+
+            public void Execute(int index)
+            {
+                var e = CommandBuffer.CreateEntity(index);
+                CommandBuffer.AddComponent(index, e, new EcsTestData { value = index });
+            }
+        }
+
+        [BurstCompile(CompileSynchronously = true)]
+        struct CreateWithComponentJob : IJob
+        {
+            public NativeArray<Entity> allocatedEntities;
+            public EntityArchetype archetype;
+            public EntityCommandBuffer CommandBuffer;
+
+            public void Execute()
+            {
+                CommandBuffer.CreateEntity(archetype, allocatedEntities);
+                CommandBuffer.AddComponent(allocatedEntities, new EcsTestData {});
+            }
+        }
+
+#pragma warning disable 618 //Remove when PlaybackPolicy is obsolete
+        [Test]
+        public void MultiPlayback_ParallelWriterCreate_SecondPlaybackAllocatesFreshEntities()
+        {
+            const int kCreateCount = 1000;
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+            var job = new ParallelCreateWithComponentJob { CommandBuffer = cmds.AsParallelWriter() };
+            job.Schedule(kCreateCount, 1).Complete();
+
+            cmds.Playback(m_Manager);
+            using (var afterFirst = m_Manager.CreateEntityQuery(typeof(EcsTestData)).ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(kCreateCount, afterFirst.Length, "First playback should realize all parallel-recorded entities.");
+            }
+
+            cmds.Playback(m_Manager);
+            using (var afterSecond = m_Manager.CreateEntityQuery(typeof(EcsTestData)).ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(2 * kCreateCount, afterSecond.Length,
+                    "Second playback should add kCreateCount more entities.");
+            }
+        }
+
+        [Test]
+        public void MultiPlayback_Create_SecondPlaybackAllocatesFreshEntities()
+        {
+            const int kCreateCount = 1000;
+            NativeArray<Entity> entities = new NativeArray<Entity>(kCreateCount, Allocator.Persistent);
+            EntityArchetype archetype = m_Manager.CreateArchetype();
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator, PlaybackPolicy.MultiPlayback);
+
+            var job = new CreateWithComponentJob { CommandBuffer = cmds, allocatedEntities = entities, archetype = archetype};
+            job.Run();
+
+            cmds.Playback(m_Manager);
+            using (var afterFirst = m_Manager.CreateEntityQuery(typeof(EcsTestData)).ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(kCreateCount, afterFirst.Length, "First playback should realize all recorded entities.");
+            }
+
+            cmds.Playback(m_Manager);
+            using (var afterSecond = m_Manager.CreateEntityQuery(typeof(EcsTestData)).ToEntityArray(World.UpdateAllocator.ToAllocator))
+            {
+                Assert.AreEqual(2 * kCreateCount, afterSecond.Length,
+                    "Second playback should add kCreateCount more entities.");
+            }
+
+            entities.Dispose();
+        }
+#pragma warning restore 618
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Test requires entity command buffer safety checks")]
+        public void GetComponentData_OnEntityWithoutChunk_Throws()
+        {
+            using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+
+            Entity e = cmds.CreateEntity();
+            cmds.AddComponent<EcsTestData>(e);
+            var ex = Assert.Throws<InvalidOperationException>(() => m_Manager.GetComponentData<EcsTestData>(e),
+                "Entity was created via EntityCommandBuffer.CreateEntity/Instantiate but the EntityCommandBuffer has not yet been played back. " +
+                "Call EntityCommandBuffer.Playback() before reading or writing components on this entity.");
+        }
+
+        [Test]
+        public void Dispose_WithoutPlayback_DoesNotLeakEntities()
+        {
+            int beforeWorldEntities = m_Manager.Debug.EntityCount;
+            {
+                using var cmds = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
+                for (int i = 0; i < 32; i++)
+                    cmds.CreateEntity();
+            }
+            int afterWorldEntities = m_Manager.Debug.EntityCount;
+            Assert.AreEqual(beforeWorldEntities, afterWorldEntities,
+                "ECB disposed without Playback() should DeallocateEntities its recorded entities.");
         }
     }
 }

@@ -28,7 +28,7 @@ namespace Unity.Entities
         struct IndexAndInstance
         {
             public int transformAccessArrayIndex;
-            public int instanceID;
+            public EntityId entityId;
         }
 
         TransformAccessArray m_TransformAccessArray;
@@ -120,9 +120,9 @@ namespace Unity.Entities
                         {
                             IndexAndInstance indexAndInstance = default;
                             indexAndInstance.transformAccessArrayIndex = m_Entities.Length;
-                            indexAndInstance.instanceID = link.CompanionTransform.Id.instanceId;
+                            indexAndInstance.entityId = link.CompanionTransform.Id.entityId;
                             m_EntitiesMap.Add(entity, indexAndInstance);
-                            m_TransformAccessArray.Add(link.CompanionTransform.Id.instanceId);
+                            m_TransformAccessArray.Add(link.CompanionTransform.Id.entityId);
                             m_Entities.Add(entity);
                         }
                     }
@@ -153,8 +153,8 @@ namespace Unity.Entities
                 foreach (var (link, entity) in SystemAPI.Query<CompanionLinkTransform>().WithChangeFilter<CompanionLink>().WithEntityAccess())
                 {
                     var cached = m_EntitiesMap[entity];
-                    var currentID = link.CompanionTransform.Id.instanceId;
-                    if (cached.instanceID != currentID)
+                    var currentID = link.CompanionTransform.Id.entityId;
+                    if (cached.entityId != currentID)
                     {
                         // We avoid the need to update the indices and reorder the entities array by adding
                         // the new transform first, and removing the old one after with a RemoveAtSwapBack.
@@ -162,9 +162,9 @@ namespace Unity.Entities
                         // 1. ABCD + X = ABCDX
                         // 2. ABCDX - B = AXCD
                         // -> the transform is updated, but the index remains unchanged
-                        m_TransformAccessArray.Add(link.CompanionTransform.Id.instanceId);
+                        m_TransformAccessArray.Add(link.CompanionTransform.Id.entityId);
                         m_TransformAccessArray.RemoveAtSwapBack(cached.transformAccessArrayIndex);
-                        cached.instanceID = currentID;
+                        cached.entityId = currentID;
                         m_EntitiesMap[entity] = cached;
                     }
                 }

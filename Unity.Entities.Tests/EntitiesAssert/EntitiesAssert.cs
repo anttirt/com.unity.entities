@@ -239,6 +239,8 @@ namespace Unity.Entities.Tests
             => Match(MatchType.Exact, new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7) }, matchData);
         public static EntityMatch Exact<T0, T1, T2, T3, T4, T5, T6, T7, T8>(params object[] matchData)
             => Match(MatchType.Exact, new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8) }, matchData);
+        public static EntityMatch Exact<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(params object[] matchData)
+            => Match(MatchType.Exact, new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9) }, matchData);
 
         public static EntityMatch Exact(IEnumerable<Type> types, IEnumerable<object> matchData)
             => Match(MatchType.Exact, types, matchData);

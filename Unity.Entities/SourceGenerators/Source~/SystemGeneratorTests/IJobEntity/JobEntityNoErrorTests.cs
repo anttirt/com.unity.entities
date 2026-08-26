@@ -143,49 +143,6 @@ public class JobEntityNoErrorTests
     }
 
     [TestMethod]
-    public async Task JobWithAspectNestedPrimitives()
-    {
-        const string source = @"
-            using Unity.Entities;
-            using Unity.Entities.Tests;
-            partial struct JobWithAspectLookup : IJobEntity
-            {
-                public EcsTestAspect.Lookup Lookup;
-                public JobWithAspectLookup(EcsTestAspect.Lookup a) { Lookup = a; }
-                void Execute() { }
-            }
-            partial struct JobWithNestedAspectLookup : IJobEntity
-            {
-                public struct Nested
-                {
-                    public EcsTestAspect.Lookup Lookup;
-                    public Nested(EcsTestAspect.Lookup a) { Lookup = a; }
-                }
-                public Nested NestedLookup;
-                public JobWithNestedAspectLookup(Nested a) { NestedLookup = a; }
-                void Execute() { }
-            }
-            partial struct JobWithAspectTypeHandle : IJobEntity
-            {
-                public EcsTestAspect.TypeHandle TypeHandle;
-                public JobWithAspectTypeHandle(EcsTestAspect.TypeHandle a) { TypeHandle = a; }
-                void Execute() { }
-            }
-            partial struct JobWithNestedAspectTypeHandle : IJobEntity
-            {
-                public struct Nested
-                {
-                    public EcsTestAspect.TypeHandle TypeHandle;
-                    public Nested(EcsTestAspect.TypeHandle a) { TypeHandle = a; }
-                }
-                public Nested NestedTypeHandle;
-                public JobWithNestedAspectTypeHandle(Nested a) { NestedTypeHandle = a; }
-                void Execute() { }
-            }";
-        await VerifyCS.VerifySourceGeneratorAsync(source);
-    }
-
-    [TestMethod]
     public async Task ParameterTypesWithValidAccessibility()
     {
         const string source = @"

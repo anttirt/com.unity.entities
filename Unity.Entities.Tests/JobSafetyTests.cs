@@ -1,6 +1,6 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Jobs;
@@ -630,20 +630,23 @@ namespace Unity.Entities.Tests
             _testSystem.BufferSafetyJob_GetUnsafePtrReadWrite_Run();
         }
 
+        [BurstCompile]
+        partial struct ReadBufferJob : IJobEntity
+        {
+            void Execute(in DynamicBuffer<EcsIntElement> buffers)
+            {
+                unsafe
+                {
+                    var ptr = buffers.GetUnsafeReadOnlyPtr();
+                }
+            }
+        }
+
         public partial class DynamicBufferReadOnlySystem : SystemBase
         {
             protected override void OnUpdate()
             {
-                Entities
-                    .ForEach((
-                    Entity e,
-                    in DynamicBuffer<EcsIntElement> buffers) =>
-                    {
-                        unsafe
-                        {
-                            var ptr = buffers.GetUnsafeReadOnlyPtr();
-                        }
-                    }).Run();
+                new ReadBufferJob().Run();
             }
         }
 

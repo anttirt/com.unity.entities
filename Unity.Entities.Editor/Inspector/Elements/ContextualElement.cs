@@ -21,7 +21,7 @@ namespace Unity.Entities.Editor
 
         public ContextualElement(string sessionKey, params Item[] elements)
         {
-            m_State = Unity.Serialization.Editor.SessionState<State>.GetOrCreate(sessionKey);
+            m_State = Unity.Entities.Editor.Serialization.SessionState<State>.GetOrCreate(sessionKey);
             m_Items = elements;
 
             focusable = true;

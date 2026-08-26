@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System.Runtime.InteropServices;
 using NUnit.Framework;
 using Unity.Collections;
@@ -14,11 +13,17 @@ namespace Unity.Entities.Tests
             var entity = em.CreateEntity();
             em.SetName(entity, "Test");
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             em.AddComponentData(entity, new EcsTestData(1));
+            #pragma warning restore 0618
             em.AddBuffer<EcsIntElement>(entity).Add(2);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             em.AddSharedComponentManaged(entity, new EcsTestSharedComp{value = 3});
+            #pragma warning restore 0618
             #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             em.AddComponentData(entity, new EcsTestManagedComponent(){ value = "boing" });
+            #pragma warning restore 0618
             #endif
 
             WorldForTest = em.World;
@@ -123,14 +128,21 @@ namespace Unity.Entities.Tests
                 Reference.Dispose();
             }
 
-            protected override void OnUpdate()
+            partial struct Job : IJobEntity
             {
-                var referenceValue = Reference;
-                Entities.WithoutBurst().WithNativeDisableParallelForRestriction(referenceValue).ForEach((Entity entity, ref EcsTestData outputValue) =>
+                [NativeDisableParallelForRestriction]
+                public NativeReference<bool> Reference;
+
+                public void Execute(Entity entity, ref EcsTestData outputValue)
                 {
                     CheckEntity(entity, true);
-                    referenceValue.Value = true;
-                }).ScheduleParallel();
+                    Reference.Value = true;
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                new Job { Reference = Reference }.ScheduleParallel();
             }
         }
 

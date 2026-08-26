@@ -118,12 +118,30 @@ public class BurstTests : BurstTestFixture
             Memory.Unmanaged.Free(allocated, Allocator.Persistent);
         }
     }
+    
+    [BurstCompile(CompileSynchronously = true)]
+    struct MallocWithMemLabelTestJob : IJob
+    {
+        public MemoryLabel label;
+        
+        public unsafe void Execute()
+        {
+            void* allocated = Memory.Unmanaged.Allocate(UnsafeUtility.SizeOf<int>() * 100, 4, label);
+            Memory.Unmanaged.Free(allocated, label);
+        }
+    }    
 
     [Test]
     public void MallocTest()
     {
         var jobData = new MallocTestJob();
         jobData.Run();
+
+        var labelJobData = new MallocWithMemLabelTestJob()
+        {
+            label = new MemoryLabel(nameof(BurstTests), "Test Allocations")
+        };
+        labelJobData.Run();
     }
 
     [BurstCompile(CompileSynchronously = true)]

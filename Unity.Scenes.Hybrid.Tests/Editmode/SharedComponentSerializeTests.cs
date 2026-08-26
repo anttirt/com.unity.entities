@@ -20,6 +20,7 @@ public class SharedComponentSerializeTests
         Blah = 5
     }
 
+    #pragma warning disable EA0017 // intentionally a managed shared component
     struct TestStruct : ISharedComponentData, IEquatable<TestStruct>
     {
         public int Value;
@@ -73,6 +74,7 @@ public class SharedComponentSerializeTests
             }
         }
     }
+    #pragma warning restore EA0017
 
     public static string s_MaterialAssetPath = "Assets/TestMaterial.asset";
     public Material CreateBasicMaterial()
@@ -127,7 +129,7 @@ public class SharedComponentSerializeTests
 
         // Read from stream
         var readStream = buffer.AsReader();
-        var reader = new ManagedObjectBinaryReader(&readStream, unityObjectRefs.InstanceIDs.AsArray());
+        var reader = new ManagedObjectBinaryReader(&readStream, unityObjectRefs.EntityIds.AsArray());
 
         var boxedRead = reader.ReadObject(typeof(TestStruct));
 
@@ -173,7 +175,7 @@ public class SharedComponentSerializeTests
 
         // Read from stream
         var readStream = buffer.AsReader();
-        var reader = new ManagedObjectBinaryReader(&readStream, unityObjectRefs.InstanceIDs.AsArray());
+        var reader = new ManagedObjectBinaryReader(&readStream, unityObjectRefs.EntityIds.AsArray());
 
         var boxedRead = reader.ReadObject(typeof(ComponentWithStringArray));
 

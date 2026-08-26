@@ -9,6 +9,7 @@ using Unity.Burst.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using UnityEngine;
 using UnityEngine.Profiling;
 
 namespace Unity.Entities
@@ -151,13 +152,13 @@ namespace Unity.Entities
         UntypedUnsafeParallelHashMap m_CachedEntityGUIDToEntityIndex;
 
         [GenerateTestsForBurstCompatibility(CompileTarget = GenerateTestsForBurstCompatibilityAttribute.BurstCompatibleCompileTarget.Editor)]
-        public ref UnsafeParallelMultiHashMap<int, Entity> CachedEntityGUIDToEntityIndex
+        public ref UnsafeParallelMultiHashMap<EntityId, Entity> CachedEntityGUIDToEntityIndex
         {
             get
             {
                 fixed (void* ptr = &m_CachedEntityGUIDToEntityIndex)
                 {
-                    return ref UnsafeUtility.AsRef<UnsafeParallelMultiHashMap<int, Entity>>(ptr);
+                    return ref UnsafeUtility.AsRef<UnsafeParallelMultiHashMap<EntityId, Entity>>(ptr);
                 }
             }
         }
@@ -200,7 +201,7 @@ namespace Unity.Entities
 
             self->AliveEntityQueries = new UnsafeParallelHashMap<ulong, byte>(32, Allocator.Persistent);
 #if UNITY_EDITOR
-            self->CachedEntityGUIDToEntityIndex = new UnsafeParallelMultiHashMap<int, Entity>(32, Allocator.Persistent);
+            self->CachedEntityGUIDToEntityIndex = new UnsafeParallelMultiHashMap<EntityId, Entity>(32, Allocator.Persistent);
 #endif
             self->m_DependencyManager.OnCreate(world.Unmanaged);
             Entities.EntityComponentStore.Create(&self->m_EntityComponentStore, world.SequenceNumber);
@@ -514,7 +515,7 @@ namespace Unity.Entities
 
             EntityComponentStore->AssertValidEntities((Entity*) entities.GetUnsafePtr(), entities.Length);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_DestroyEntity(in originSystem, in entities);
 #endif
@@ -544,7 +545,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.DestroyEntity, in m_WorldUnmanaged);
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -575,7 +576,7 @@ namespace Unity.Entities
                 return;
             EntityComponentStore->AssertValidEntities(entities, count);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_DestroyEntity(in originSystem, entities, count);
 #endif
@@ -667,12 +668,70 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_CreateEntity(in originSystem, &entity, 1);
 #endif
 
             return entity;
+        }
+
+        public void AllocateAndAssignChunksToExistingEntities(EntityArchetype archetype, Entity* existingEntities, int count)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (count < 0)
+                throw new ArgumentOutOfRangeException("count must be non-negative");
+#endif
+            Unity.Entities.EntityComponentStore.AssertValidArchetype(EntityComponentStore, archetype);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.CreateEntity, in m_WorldUnmanaged);
+#endif
+
+            StructuralChange.AllocateAndAssignChunksToExistingEntities(EntityComponentStore, archetype.Archetype, existingEntities, count);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.End();
+#endif
+
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+            if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
+                JournalAddRecord_CreateEntity(default, existingEntities, count, (TypeIndex*)archetype.Types, archetype.TypesCount);
+#endif
+        }
+
+        public ChunkIndex GetChunkWithEmptySlots( EntityArchetype entityArchetype)
+        {
+            Unity.Entities.EntityComponentStore.AssertValidArchetype(EntityComponentStore, entityArchetype);
+
+            var archetypeChunkFilter = new EntityComponentStore.ArchetypeChunkFilter();
+            archetypeChunkFilter.Archetype = entityArchetype.Archetype;
+            return EntityComponentStore->GetChunkWithEmptySlots(ref archetypeChunkFilter);
+        }
+
+        public void DeallocateAndUnAssignChunksToExistingEntities(Entity* existingEntities, int count)
+        {
+            if (count == 0)
+                return;
+            EntityComponentStore->AssertValidEntities(existingEntities, count);
+
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+            if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
+                JournalAddRecord_DestroyEntity(default, existingEntities, count);
+#endif
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.DestroyEntity, in m_WorldUnmanaged);
+#endif
+            StructuralChange.DeallocateAndUnAssignChunksToExistingEntities(EntityComponentStore, existingEntities, count);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.End();
+#endif
         }
 
         /// <summary>
@@ -716,7 +775,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_CreateEntity(in originSystem, outEntities, count, (TypeIndex*)archetype.Types, archetype.TypesCount);
 #endif
@@ -750,7 +809,7 @@ namespace Unity.Entities
 
             EntityComponentStore->AssertCanAddComponent(entity, componentType);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_AddComponent(in originSystem, &entity, 1, &componentType.TypeIndex, 1);
 #endif
@@ -784,7 +843,7 @@ namespace Unity.Entities
         {
             EntityComponentStore->AssertCanAddComponents(entity, typeSet);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_AddComponent(in originSystem, &entity, 1, typeSet.UnsafeTypesPtrRO, typeSet.Length);
 #endif
@@ -824,7 +883,7 @@ namespace Unity.Entities
 #endif
 
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -862,7 +921,7 @@ namespace Unity.Entities
 #endif
 
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -894,7 +953,7 @@ namespace Unity.Entities
 
             EntityComponentStore->AssertCanAddComponent(entities, componentType);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_AddComponent(in originSystem, in entities, &componentType.TypeIndex, 1);
 #endif
@@ -908,9 +967,7 @@ namespace Unity.Entities
                 EntityComponentStore->CreateEntityBatchList(entities, componentType.IsSharedComponent ? 1 : 0,
                     Allocator.Temp, out var entityBatchList))
             {
-                StructuralChange.AddComponentEntitiesBatch(EntityComponentStore,
-                    (UnsafeList<EntityBatchInChunk>*) NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(
-                        ref entityBatchList), componentType.TypeIndex);
+                StructuralChange.AddComponentEntitiesBatch(EntityComponentStore, entityBatchList.GetUnsafeList(), componentType.TypeIndex);
             }
             else
             {
@@ -943,7 +1000,7 @@ namespace Unity.Entities
                 return;
             EntityComponentStore->AssertCanAddComponents(entities, componentTypeSet);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_AddComponent(in originSystem, in entities, componentTypeSet.UnsafeTypesPtrRO, componentTypeSet.Length);
 #endif
@@ -957,9 +1014,7 @@ namespace Unity.Entities
                 EntityComponentStore->CreateEntityBatchList(entities, componentTypeSet.m_masks.SharedComponents,
                     Allocator.Temp, out var entityBatchList))
             {
-                StructuralChange.AddComponentsEntitiesBatch(EntityComponentStore,
-                    (UnsafeList<EntityBatchInChunk>*) NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(
-                        ref entityBatchList), componentTypeSet);
+                StructuralChange.AddComponentsEntitiesBatch(EntityComponentStore, entityBatchList.GetUnsafeList(), componentTypeSet);
             }
             else
             {
@@ -989,7 +1044,7 @@ namespace Unity.Entities
                 return;
             EntityComponentStore->AssertCanRemoveComponents(componentTypeSet);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_RemoveComponent(in originSystem, in entities, componentTypeSet.UnsafeTypesPtrRO, componentTypeSet.Length);
 #endif
@@ -1002,9 +1057,7 @@ namespace Unity.Entities
             if (entities.Length > FASTER_TO_BATCH_THRESHOLD &&
                 EntityComponentStore->CreateEntityBatchList(entities, 0, Allocator.Temp, out var entityBatchList))
             {
-                StructuralChange.RemoveComponentsEntitiesBatch(EntityComponentStore,
-                    (UnsafeList<EntityBatchInChunk>*) NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(
-                        ref entityBatchList), componentTypeSet);
+                StructuralChange.RemoveComponentsEntitiesBatch(EntityComponentStore, entityBatchList.GetUnsafeList(), componentTypeSet);
             }
             else
             {
@@ -1032,7 +1085,7 @@ namespace Unity.Entities
         {
             EntityComponentStore->AssertCanRemoveComponent(componentType);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_RemoveComponent(in originSystem, &entity, 1, &componentType.TypeIndex, 1);
 #endif
@@ -1062,7 +1115,7 @@ namespace Unity.Entities
         {
             EntityComponentStore->AssertCanRemoveComponents(componentTypeSet);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_RemoveComponent(in originSystem, &entity, 1, componentTypeSet.UnsafeTypesPtrRO, componentTypeSet.Length);
 #endif
@@ -1098,7 +1151,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.RemoveComponent, in m_WorldUnmanaged);
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -1130,7 +1183,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.RemoveComponent, in m_WorldUnmanaged);
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -1157,7 +1210,7 @@ namespace Unity.Entities
             if (chunks.Length == 0)
                 return;
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_RemoveComponent(in originSystem, in chunks, &componentType.TypeIndex, 1);
 #endif
@@ -1191,7 +1244,7 @@ namespace Unity.Entities
 
             EntityComponentStore->AssertCanRemoveComponent(componentType);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_RemoveComponent(in originSystem, in entities, &componentType.TypeIndex, 1);
 #endif
@@ -1204,9 +1257,7 @@ namespace Unity.Entities
             if (entities.Length > FASTER_TO_BATCH_THRESHOLD &&
                 EntityComponentStore->CreateEntityBatchList(entities, 0, Allocator.Temp, out var entityBatchList))
             {
-                StructuralChange.RemoveComponentEntitiesBatch(EntityComponentStore,
-                    (UnsafeList<EntityBatchInChunk>*) NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(
-                        ref entityBatchList), componentType.TypeIndex);
+                StructuralChange.RemoveComponentEntitiesBatch(EntityComponentStore, entityBatchList.GetUnsafeList(), componentType.TypeIndex);
             }
             else
             {
@@ -1319,7 +1370,7 @@ namespace Unity.Entities
 
             EntityComponentStore->SetComponentEnabled(entity, typeIndex, value);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetComponentEnabled(default, &entity, 1, &typeIndex, 1, value);
 #endif
@@ -1332,7 +1383,7 @@ namespace Unity.Entities
 
             EntityComponentStore->SetComponentEnabled(entity, typeIndex, value, ref typeLookupCache);
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetComponentEnabled(default, &entity, 1, &typeIndex, 1, value);
 #endif
@@ -1473,7 +1524,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
             where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
 
             //TODO: optimization: set value when component is added, not afterwards
             var added = AddComponentDuringStructuralChange(entity, ComponentType.ReadWrite<T>(), in originSystem);
@@ -1497,7 +1550,9 @@ namespace Unity.Entities
             where T : struct, ISharedComponentData
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
 
 #if ENABLE_PROFILER
             if (StructuralChangesProfiler.Enabled)
@@ -1520,7 +1575,7 @@ namespace Unity.Entities
             }
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 JournalAddRecord_AddComponent(in originSystem, in entities, &typeIndex, 1);
@@ -1563,7 +1618,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
         {
             Assert.IsTrue(componentType.IsSharedComponent);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(componentType.TypeIndex));
+            #pragma warning restore 0618
             if (queryImpl->IsEmptyIgnoreFilter)
                 return;
             EntityComponentStore->AssertCanAddComponent(queryImpl, componentType);
@@ -1576,7 +1633,7 @@ namespace Unity.Entities
             }
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -1625,7 +1682,7 @@ namespace Unity.Entities
             }
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 var typeIndex = componentType.TypeIndex;
@@ -1695,7 +1752,9 @@ namespace Unity.Entities
         // if defaultComponentData is null: consider we are inserting non default value
         public bool AddSharedComponentDataDuringStructuralChange_Unmanaged(Entity entity, ComponentType componentType, void* componentData, void* defaultComponentData)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(componentType.TypeIndex));
+            #pragma warning restore 0618
 
             var added = AddComponentDuringStructuralChange(entity, componentType);
             SetSharedComponentData_Unmanaged(entity, componentType.TypeIndex, componentData, defaultComponentData);
@@ -1708,7 +1767,9 @@ namespace Unity.Entities
         public void AddSharedComponentDataDuringStructuralChange_Unmanaged(NativeArray<Entity> entities,
             ComponentType componentType, void* componentData, void* defaultComponentData, in SystemHandle originSystem = default)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(componentType.TypeIndex));
+            #pragma warning restore 0618
 
 #if ENABLE_PROFILER
             if (StructuralChangesProfiler.Enabled)
@@ -1730,7 +1791,7 @@ namespace Unity.Entities
             }
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 var typeIndex = componentType.TypeIndex;
@@ -1743,9 +1804,24 @@ namespace Unity.Entities
         [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleSharedComponentData) })]
         public void GetAllUniqueSharedComponents_Unmanaged<T>(out UnsafeList<T> sharedComponentValues, AllocatorManager.AllocatorHandle allocator) where T : unmanaged, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
 
             EntityComponentStore->GetAllUniqueSharedComponents_Unmanaged<T>(out sharedComponentValues, allocator);
+        }
+
+        [GenerateTestsForBurstCompatibility(GenericTypeArguments = new[] { typeof(BurstCompatibleSharedComponentData) })]
+        public void GetAllUniqueSharedComponents_Unmanaged<T>(
+            out UnsafeList<T> sharedComponentValues,
+            out UnsafeList<int> sharedComponentIndices,
+            AllocatorManager.AllocatorHandle allocator) where T : unmanaged, ISharedComponentData
+        {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            Assert.IsFalse(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
+
+            EntityComponentStore->GetAllUniqueSharedComponents_Unmanaged<T>(out sharedComponentValues, out sharedComponentIndices, allocator);
         }
 
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
@@ -1809,7 +1885,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
             where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             EntityComponentStore->AssertEntityHasComponent(entity, typeIndex);
@@ -1828,7 +1906,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponentManaged(in originSystem, &entity, 1, typeIndex);
 #endif
@@ -1841,7 +1919,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
             where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var componentType = ComponentType.FromTypeIndex(typeIndex);
@@ -1862,7 +1942,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponentManaged(in originSystem, in entities, typeIndex);
 #endif
@@ -1875,7 +1955,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
             where T : struct, ISharedComponentData
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(TypeManager.GetTypeIndex<T>()));
+            #pragma warning restore 0618
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -1899,7 +1981,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponentManaged(in originSystem, &chunk, 1, typeIndex);
 #endif
@@ -1921,7 +2003,9 @@ namespace Unity.Entities
             EntityComponentStore->AssertEntityHasComponent(entity, typeIndex);
 
             var newSharedComponentDataIndex = 0;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var isManagedSharedComponent = TypeManager.IsManagedSharedComponent(typeIndex);
+            #pragma warning restore 0618
 
 #if ENABLE_PROFILER
             if (StructuralChangesProfiler.Enabled)
@@ -1936,9 +2020,10 @@ namespace Unity.Entities
                 }
                 else
                 {
-                    var componentDataAddr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(componentData, out var gcHandle) + TypeManager.ObjectOffset;
+                    var componentDataHandle = GCHandle.Alloc(componentData, GCHandleType.Pinned);
+                    var componentDataAddr = (byte*)componentDataHandle.AddrOfPinnedObject();
                     newSharedComponentDataIndex = EntityComponentStore->InsertSharedComponent_Unmanaged(typeIndex, hashCode, componentDataAddr, null);
-                    UnsafeUtility.ReleaseGCObject(gcHandle);
+                    componentDataHandle.Free();
                 }
             }
             var componentType = ComponentType.FromTypeIndex(typeIndex);
@@ -1968,7 +2053,9 @@ namespace Unity.Entities
 
             var type = ComponentType.FromTypeIndex(typeIndex);
             EntityComponentStore->AssertEntityHasComponent(entities, type);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
 
             var newSharedComponentDataIndex = 0;
             if (componentData != null) // null means default
@@ -2002,7 +2089,9 @@ namespace Unity.Entities
         {
             UnityEngine.Assertions.Assert.IsTrue(
                 TypeManager.IsSharedComponentType(typeIndex) &&
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 !TypeManager.IsManagedSharedComponent(typeIndex));
+                #pragma warning restore 0618
             var type = ComponentType.FromTypeIndex(typeIndex);
             EntityComponentStore->AssertEntityHasComponent(entity, type);
 
@@ -2036,7 +2125,9 @@ namespace Unity.Entities
             void* componentDataAddr,
             in SystemHandle originSystem = default)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             UnityEngine.Assertions.Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
             var type = ComponentType.FromTypeIndex(typeIndex);
             EntityComponentStore->AssertEntityHasComponent(entities, type);
 
@@ -2068,46 +2159,30 @@ namespace Unity.Entities
         public void GetAllUniqueSharedComponents<T>(List<T> sharedComponentValues) where T : struct, ISharedComponentData
         {
             var ti = TypeManager.GetTypeIndex<T>();
-            if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            if (!TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
-                ManagedComponentStore.GetAllUniqueSharedComponents_Managed(sharedComponentValues);
+                GetAllUniqueSharedComponentsManagedUnmanagedTypeWarning<T>.WarnOnce();
+                EntityComponentStore->GetAllUniqueSharedComponents_UnmanagedIntoManagedList(sharedComponentValues);
+                return;
             }
-            else
-            {
-                var defaultValue = default(T);
-                EntityComponentStore->GetAllUniqueSharedComponents_Unmanaged(ti, UnsafeUtility.AddressOf(ref defaultValue), out var unmanagedSharedComponentValues, out _, Allocator.Temp);
-                for (int i = 0; i < unmanagedSharedComponentValues.Length; i++)
-                {
-                    var el = UnsafeUtility.ReadArrayElement<T>(unmanagedSharedComponentValues.Ptr, i);
-                    sharedComponentValues.Add(el);
-                }
-            }
+            ManagedComponentStore.GetAllUniqueSharedComponents_Managed(sharedComponentValues);
         }
 
         [ExcludeFromBurstCompatTesting("Takes managed list")]
         public void GetAllUniqueSharedComponents<T>(List<T> sharedComponentValues, List<int> sharedComponentIndices) where T : struct, ISharedComponentData
         {
             var ti = TypeManager.GetTypeIndex<T>();
-            if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            if (!TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
-                ManagedComponentStore.GetAllUniqueSharedComponents_Managed(sharedComponentValues, sharedComponentIndices);
+                GetAllUniqueSharedComponentsManagedUnmanagedTypeWarning<T>.WarnOnce();
+                EntityComponentStore->GetAllUniqueSharedComponents_UnmanagedIntoManagedList(sharedComponentValues, sharedComponentIndices);
+                return;
             }
-            else
-            {
-                var defaultValue = default(T);
-                EntityComponentStore->GetAllUniqueSharedComponents_Unmanaged(
-                    ti,
-                    UnsafeUtility.AddressOf(ref defaultValue),
-                    out var unmanagedSharedComponentValues,
-                    out var unmanagedSharedComponentIndices,
-                    Allocator.Temp);
-                for (int i = 0; i < unmanagedSharedComponentValues.Length; i++)
-                {
-                    var el = UnsafeUtility.ReadArrayElement<T>(unmanagedSharedComponentValues.Ptr, i);
-                    sharedComponentValues.Add(el);
-                    sharedComponentIndices.Add(unmanagedSharedComponentIndices[i]);
-                }
-            }
+            ManagedComponentStore.GetAllUniqueSharedComponents_Managed(sharedComponentValues, sharedComponentIndices);
         }
 
         /// <summary>
@@ -2121,7 +2196,9 @@ namespace Unity.Entities
         {
             var ti = TypeManager.GetTypeIndex<T>();
             int index;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
                 index = ManagedComponentStore.InsertSharedComponent_Managed(newData);
             }
@@ -2148,7 +2225,9 @@ namespace Unity.Entities
         {
             var ti = TypeManager.GetTypeIndex<T>();
             int index;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(ti));
+            #pragma warning restore 0618
 
             var defaultData = default(T);
             index = EntityComponentStore->InsertSharedComponent_Unmanaged(ti,
@@ -2164,7 +2243,9 @@ namespace Unity.Entities
         public int GetSharedComponentVersion<T>(T sharedData) where T : struct
         {
             var ti = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(ti))
+            #pragma warning restore 0618
             {
                 return ManagedComponentStore.GetSharedComponentVersion_Managed(sharedData);
             }
@@ -2300,7 +2381,9 @@ namespace Unity.Entities
         [ExcludeFromBurstCompatTesting("Accesses managed component store")]
         public int InsertSharedComponentAssumeNonDefault(TypeIndex typeIndex, int hashCode, object sharedComponent)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (TypeManager.IsManagedSharedComponent(typeIndex))
+            #pragma warning restore 0618
             {
                 return ManagedComponentStore.InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, sharedComponent);
             }
@@ -2309,9 +2392,12 @@ namespace Unity.Entities
                 /*
                  * this is actually used in hybrid to read unmanaged shared components, but it is NOT called in dotsrt
                  */
-                var sharedComponentAddr = (byte*)UnsafeUtility.PinGCObjectAndGetAddress(sharedComponent, out var gcHandle) + TypeManager.ObjectOffset;
+                var sharedComponentHandle = GCHandle.Alloc(sharedComponent, GCHandleType.Pinned);
+                var sharedComponentAddr = (byte*)sharedComponentHandle.AddrOfPinnedObject();
+
                 var index = EntityComponentStore->InsertSharedComponent_Unmanaged(typeIndex, hashCode, sharedComponentAddr, null);
-                UnsafeUtility.ReleaseGCObject(gcHandle);
+                sharedComponentHandle.Free();
+
                 return index;
             }
         }
@@ -2359,7 +2445,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
         {
             var componentType = ComponentType.FromTypeIndex(typeIndex);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             UnityEngine.Assertions.Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
             EntityComponentStore->AssertEntityHasComponent(entity, typeIndex);
 
 #if ENABLE_PROFILER
@@ -2375,7 +2463,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponent(in originSystem, &entity, 1, componentType.TypeIndex, componentData, TypeManager.GetTypeInfo(componentType.TypeIndex).TypeSize);
 #endif
@@ -2390,7 +2478,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
         {
             var componentType = ComponentType.FromTypeIndex(typeIndex);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             UnityEngine.Assertions.Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
             EntityComponentStore->AssertEntityHasComponent(entities, componentType);
 
 #if ENABLE_PROFILER
@@ -2407,7 +2497,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponent(in originSystem, in entities, componentType.TypeIndex, componentData, TypeManager.GetTypeInfo(componentType.TypeIndex).TypeSize);
 #endif
@@ -2422,7 +2512,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
         {
             var componentType = ComponentType.FromTypeIndex(typeIndex);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             UnityEngine.Assertions.Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             var archetype = chunk.Archetype.Archetype;
             UnityEngine.Assertions.Assert.IsTrue(ChunkDataUtility.GetIndexInTypeArray(archetype, typeIndex) >= 0,
@@ -2442,7 +2534,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_SetSharedComponent(in originSystem, &chunk, 1, componentType.TypeIndex, componentData, TypeManager.GetTypeInfo(componentType.TypeIndex).TypeSize);
 #endif
@@ -2461,7 +2553,9 @@ namespace Unity.Entities
             ComponentType componentType,
             in SystemHandle originSystem = default)
         {
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsTrue(TypeManager.IsManagedSharedComponent(componentType.TypeIndex));
+            #pragma warning restore 0618
             EntityComponentStore->AssertNonEmptyArchetypesHaveComponent(queryImpl->_QueryData->MatchingArchetypes, componentType);
 
 #if ENABLE_PROFILER
@@ -2469,7 +2563,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.SetSharedComponent, in m_WorldUnmanaged);
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -2506,7 +2600,9 @@ namespace Unity.Entities
             in SystemHandle originSystem = default)
         {
             Assert.IsTrue(componentType.IsSharedComponent);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(componentType.TypeIndex));
+            #pragma warning restore 0618
             EntityComponentStore->AssertNonEmptyArchetypesHaveComponent(queryImpl->_QueryData->MatchingArchetypes, componentType);
 
 #if ENABLE_PROFILER
@@ -2514,7 +2610,7 @@ namespace Unity.Entities
                 StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.SetSharedComponent, in m_WorldUnmanaged);
 #endif
             queryImpl->SyncFilterTypes();
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
             {
                 // TODO: Allocating and populating this filtered chunk array is redundant work, but that's what the journaling interface requires.
@@ -2539,7 +2635,9 @@ namespace Unity.Entities
         public T GetSharedComponentData_Unmanaged<T>(Entity entity) where T : unmanaged, ISharedComponentData
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             UnityEngine.Assertions.Assert.IsFalse(TypeManager.IsManagedSharedComponent(typeIndex));
+            #pragma warning restore 0618
             EntityComponentStore->AssertEntityHasComponent(entity, typeIndex);
 
             var sharedComponentIndex = EntityComponentStore->GetSharedComponentDataIndex(entity, typeIndex);
@@ -2564,7 +2662,9 @@ namespace Unity.Entities
         public int GetSharedComponentVersion_Unmanaged<T>(T sharedData) where T : unmanaged
         {
             var ti = TypeManager.GetTypeIndex<T>();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.IsFalse(TypeManager.IsManagedSharedComponent(ti));
+            #pragma warning restore 0618
             var res = default(T);
             return EntityComponentStore->GetSharedComponentVersion_Unmanaged(ti, UnsafeUtility.AddressOf(ref sharedData), UnsafeUtility.AddressOf(ref res));
         }
@@ -2724,6 +2824,58 @@ namespace Unity.Entities
 #endif
         }
 
+#if ENABLE_TRANSFORMREF
+        public unsafe TransformRef GetTransformRef(Entity entity, bool isReadOnly = false)
+        {
+            TypeIndex typeIndex = TypeManager.GetTypeIndex<TransformRef>();
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            ComponentSafetyHandles* ptr = &DependencyManager->Safety;
+            return GetTransformRefInternal(entity, ptr->GetSafetyHandle(typeIndex, isReadOnly), ptr->GetBufferSafetyHandle(typeIndex), isReadOnly);
+#else
+            return GetTransformRefInternal(entity, isReadOnly);
+#endif
+        }
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+        public unsafe TransformRef GetTransformRefInternal(Entity entity, AtomicSafetyHandle safety, AtomicSafetyHandle hierarchySafety, bool isReadOnly = false)
+#else
+        public unsafe TransformRef GetTransformRefInternal(Entity entity, bool isReadOnly = false)
+#endif
+        {
+            TypeIndex typeIndex = TypeManager.GetTypeIndex<TransformRef>();
+            EntityComponentStore->AssertEntityHasComponent(entity, typeIndex);
+
+            if (!IsInExclusiveTransaction)
+            {
+                if (isReadOnly)
+                {
+                    DependencyManager->CompleteWriteDependency(typeIndex);
+                }
+                else
+                {
+                    DependencyManager->CompleteReadAndWriteDependency(typeIndex);
+                }
+            }
+
+            TransformUnion* header;
+            if (isReadOnly)
+            {
+                header = (TransformUnion*)EntityComponentStore->GetComponentDataWithTypeRO(entity, typeIndex);
+            }
+            else
+            {
+                header = (TransformUnion*)EntityComponentStore->GetComponentDataWithTypeRW(entity, typeIndex,
+                    EntityComponentStore->GlobalSystemVersion);
+            }
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            return new TransformRef(header, isReadOnly, safety, hierarchySafety);
+#else
+            return new TransformRef(header, isReadOnly);
+#endif
+        }
+#endif
+
         public void SetBufferRaw(Entity entity, TypeIndex componentTypeIndex, BufferHeader* tempBuffer, int sizeInChunk,
             in SystemHandle originSystem = default)
         {
@@ -2757,7 +2909,7 @@ namespace Unity.Entities
                 throw new ArgumentOutOfRangeException("count must be non-negative");
 #endif
             EntityComponentStore->AssertEntitiesExist(&srcEntity, 1);
-            EntityComponentStore->AssertCanInstantiateEntities(srcEntity, outputEntities, count);
+            EntityComponentStore->AssertCanInstantiateEntities(srcEntity);
 
 #if ENABLE_PROFILER
             if (StructuralChangesProfiler.Enabled)
@@ -2771,7 +2923,41 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+            if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
+                JournalAddRecord_CreateEntity(in originSystem, outputEntities, count);
+#endif
+        }
+
+        /// <summary>
+        /// This function must be wrapped in BeginStructuralChanges() and EndStructuralChanges(ref EntityComponentStore.ArchetypeChanges changes).
+        /// </summary>
+        /// <param name="srcEntity"></param>
+        /// <param name="outputEntities"></param>
+        /// <param name="count"></param>
+        internal void InstantiateExistingInternalDuringStructuralChange(Entity srcEntity, Entity* outputEntities, int count,
+            in SystemHandle originSystem = default)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (count < 0)
+                throw new ArgumentOutOfRangeException("count must be non-negative");
+#endif
+            EntityComponentStore->AssertEntitiesExist(&srcEntity, 1);
+            EntityComponentStore->AssertCanInstantiateEntities(srcEntity);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.CreateEntity, in m_WorldUnmanaged);
+#endif
+
+            StructuralChange.InstantiateExistingEntities(EntityComponentStore, &srcEntity, outputEntities, count);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.End();
+#endif
+
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_CreateEntity(in originSystem, outputEntities, count);
 #endif
@@ -2800,11 +2986,40 @@ namespace Unity.Entities
                 StructuralChangesRecorder.End();
 #endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
             if (Burst.CompilerServices.Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
                 JournalAddRecord_CreateEntity(in originSystem, outputEntities, outputCount);
 #endif
         }
+
+        internal void AllocateAndAssignChunksToExistingEntitiesInstantiate(Entity srcEntity, Entity* existingEntities, int count,
+            in SystemHandle originSystem = default)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (count < 0)
+                throw new ArgumentOutOfRangeException("count must be non-negative");
+#endif
+            EntityComponentStore->AssertEntitiesExist(&srcEntity, 1);
+            EntityComponentStore->AssertCanInstantiateEntities(srcEntity);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.Begin(StructuralChangesProfiler.StructuralChangeType.CreateEntity, in m_WorldUnmanaged);
+#endif
+
+            StructuralChange.InstantiateExistingEntities(EntityComponentStore, &srcEntity, existingEntities, count);
+
+#if ENABLE_PROFILER
+            if (StructuralChangesProfiler.Enabled)
+                StructuralChangesRecorder.End();
+#endif
+
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+            if (Hint.Unlikely(EntityComponentStore->m_RecordToJournal != 0))
+                JournalAddRecord_CreateEntity(in originSystem, existingEntities, count);
+#endif
+        }
+
 
         public void SwapComponents(ArchetypeChunk leftChunk, int leftIndex, ArchetypeChunk rightChunk, int rightIndex)
         {
@@ -2847,6 +3062,22 @@ namespace Unity.Entities
             ManagedComponentStore.GetAllUniqueSharedComponents_Managed(sharedComponentValues, sharedComponentIndices, sharedComponentVersions);
         }
 
+#if ENABLE_TRANSFORMREF
+        [GenerateTestsForBurstCompatibility]
+        public unsafe TransformTypeHandle GetTransformTypeHandle(bool isReadOnly)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            TypeIndex typeIndex = TypeManager.GetTypeIndex<TransformRef>();
+            AtomicSafetyHandle safetyHandleForComponentTypeHandle = DependencyManager->Safety.GetSafetyHandleForComponentTypeHandle(typeIndex, isReadOnly);
+            // TODO DOTS-10269: This should be a safety handle for the TransformHierarchies referenced by the TransformUnions in this chunk?
+            AtomicSafetyHandle hierarchySafety = DependencyManager->Safety.GetBufferHandleForBufferTypeHandle(typeIndex);
+            return new TransformTypeHandle(safetyHandleForComponentTypeHandle, hierarchySafety, isReadOnly, EntityComponentStore->GlobalSystemVersion);
+#else
+            return new TransformTypeHandle(isReadOnly, EntityComponentStore->GlobalSystemVersion);
+#endif
+        }
+#endif
+
         public bool HasBlobReferences(int sharedComponentIndex)
         {
             return TypeManager.GetTypeInfo(
@@ -2864,16 +3095,6 @@ namespace Unity.Entities
         internal Entity GetEntityByEntityIndex(int index)
         {
             return EntityComponentStore->GetEntityByEntityIndex(index);
-        }
-
-        internal int GetNameIndexByEntityIndex(int index)
-        {
-            int nameIndex = 0;
-#if !DOTS_DISABLE_DEBUG_NAMES
-            var entityName = EntityComponentStore->GetEntityNameByEntityIndex(index);
-            nameIndex = entityName.Index;
-#endif
-            return nameIndex;
         }
 
         /// <summary>
@@ -2914,7 +3135,8 @@ namespace Unity.Entities
             DependencyManager->CompleteAllJobsAndInvalidateArrays();
         }
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void JournalAddRecord_CreateEntity(in SystemHandle originSystem, Entity* entities, int entityCount, TypeIndex* types = null, int typeCount = 0)
         {
@@ -3166,6 +3388,7 @@ namespace Unity.Entities
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void JournalAddRecord_SetSharedComponentManaged(in SystemHandle originSystem, in NativeArray<ArchetypeChunk> chunks, TypeIndex typeIndex) =>
             JournalAddRecord_SetSharedComponentManaged(in originSystem, (ArchetypeChunk*)chunks.GetUnsafeReadOnlyPtr(), chunks.Length, typeIndex);
+#pragma warning restore 0618
 #endif
     }
 
@@ -3191,8 +3414,10 @@ namespace Unity.Entities
         public static T GetComponentObject<T>(ref this EntityDataAccess dataAccess, Entity entity, ComponentType componentType)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (!componentType.IsManagedComponent)
                 throw new System.ArgumentException($"GetComponentObject must be called with a managed component type.");
+                #pragma warning restore 0618
 #endif
             var index = *dataAccess.GetManagedComponentIndex(entity, componentType.TypeIndex);
             return (T)dataAccess.ManagedComponentStore.GetManagedComponent(index);
@@ -3201,10 +3426,14 @@ namespace Unity.Entities
         public static void SetComponentObject(ref this EntityDataAccess dataAccess, Entity entity, ComponentType componentType, object componentObject, in SystemHandle originSystem = default)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (!componentType.IsManagedComponent)
                 throw new System.ArgumentException($"SetComponentObject must be called with a managed component type.");
+                #pragma warning restore 0618
             if (componentObject != null && componentObject.GetType() != TypeManager.GetType(componentType.TypeIndex))
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 throw new System.ArgumentException($"SetComponentObject {componentObject.GetType()} doesn't match the specified component type: {TypeManager.GetType(componentType.TypeIndex)}");
+                #pragma warning restore 0618
 #endif
             var ptr = dataAccess.GetManagedComponentIndex(entity, componentType.TypeIndex);
             dataAccess.ManagedComponentStore.UpdateManagedComponentValue(ptr, componentObject, ref *dataAccess.EntityComponentStore);
@@ -3214,7 +3443,9 @@ namespace Unity.Entities
             Entity dstEntity, ComponentType componentType, in SystemHandle originSystem = default)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             if (Hint.Unlikely(!componentType.IsManagedComponent))
+            #pragma warning restore 0618
                 throw new ArgumentException($"{componentType} must be a managed component type.");
 #endif
             if (srcEntity == dstEntity)
@@ -3252,6 +3483,21 @@ namespace Unity.Entities
             // removing doesn't attempt to dispose the value.
             *srcPtr = 0;
             dataAccess.RemoveComponentDuringStructuralChange(srcEntity, componentType, originSystem);
+        }
+    }
+
+    static class GetAllUniqueSharedComponentsManagedUnmanagedTypeWarning<T>
+    {
+        static bool s_Warned;
+
+        internal static void WarnOnce()
+        {
+            if (s_Warned)
+                return;
+            s_Warned = true;
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            UnityEngine.Debug.LogWarning($"{typeof(T)} is an unmanaged shared component. Use {nameof(EntityManager.GetAllUniqueSharedComponents)}<T>(out NativeList<T>, AllocatorManager.AllocatorHandle) instead of {nameof(EntityManager.GetAllUniqueSharedComponentsManaged)} for better performance.");
+            #pragma warning restore 0618
         }
     }
 }

@@ -1,5 +1,5 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 
@@ -65,20 +65,19 @@ namespace Unity.Entities.Tests
     {
         partial class BumpVersionSystemInJob : SystemBase
         {
-            JobHandle UpdateEcsTestData2()
+            [BurstCompile]
+            partial struct BumpVersionJob : IJobEntity
             {
-                return
-                    Entities
-                        .ForEach((ref EcsTestData data, ref EcsTestData2 data2) =>
-                        {
-                            data2 = new EcsTestData2 { value0 = 10 };
-                        })
-                        .Schedule(default);
+                void Execute(ref EcsTestData data, ref EcsTestData2 data2)
+                {
+                    data2 = new EcsTestData2 { value0 = 10 };
+                }
             }
 
             protected override void OnUpdate()
             {
-                UpdateEcsTestData2().Complete();
+                var jobHandle = new BumpVersionJob().Schedule(new JobHandle());
+                jobHandle.Complete();
             }
 
             protected override void OnCreate()
@@ -264,27 +263,32 @@ namespace Unity.Entities.Tests
                 var bfe = GetBufferLookup<EcsIntElement>(true);
                 var componentLookup = GetComponentLookup<EcsTestData>(true);
                 uint lastSysVersion = LastSystemVersion;
-                Entities
-                    .WithAll<EcsTestData, EcsIntElement>()
-                    .ForEach((Entity e, ref EcsTestData2 changed) =>
-                    {
-                        changed.value0 = componentLookup.DidChange(e, lastSysVersion) ? 1 : 0;
-                        changed.value1 = bfe.DidChange(e, lastSysVersion) ? 1 : 0;
-                    }).Run();
+
+                foreach (var (changed, entity) in
+                         SystemAPI.Query<RefRW<EcsTestData2>>().WithEntityAccess().WithAll<EcsTestData, EcsIntElement>())
+                {
+                    changed.ValueRW.value0 = componentLookup.DidChange(entity, lastSysVersion) ? 1 : 0;
+                    changed.ValueRW.value1 = bfe.DidChange(entity, lastSysVersion) ? 1 : 0;
+                }
             }
         }
 
         partial class ChangeEntitiesWithTag : SystemBase
         {
+            [BurstCompile]
+            [WithAll(typeof(EcsTestTag))]
+            partial struct ChangeEntitiesWithTagJob : IJobEntity
+            {
+                void Execute(ref EcsTestData testData, ref DynamicBuffer<EcsIntElement> buf)
+                {
+                    testData.value += 10;
+                    buf.Add(new EcsIntElement{Value=17});
+                }
+            }
+
             protected override void OnUpdate()
             {
-                Entities
-                    .WithAll<EcsTestTag>()
-                    .ForEach((Entity e, ref EcsTestData testData, ref DynamicBuffer<EcsIntElement> buf) =>
-                    {
-                        testData.value += 10;
-                        buf.Add(new EcsIntElement{Value=17});
-                    }).Run();
+                new ChangeEntitiesWithTagJob().Run();
             }
         }
 

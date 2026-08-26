@@ -279,34 +279,6 @@ namespace Unity.Entities.SourceGen.SystemGenerator.SystemAPI.QueryBuilder
                                         _invocationsBeforeBuild.AppendLine($".WithNoneChunkComponent<{typeArguments.Select(t => t.TypeSymbol.ToFullName()).SeparateByCommaAndSpace()}>()");
                                         noneQueryTypes.AddRange(typeArguments);
                                         break;
-                                    case "WithAspect":
-                                        // Aspect types go in the Archetype.All list.
-                                        typeArguments =
-                                            genericNameSyntax.TypeArgumentList.Arguments.Select(typeArg =>
-                                                new Query
-                                                {
-                                                    TypeSymbol = systemDescription.SemanticModel.GetTypeInfo(typeArg).Type,
-                                                    Type = QueryType.All,
-                                                    IsReadOnly = false
-                                                }).ToArray();
-
-                                        _invocationsBeforeBuild.AppendLine($".WithAspect<{typeArguments.Select(t => t.TypeSymbol.ToFullName()).SeparateByCommaAndSpace()}>()");
-                                        allQueryTypes.AddRange(typeArguments);
-                                        break;
-                                    case "WithAspectRO":
-                                        // Aspect types go in the Archetype.All list.
-                                        typeArguments =
-                                            genericNameSyntax.TypeArgumentList.Arguments.Select(typeArg =>
-                                                new Query
-                                                {
-                                                    TypeSymbol = systemDescription.SemanticModel.GetTypeInfo(typeArg).Type,
-                                                    Type = QueryType.All,
-                                                    IsReadOnly = true
-                                                }).ToArray();
-
-                                        _invocationsBeforeBuild.AppendLine($".WithAspectRO<{typeArguments.Select(t => t.TypeSymbol.ToFullName()).SeparateByCommaAndSpace()}>()");
-                                        allQueryTypes.AddRange(typeArguments);
-                                        break;
                                 }
                                 break;
                             }

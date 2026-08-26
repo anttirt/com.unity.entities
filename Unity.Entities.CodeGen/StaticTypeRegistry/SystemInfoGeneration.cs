@@ -5,6 +5,7 @@ using Mono.Cecil.Rocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using Unity.Cecil.Awesome;
@@ -16,6 +17,11 @@ namespace Unity.Entities.CodeGen
 {
     internal partial class StaticTypeRegistryPostProcessor : EntitiesILPostProcessor
     {
+        // Re-Used to detect cycles in the UpdateInGroup tree, so we don't recurse infinitely and crash.
+        // Using a List (as a stack) rather than a HashSet to track only the current path, so we can
+        // accurately report which types form the cycle.
+        List<TypeDefinition> _visitedSystemGroupsList = new List<TypeDefinition>(32);
+
         public List<int> GetSystemTypeFlagsList(List<TypeReference> systems)
         {
             var inGroup = systems.Select(s =>
@@ -26,7 +32,9 @@ namespace Unity.Entities.CodeGen
                     .IsChildTypeOf(AssemblyDefinition.MainModule.ImportReference(typeof(ComponentSystemGroup))
                         .Resolve()))
                     flags |= TypeManager.SystemTypeInfo.kIsSystemGroupFlag;
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (TypeUtilsInstance.IsManagedType(s, 0))
+                #pragma warning restore 0618
                     flags |= TypeManager.SystemTypeInfo.kIsSystemManagedFlag;
 
                 if (s.TypeImplements(AssemblyDefinition.MainModule.ImportReference(typeof(ISystemStartStop))))
@@ -39,17 +47,29 @@ namespace Unity.Entities.CodeGen
         static WorldSystemFilterFlags GetChildDefaultFilterFlag(TypeDefinition typeDef)
         {
             var flags = WorldSystemFilterFlags.Default;
-            var filterFlagsAttribute = typeDef.CustomAttributes.FirstOrDefault(ca => ca.AttributeType.Name == nameof(WorldSystemFilterAttribute) && ca.ConstructorArguments.Count >= 2);
+            bool found = false;
+            var filterFlagsAttribute = typeDef.CustomAttributes.FirstOrDefault(ca => ca.AttributeType.Name == nameof(WorldSystemFilterAttribute));
             if (filterFlagsAttribute != null)
             {
-                // override the default value if flags are provided
-                flags = (WorldSystemFilterFlags)filterFlagsAttribute.ConstructorArguments[1].Value;
+                foreach (var field in filterFlagsAttribute.Fields)
+                    if (field.Name == nameof(WorldSystemFilterAttribute.ChildDefaultFilterFlags))
+                    {
+                        found = true;
+                        flags = (WorldSystemFilterFlags)field.Argument.Value;
+                        break;
+                    }
+                if (!found && filterFlagsAttribute.ConstructorArguments.Count >= 2)
+                {
+                    // override the default value if flags are provided
+                    flags = (WorldSystemFilterFlags)filterFlagsAttribute.ConstructorArguments[1].Value;
+                    found = true;
+                }
             }
-            else if (typeDef.BaseType != null) // Traverse the hierarchy to fetch a flags from an ancestor if we can't find one on this type
+            if (!found && typeDef.BaseType != null) // Traverse the hierarchy to fetch a flags from an ancestor if we can't find one on this type
                 flags = (WorldSystemFilterFlags)GetChildDefaultFilterFlag(typeDef.BaseType.Resolve());
             return flags;
         }
-        static WorldSystemFilterFlags GetParentGroupDefaultFilterFlags(TypeDefinition typeDef)
+        static WorldSystemFilterFlags GetParentGroupDefaultFilterFlags(TypeDefinition typeDef, List<TypeDefinition> visitedSystemGroupsList)
         {
             var baseTypeDef = typeDef;
             List<CustomAttribute> groupAttributes = new List<CustomAttribute>();
@@ -68,12 +88,28 @@ namespace Unity.Entities.CodeGen
             foreach (var uig in groupAttributes)
             {
                 var groupTypeDef = ((TypeReference)uig.ConstructorArguments[0].Value).Resolve();
+
+                if (visitedSystemGroupsList.Contains(groupTypeDef))
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append("The following systems form a cycle in their UpdateInGroup attributes: ");
+
+                    // Print only from the cycle start point to the current type
+                    int cycleStart = visitedSystemGroupsList.IndexOf(groupTypeDef);
+                    for (int i = cycleStart; i < visitedSystemGroupsList.Count; i++)
+                        sb.Append($"{visitedSystemGroupsList[i]} -> ");
+                    sb.Append($"{groupTypeDef}");
+                    throw new InvalidOperationException(sb.ToString());
+                }
+
+                visitedSystemGroupsList.Add(groupTypeDef);
                 var groupFlags = GetChildDefaultFilterFlag(groupTypeDef);
                 if ((groupFlags & WorldSystemFilterFlags.Default) != 0)
                 {
                     groupFlags &= ~WorldSystemFilterFlags.Default;
-                    groupFlags |= GetParentGroupDefaultFilterFlags(groupTypeDef);
+                    groupFlags |= GetParentGroupDefaultFilterFlags(groupTypeDef, visitedSystemGroupsList);
                 }
+                visitedSystemGroupsList.RemoveAt(visitedSystemGroupsList.Count - 1);
                 systemFlags |= groupFlags;
             }
             return systemFlags;
@@ -95,7 +131,8 @@ namespace Unity.Entities.CodeGen
             if (!isBase && (flags & WorldSystemFilterFlags.Default) != 0)
             {
                 flags &= ~WorldSystemFilterFlags.Default;
-                flags |= GetParentGroupDefaultFilterFlags(typeDef);
+                _visitedSystemGroupsList.Clear();
+                flags |= GetParentGroupDefaultFilterFlags(typeDef, _visitedSystemGroupsList);
             }
 
             if (typeDef.HasAttribute("UnityEngine.ExecuteAlways"))

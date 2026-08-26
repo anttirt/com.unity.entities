@@ -11,6 +11,7 @@ namespace Unity.Entities.Tests
         public Material mat;
     }
 
+    #pragma warning disable EA0017 // intentionally a managed shared component
     public struct WeakMaterialComponent : ISharedComponentData, IEquatable<WeakMaterialComponent>
     {
         public Material material;
@@ -30,6 +31,7 @@ namespace Unity.Entities.Tests
             return (material != null ? material.GetHashCode() : 0);
         }
     }
+    #pragma warning restore EA0017
 
     public class WeakMaterialComponentAuthoringBaker : Baker<WeakMaterialComponentAuthoring>
     {
@@ -37,7 +39,9 @@ namespace Unity.Entities.Tests
         {
             // This test shouldn't require transform components
             var entity = GetEntity(TransformUsageFlags.None);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddSharedComponentManaged(entity, new WeakMaterialComponent() { material = authoring.mat });
+            #pragma warning restore 0618
         }
     }
 }

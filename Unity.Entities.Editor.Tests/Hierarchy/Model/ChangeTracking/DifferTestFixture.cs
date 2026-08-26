@@ -38,7 +38,9 @@ namespace Unity.Entities.Editor.Tests
             {
                 for (var i = 0; i < count; i++)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     World.EntityManager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp { value = sharedComponentValueProvider?.Invoke(i) ?? i / 31 });
+                    #pragma warning restore 0618
                 }
             }
 
@@ -54,7 +56,9 @@ namespace Unity.Entities.Editor.Tests
             {
                 for (var i = 0; i < entities.Length; i++)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     World.EntityManager.SetSharedComponentManaged(entities[i], new EcsTestSharedComp { value = sharedComponentValueProvider?.Invoke(i) ?? i / 31 });
+                    #pragma warning restore 0618
                 }
             }
         }

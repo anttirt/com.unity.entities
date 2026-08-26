@@ -51,12 +51,8 @@ namespace Unity.Entities.UI
         {
             if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
             {
-#if UNITY_2023_2_OR_NEWER
                 evt.StopPropagation();
                 (evt.target as VisualElement)?.focusController?.IgnoreEvent(evt);
-#else
-                    evt.PreventDefault();
-#endif
             }
         }
 
@@ -139,11 +135,7 @@ namespace Unity.Entities.UI
         void CountChanged(ChangeEvent<int> evt)
         {
             evt.StopImmediatePropagation();
-#if UNITY_2023_2_OR_NEWER
             (evt.target as VisualElement)?.focusController?.IgnoreEvent(evt);
-#else
-            evt.PreventDefault();
-#endif
             var count = evt.newValue;
             if (count < 0)
             {

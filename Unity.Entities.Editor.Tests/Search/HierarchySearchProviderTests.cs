@@ -230,6 +230,7 @@ namespace Unity.Entities.Editor.Tests.Search
             Value3
         }
 
+        #pragma warning disable EA0017 // intentionally a managed shared component
         // SearchTestASFSC => SearchTestAllSupportedFieldsSharedComponent
         struct SearchTestASFSC : ISharedComponentData, IEquatable<SearchTestASFSC>
         {
@@ -309,6 +310,7 @@ namespace Unity.Entities.Editor.Tests.Search
                 };
             }
         }
+        #pragma warning restore EA0017
 
         [Test]
         public void CreateSharedComponentDesc()
@@ -384,21 +386,29 @@ namespace Unity.Entities.Editor.Tests.Search
         {
             {
                 var entity = m_Manager.CreateEntity(typeof(SearchTestSharedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new SearchTestSharedComponent { intValue = 1 });
+                #pragma warning restore 0618
 
                 entity = m_Manager.CreateEntity(typeof(SearchTestSharedComponent), typeof(DummyComp));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new SearchTestSharedComponent { intValue = 1 });
+                #pragma warning restore 0618
                 m_Manager.AddComponentData(entity, new DummyComp { value = 1 });
             }
 
             {
                 var entity = m_Manager.CreateEntity(typeof(SearchTestSharedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new SearchTestSharedComponent { floatValue = 3.3f });
+                #pragma warning restore 0618
             }
 
             {
                 var entity = m_Manager.CreateEntity(typeof(SearchTestSharedComponent));
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetSharedComponentManaged(entity, new SearchTestSharedComponent { floatValue = 42f, intValue = 42 });
+                #pragma warning restore 0618
             }
         }   
 

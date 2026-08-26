@@ -24,8 +24,8 @@ namespace Unity.Entities.Baking
             // this Implicit equality triggers calls into the Engine due to the Component reference here, which is horribly slow at MegaCity scale.
             internal struct BakeComponent : IEquatable<BakeComponent>
             {
-                public int             GameObjectInstanceID;
-                public int             ComponentID;
+                public EntityId        GameObjectEntityId;
+                public EntityId        ComponentID;
                 public Component       Component;
 
                 public bool Equals(BakeComponent other)
@@ -40,7 +40,7 @@ namespace Unity.Entities.Baking
 
                 public override int GetHashCode()
                 {
-                    return ComponentID;
+                    return ComponentID.GetHashCode();
                 }
             }
 
@@ -57,7 +57,7 @@ namespace Unity.Entities.Baking
             public HashSet<GameObject> BakeGameObjects;
 
             // The components that need to be reverted, because it was removed (Not present in bake components)
-            public UnsafeParallelHashSet<int>     RevertComponents;
+            public UnsafeParallelHashSet<EntityId>     RevertComponents;
 
             // The individual game objects that were created.
             // (Note all components on created objects are already part of BakeComponents)
@@ -66,7 +66,7 @@ namespace Unity.Entities.Baking
 
             // The individual game objects that were destroyed, all components that were previously baked are also on the RevertComponents list.
             // (Used for cleaning up entities, that no longer have their source game object)
-            public NativeList<int>     DestroyedGameObjects;
+            public NativeList<EntityId>     DestroyedGameObjects;
 
             // The individual game objects that might have had their name changed.
             // If a game object is in the CreatedGameObjects, then it will NOT be in PotentiallyRenamedGameObjects.
@@ -75,19 +75,19 @@ namespace Unity.Entities.Baking
             // The list of all transforms that were changed.
             // Note this list is the changes to Local TRS values or reparenting.
             // (Changes to TRS still need to be pushed down the hierarchy to get list of changed LocalToWorld matrices)
-            public NativeList<int>     ChangedTransforms;
+            public NativeList<EntityId>     ChangedTransforms;
 
             private bool created;
 
             public IncrementalBakeInstructions(Allocator allocator)
             {
                 CreatedGameObjects = new List<GameObject>(1024);
-                DestroyedGameObjects = new NativeList<int>(Allocator.Persistent);
+                DestroyedGameObjects = new NativeList<EntityId>(Allocator.Persistent);
                 BakeComponents = new HashSet<BakeComponent>();
                 BakeGameObjects = new HashSet<GameObject>(1024);
-                RevertComponents = new UnsafeParallelHashSet<int>(16, Allocator.Persistent);
+                RevertComponents = new UnsafeParallelHashSet<EntityId>(16, Allocator.Persistent);
                 PotentiallyRenamedGameObjects = new List<GameObject>();
-                ChangedTransforms = new NativeList<int>(16, Allocator.Persistent);
+                ChangedTransforms = new NativeList<EntityId>(16, Allocator.Persistent);
 
                 created = true;
             }
@@ -198,7 +198,7 @@ namespace Unity.Entities.Baking
         {
             if (_BakeInstructionsCache.IsCreated && component != null)
             {
-                var componentID = component.GetInstanceID();
+                var componentID = component.GetEntityId();
                 foreach (var bakeComponent in _BakeInstructionsCache.BakeComponents)
                 {
                     if (bakeComponent.ComponentID == componentID)
@@ -214,10 +214,10 @@ namespace Unity.Entities.Baking
         {
             if (_BakeInstructionsCache.IsCreated && go != null)
             {
-                var objectID = go.GetInstanceID();
+                var objectID = go.GetEntityId();
                 foreach (var bakeComponent in _BakeInstructionsCache.BakeComponents)
                 {
-                    if (bakeComponent.GameObjectInstanceID == objectID)
+                    if (bakeComponent.GameObjectEntityId == objectID)
                     {
                         return true;
                     }
@@ -253,13 +253,13 @@ namespace Unity.Entities.Baking
                 {
                     var additionalGameObjects = root.GetComponentsInChildren<Transform>(true).Select(transform =>
                     {
-                        // Debug.Log($"BuildInitialInstructions - CreateGameObject: {transform.gameObject.GetInstanceID()} (transform.gameObject)");
+                        // Debug.Log($"BuildInitialInstructions - CreateGameObject: {transform.gameObject.GetEntityId()} (transform.gameObject)");
                         return transform.gameObject;
                     }).ToArray();
                     _BakeInstructionsCache.CreatedGameObjects.AddRange(additionalGameObjects);
                     _BakeInstructionsCache.BakeGameObjects.UnionWith(additionalGameObjects);
 
-                    _BakeInstructionsCache.ChangedTransforms.Add(root.gameObject.GetInstanceID());
+                    _BakeInstructionsCache.ChangedTransforms.Add(root.gameObject.GetEntityId());
                 }
             }
 
@@ -276,9 +276,9 @@ namespace Unity.Entities.Baking
                     _ComponentAddedCache.Clear();
                     _ComponentsExistingCache.Clear();
                     _Components.UpdateGameObject(gameObject, _ComponentCache, _ComponentAddedCache, _ComponentsExistingCache, ref revertComponents);
-                    // Debug.Log($"BuildInitialInstructions - Bake: {gameObject.GetInstanceID()} ({gameObject.name}) Component: {com.GetInstanceID()} ({com})");
+                    // Debug.Log($"BuildInitialInstructions - Bake: {gameObject.GetEntityId()} ({gameObject.name}) Component: {com.GetEntityId()} ({com})");
 
-                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectInstanceID = gameObject.GetInstanceID(), Component = com, ComponentID = com.GetInstanceID()});
+                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectEntityId = gameObject.GetEntityId(), Component = com, ComponentID = com.GetEntityId()});
                 }
             }
 
@@ -291,7 +291,7 @@ namespace Unity.Entities.Baking
             return _BakeInstructionsCache;
         }
 
-        public void CollectGameObjectsWithTransformChanged(ref IncrementalBakingBatch batch, NativeList<int> instanceIDs)
+        public void CollectGameObjectsWithTransformChanged(ref IncrementalBakingBatch batch, NativeList<EntityId> entityIds)
         {
             // Consider modified transform
             var changes = batch.ChangedComponents;
@@ -299,20 +299,20 @@ namespace Unity.Entities.Baking
             {
                 if (changes[i] is Transform)
                 {
-                    instanceIDs.Add(changes[i].gameObject.GetInstanceID());
+                    entityIds.Add(changes[i].gameObject.GetEntityId());
                 }
             }
 
             // Consider baking of hierarchies
-            if (batch.BakeHierarchyInstanceIds.Length > 0)
-                _BakeInstructionsCache.ChangedTransforms.AddRange(batch.BakeHierarchyInstanceIds);
-            if (batch.ForceBakeHierarchyInstanceIds.Length > 0)
-                _BakeInstructionsCache.ChangedTransforms.AddRange(batch.ForceBakeHierarchyInstanceIds);
+            if (batch.BakeHierarchyEntityIds.Length > 0)
+                _BakeInstructionsCache.ChangedTransforms.AddRange(batch.BakeHierarchyEntityIds);
+            if (batch.ForceBakeHierarchyEntityIds.Length > 0)
+                _BakeInstructionsCache.ChangedTransforms.AddRange(batch.ForceBakeHierarchyEntityIds);
 
             // Consider reparenting
-            if (!batch.ParentChangeInstanceIds.IsEmpty)
+            if (!batch.ParentChangeEntityIds.IsEmpty)
             {
-                using var parentChangeKeys = batch.ParentChangeInstanceIds.GetKeyArray(Allocator.TempJob);
+                using var parentChangeKeys = batch.ParentChangeEntityIds.GetKeyArray(Allocator.TempJob);
                 _BakeInstructionsCache.ChangedTransforms.AddRange(parentChangeKeys);
             }
         }
@@ -326,7 +326,7 @@ namespace Unity.Entities.Baking
             UpdateHierarchy(batch, ref _IncrementalBakingDataCache);
 
             _BakeInstructionsCache.Clear();
-            var changedAuthoringObjectsIncludingDependencies = new UnsafeParallelHashSet<int>(1024, Allocator.TempJob);
+            var changedAuthoringObjectsIncludingDependencies = new UnsafeParallelHashSet<EntityId>(1024, Allocator.TempJob);
 
             var revertComponents = _BakeInstructionsCache.RevertComponents;
             var destroyedGameObjects = _BakeInstructionsCache.DestroyedGameObjects;
@@ -353,45 +353,45 @@ namespace Unity.Entities.Baking
                 _ComponentAddedCache.Clear();
                 _ComponentsExistingCache.Clear();
 
-                int goInstanceId = gameObject.GetInstanceID();
+                EntityId goEntityId = gameObject.GetEntityId();
                 if (_Components.UpdateGameObject(gameObject, _ComponentCache, _ComponentAddedCache, _ComponentsExistingCache, ref revertComponents) || recreateEntity)
                 {
-                    IncrementalBakingLog.RecordGameObjectNew(goInstanceId);
+                    IncrementalBakingLog.RecordGameObjectNew(goEntityId);
                     _BakeInstructionsCache.CreatedGameObjects.Add(gameObject);
                 }
                 else
                 {
-                    IncrementalBakingLog.RecordGameObjectChanged(goInstanceId);
+                    IncrementalBakingLog.RecordGameObjectChanged(goEntityId);
                     _BakeInstructionsCache.PotentiallyRenamedGameObjects.Add(gameObject);
                     _IncrementalBakingDataCache.ChangedGameObjectProperties.Add(IncrementalBakingData.GameObjectProperties.CalculateProperties(gameObject));
                 }
 
                 foreach (var com in _ComponentAddedCache)
                 {
-                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectInstanceID = goInstanceId, Component = com, ComponentID = com.GetInstanceID()});
-                    IncrementalBakingLog.RecordComponentNew(com.GetInstanceID());
+                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectEntityId = goEntityId, Component = com, ComponentID = com.GetEntityId()});
+                    IncrementalBakingLog.RecordComponentNew(com.GetEntityId());
 
-                    IncrementalBakingLog.RecordComponentBake(com.GetInstanceID(), ComponentBakeReason.NewComponent, com.GetInstanceID(), TypeManager.GetTypeIndex(com.GetType()));
+                    IncrementalBakingLog.RecordComponentBake(com.GetEntityId(), ComponentBakeReason.NewComponent, com.GetEntityId(), TypeManager.GetTypeIndex(com.GetType()));
                 }
 
                 if (isForced)
                 {
                     foreach (var com in _ComponentsExistingCache)
                     {
-                        var comId = com.GetInstanceID();
+                        var comId = com.GetEntityId();
 
                         // Add for revert
                         _BakeInstructionsCache.RevertComponents.Add(comId);
 
                         // Add for baking
-                        _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectInstanceID = goInstanceId, Component = com, ComponentID = com.GetInstanceID()});
-                        IncrementalBakingLog.RecordComponentBake(comId, ComponentBakeReason.UpdatePrefabInstance, goInstanceId, TypeManager.GetTypeIndex(com.GetType()));
+                        _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectEntityId = goEntityId, Component = com, ComponentID = com.GetEntityId()});
+                        IncrementalBakingLog.RecordComponentBake(comId, ComponentBakeReason.UpdatePrefabInstance, goEntityId, TypeManager.GetTypeIndex(com.GetType()));
                     }
                 }
             }
 
             //foreach (var componentID in _IncrementalConversionDataCache.ChangedComponents)
-            //    Debug.Log($"BuildIncrementalInstructions - ChangedComponents: {componentID.GetInstanceID()} ({componentID.gameObject.name}) ({componentID.GetType().Name})");
+            //    Debug.Log($"BuildIncrementalInstructions - ChangedComponents: {componentID.GetEntityId()} ({componentID.gameObject.name}) ({componentID.GetType().Name})");
 
             var changedSceneTransforms = new ChangedSceneTransforms
             {
@@ -413,10 +413,10 @@ namespace Unity.Entities.Baking
                 // Debug.Log($"BuildIncrementalInstructions: Destroy GameObject: {gameObjectID}" );
                 foreach (var component in _Components.GetComponents(gameObjectID))
                 {
-                    revertComponents.Add(component.InstanceID);
-                    changedAuthoringObjectsIncludingDependencies.Remove(component.InstanceID);
+                    revertComponents.Add(component.EntityId);
+                    changedAuthoringObjectsIncludingDependencies.Remove(component.EntityId);
 
-                    IncrementalBakingLog.RecordComponentDestroyed(component.InstanceID);
+                    IncrementalBakingLog.RecordComponentDestroyed(component.EntityId);
                 }
 
                 if (_Components.DestroyGameObject(gameObjectID))
@@ -433,7 +433,7 @@ namespace Unity.Entities.Baking
             // - Thus we need to revert & bake them
             foreach (var componentID in changedAuthoringObjectsIncludingDependencies)
             {
-                var obj =  Resources.InstanceIDToObject(componentID);
+                var obj =  Resources.EntityIdToObject(componentID);
                 if (obj is GameObject gameObject)
                 {
                     _BakeInstructionsCache.BakeGameObjects.Add(gameObject);
@@ -452,7 +452,7 @@ namespace Unity.Entities.Baking
                 }
 
                 //@TODO: DOTS-5455
-                var gameObjectID = component.gameObject.GetInstanceID();
+                var gameObjectID = component.gameObject.GetEntityId();
                 if (!_Components.HasComponent(gameObjectID, componentID))
                 {
                     Debug.LogError("Changed component but not known on game object");
@@ -462,7 +462,7 @@ namespace Unity.Entities.Baking
                 //Debug.Log($"BuildIncrementalInstructions - ChangedComponentOrDependency: {componentID} ({component.gameObject.name}) ({component.GetType().Name})");
 
                 // Add for bake
-                var bake = new IncrementalBakeInstructions.BakeComponent { GameObjectInstanceID = gameObjectID, Component = component, ComponentID = componentID};
+                var bake = new IncrementalBakeInstructions.BakeComponent { GameObjectEntityId = gameObjectID, Component = component, ComponentID = componentID};
                 _BakeInstructionsCache.BakeComponents.Add(bake);
             }
 
@@ -471,7 +471,7 @@ namespace Unity.Entities.Baking
             return _BakeInstructionsCache;
         }
 
-        public unsafe IncrementalBakeInstructions BuildAdditionalInstructions(NativeArray<int> additionalObjects, NativeArray<int> destroyedPrefabs, ref TransformAuthoringBaking transformAuthoringBaking)
+        public unsafe IncrementalBakeInstructions BuildAdditionalInstructions(NativeArray<EntityId> additionalObjects, NativeArray<EntityId> destroyedPrefabs, ref TransformAuthoringBaking transformAuthoringBaking)
         {
             using var marker = _AdditionalObjectsInstructionsMarker.Auto();
 
@@ -480,7 +480,7 @@ namespace Unity.Entities.Baking
             var allGameObjects = new List<GameObject>();
             foreach (var gameObjectID in additionalObjects)
             {
-                var go = (GameObject)Resources.InstanceIDToObject(gameObjectID);
+                var go = (GameObject)Resources.EntityIdToObject(gameObjectID);
                 IncrementalHierarchyFunctions.AddRecurse(_Hierarchy, go, allGameObjects);
             }
 
@@ -490,8 +490,8 @@ namespace Unity.Entities.Baking
                 // Debug.Log($"BuildIncrementalInstructions: Destroy GameObject: {gameObjectID}" );
                 foreach (var component in _Components.GetComponents(gameObjectID))
                 {
-                    _BakeInstructionsCache.RevertComponents.Add(component.InstanceID);
-                    IncrementalBakingLog.RecordComponentDestroyed(component.InstanceID);
+                    _BakeInstructionsCache.RevertComponents.Add(component.EntityId);
+                    IncrementalBakingLog.RecordComponentDestroyed(component.EntityId);
                 }
 
                 _BakeInstructionsCache.DestroyedGameObjects.Add(gameObjectID);
@@ -503,7 +503,7 @@ namespace Unity.Entities.Baking
             foreach (var changedGameObject in allGameObjects)
             {
                 var gameObject = changedGameObject.gameObject;
-                var gameObjectID = gameObject.GetInstanceID();
+                var gameObjectID = gameObject.GetEntityId();
 
                 // Add changed transforms
                 _BakeInstructionsCache.ChangedTransforms.Add(gameObjectID);
@@ -515,10 +515,10 @@ namespace Unity.Entities.Baking
                     _ComponentsExistingCache.Clear();
                     _Components.AddGameObject(gameObject, _ComponentCache);
 
-                    var componentID = com.GetInstanceID();
+                    var componentID = com.GetEntityId();
 
                     // Add for bake
-                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectInstanceID = gameObject.GetInstanceID(), Component = com, ComponentID = componentID});
+                    _BakeInstructionsCache.BakeComponents.Add(new IncrementalBakeInstructions.BakeComponent { GameObjectEntityId = gameObject.GetEntityId(), Component = com, ComponentID = componentID});
 
                     IncrementalBakingLog.RecordGameObjectNew(gameObjectID);
                 }
@@ -527,7 +527,7 @@ namespace Unity.Entities.Baking
             return _BakeInstructionsCache;
         }
 
-        public void DestroyGameObjectData(int gameObjectID)
+        public void DestroyGameObjectData(EntityId gameObjectID)
         {
             _Components.DestroyGameObject(gameObjectID);
         }
@@ -535,21 +535,21 @@ namespace Unity.Entities.Baking
 
         //********
         static readonly List<Object> ObjectCache = new List<Object>();
-        static List<Object> InstanceIdToObject(NativeArray<int> instanceIds)
+        static List<Object> EntityIdToObject(NativeArray<EntityId> entityIds)
         {
-            Resources.InstanceIDToObjectList(instanceIds, ObjectCache);
+            Resources.EntityIdsToObjectList(entityIds, ObjectCache);
             return ObjectCache;
         }
 
-        static void CopyToList(NativeParallelHashSet<int> xs, NativeList<int> output)
+        static void CopyToList(NativeParallelHashSet<EntityId> xs, NativeList<EntityId> output)
         {
             foreach (var x in xs)
                 output.Add(x);
         }
 
-        void FilterOutValidObjects(NativeList<int> instanceIds)
+        void FilterOutValidObjects(NativeList<EntityId> instanceIds)
         {
-            var objs = InstanceIdToObject(instanceIds.AsArray());
+            var objs = EntityIdToObject(instanceIds.AsArray());
             for (int i = instanceIds.Length - 1; i >= 0; i--)
             {
                 if (objs[i] == null)
@@ -568,10 +568,10 @@ namespace Unity.Entities.Baking
         unsafe struct RemoveFromHierarchy
         {
             public IncrementalHierarchy Hierarchy;
-            public NativeArray<int> DeletedInstanceIds;
-            public NativeArray<int> BakeHierarchyInstanceIds;
-            public NativeArray<int> ForceBakeHierarchyInstanceIds;
-            public NativeList<int> RemovedInstanceIds;
+            public NativeArray<EntityId> DeletedInstanceIds;
+            public NativeArray<EntityId> BakeHierarchyInstanceIds;
+            public NativeArray<EntityId> ForceBakeHierarchyInstanceIds;
+            public NativeList<EntityId> RemovedInstanceIds;
 
             static readonly ProfilerMarker Marker = new ProfilerMarker(nameof(RemoveFromHierarchy));
 
@@ -581,7 +581,7 @@ namespace Unity.Entities.Baking
                 ref RemoveFromHierarchy data = ref UnsafeUtility.AsRef<RemoveFromHierarchy>(ptr);
 
                 int capacity = data.DeletedInstanceIds.Length + data.BakeHierarchyInstanceIds.Length + data.ForceBakeHierarchyInstanceIds.Length;
-                var deletedInstances = new NativeParallelHashSet<int>(capacity, Allocator.TempJob);
+                var deletedInstances = new NativeParallelHashSet<EntityId>(capacity, Allocator.TempJob);
                 {
                     data.Hierarchy.AsReadOnly().CollectHierarchyInstanceIds(data.DeletedInstanceIds, deletedInstances);
                     data.Hierarchy.AsReadOnly().CollectHierarchyInstanceIds(data.BakeHierarchyInstanceIds, deletedInstances);
@@ -616,17 +616,17 @@ namespace Unity.Entities.Baking
 
                 outData.LightBakingChanged |= batch.LightBakingChanged;
 
-                var requestHierarchyBake = new NativeList<int>(Allocator.Temp);
-                requestHierarchyBake.AddRange(batch.BakeHierarchyInstanceIds);
+                var requestHierarchyBake = new NativeList<EntityId>(Allocator.Temp);
+                requestHierarchyBake.AddRange(batch.BakeHierarchyEntityIds);
 
                 // Apply all parenting changes.
-                if (!batch.ParentChangeInstanceIds.IsEmpty)
+                if (!batch.ParentChangeEntityIds.IsEmpty)
                 {
                     using (_parentChangeHierarchyMarker.Auto())
                     {
 
-                        var parentChanges = batch.ParentChangeInstanceIds.GetKeyValueArrays(Allocator.Temp);
-                        using (var changeFailed = new NativeList<int>(Allocator.TempJob))
+                        var parentChanges = batch.ParentChangeEntityIds.GetKeyValueArrays(Allocator.Temp);
+                        using (var changeFailed = new NativeList<EntityId>(Allocator.TempJob))
                         {
                             var changeSuccessful = outData.ParentChangeInstanceIds;
                             IncrementalHierarchyFunctions.ChangeParents(_Hierarchy, parentChanges, changeFailed, changeSuccessful);
@@ -635,7 +635,7 @@ namespace Unity.Entities.Baking
                                 //  - Either we failed because the parent was already deleted and this child must also be deleted,
                                 //  - Or we failed because the child was never in the hierarchy to begin with, in which case we
                                 //    should track it
-                                var objs = InstanceIdToObject(changeFailed.AsArray());
+                                var objs = EntityIdToObject(changeFailed.AsArray());
                                 for (int i = 0; i < objs.Count; i++)
                                 {
                                     var go = objs[i] as GameObject;
@@ -653,7 +653,7 @@ namespace Unity.Entities.Baking
                                 }
                             }
 
-                            using (var visitedInstances = new NativeParallelHashSet<int>(0, Allocator.TempJob))
+                            using (var visitedInstances = new NativeParallelHashSet<EntityId>(0, Allocator.TempJob))
                             {
                                 _Hierarchy.AsReadOnly().CollectHierarchyInstanceIds(changeFailed.AsArray(), visitedInstances);
                                 CopyToList(visitedInstances, outData.RemovedGameObjects);
@@ -668,13 +668,13 @@ namespace Unity.Entities.Baking
                             if (!outData.ParentChangeInstanceIds.IsEmpty)
                             {
                                 // Extract the successful GameObject IDs
-                                NativeArray<int> transformIDs = new NativeArray<int>(outData.ParentChangeInstanceIds.Length, Allocator.Temp);
+                                NativeArray<EntityId> transformIDs = new NativeArray<EntityId>(outData.ParentChangeInstanceIds.Length, Allocator.Temp);
                                 for (int index = 0; index < outData.ParentChangeInstanceIds.Length; ++index)
                                 {
-                                    transformIDs[index] = outData.ParentChangeInstanceIds[index].InstanceId;
+                                    transformIDs[index] = outData.ParentChangeInstanceIds[index].EntityId;
                                 }
 
-                                var objs = InstanceIdToObject(transformIDs);
+                                var objs = EntityIdToObject(transformIDs);
                                 var transformTypeIndex = TypeManager.GetTypeIndex<Transform>();
                                 foreach (var obj in objs)
                                 {
@@ -684,7 +684,7 @@ namespace Unity.Entities.Baking
                                         var transform = go.transform;
                                         outData.ChangedComponents.Add(new IncrementalBakingData.ChangedComponentsInfo()
                                         {
-                                            instanceID = transform.GetInstanceID(),
+                                            instanceID = transform.GetEntityId(),
                                             unityTypeIndex = transformTypeIndex
                                         });
                                     }
@@ -695,11 +695,11 @@ namespace Unity.Entities.Baking
                 }
 
                 // Update the hierarchy if siblings of a same parent got reordered
-                if (batch.ParentWithChildrenOrderChangedInstanceIds.Length != 0)
+                if (batch.ParentWithChildrenOrderChangedEntityIds.Length != 0)
                 {
                     using (_parentWithChildrenOrderChangedMarker.Auto())
                     {
-                        foreach (var parentInstanceIds in batch.ParentWithChildrenOrderChangedInstanceIds)
+                        foreach (var parentInstanceIds in batch.ParentWithChildrenOrderChangedEntityIds)
                         {
                             IncrementalHierarchyFunctions.ChangeChildrenOrderInParent(_Hierarchy, parentInstanceIds);
                             outData.ParentWithChildrenOrderChangedInstanceIds.Add((parentInstanceIds));
@@ -709,17 +709,17 @@ namespace Unity.Entities.Baking
 
                 // Remove all deleted instances from the hierarchy, plus their children. Do the same for all instances that
                 // require a clean conversion.
-                bool hasExplicitDeletions = batch.DeletedInstanceIds.Length != 0;
-                if (hasExplicitDeletions || batch.BakeHierarchyInstanceIds.Length != 0 || batch.ForceBakeHierarchyInstanceIds.Length != 0)
+                bool hasExplicitDeletions = batch.DeletedEntityIds.Length != 0;
+                if (hasExplicitDeletions || batch.BakeHierarchyEntityIds.Length != 0 || batch.ForceBakeHierarchyEntityIds.Length != 0)
                 {
                     using (_deleteFromHierarchyMarker.Auto())
                     {
                         new RemoveFromHierarchy
                         {
                             Hierarchy = _Hierarchy,
-                            DeletedInstanceIds = batch.DeletedInstanceIds,
-                            BakeHierarchyInstanceIds = batch.BakeHierarchyInstanceIds,
-                            ForceBakeHierarchyInstanceIds = batch.ForceBakeHierarchyInstanceIds,
+                            DeletedInstanceIds = batch.DeletedEntityIds,
+                            BakeHierarchyInstanceIds = batch.BakeHierarchyEntityIds,
+                            ForceBakeHierarchyInstanceIds = batch.ForceBakeHierarchyEntityIds,
                             RemovedInstanceIds = outData.RemovedGameObjects,
                         }.RunWithBurst();
                         FilterOutValidObjects(outData.RemovedGameObjects);
@@ -741,10 +741,10 @@ namespace Unity.Entities.Baking
                     }
                 }
 
-                if (batch.ForceBakeHierarchyInstanceIds.Length != 0)
+                if (batch.ForceBakeHierarchyEntityIds.Length != 0)
                 {
                     var cleanConversionGameObjects = new HashSet<GameObject>();
-                    CollectAllGameObjects(_Scene, ref _Hierarchy, batch.ForceBakeHierarchyInstanceIds, cleanConversionGameObjects);
+                    CollectAllGameObjects(_Scene, ref _Hierarchy, batch.ForceBakeHierarchyEntityIds, cleanConversionGameObjects);
                     using (_registerNewInstancesMarker.Auto())
                     {
                         foreach (var go in cleanConversionGameObjects)
@@ -777,11 +777,11 @@ namespace Unity.Entities.Baking
 
                 // Look at all instances that have been changed. These are all instances that have changed in-place and we
                 // only need to reconvert the GameObject locally (plus all dependents).
-                if (batch.ChangedInstanceIds.Length != 0)
+                if (batch.ChangedEntityIds.Length != 0)
                 {
                     using (_handleChangedMarker.Auto())
                     {
-                        var objs = InstanceIdToObject(batch.ChangedInstanceIds);
+                        var objs = EntityIdToObject(batch.ChangedEntityIds);
                         if (!hasExplicitDeletions)
                         {
                             // If nothing has been deleted, we can get away with doing fewer checks.
@@ -790,7 +790,7 @@ namespace Unity.Entities.Baking
                                 var obj = objs[i] as GameObject;
                                 outData.ChangedGameObjects.Add((obj, IncrementalBakingData.ChangedGameObjectMode.Normal));
 
-                                IncrementalHierarchyFunctions.UpdateActiveAndStaticState(_Hierarchy, batch.ChangedInstanceIds[i], obj.activeSelf, obj.isStatic);
+                                IncrementalHierarchyFunctions.UpdateActiveAndStaticState(_Hierarchy, batch.ChangedEntityIds[i], obj.activeSelf, obj.isStatic);
                             }
                         }
                         else
@@ -806,7 +806,7 @@ namespace Unity.Entities.Baking
                                     continue;
                                 outData.ChangedGameObjects.Add((obj, IncrementalBakingData.ChangedGameObjectMode.Normal));
 
-                                IncrementalHierarchyFunctions.UpdateActiveAndStaticState(_Hierarchy, batch.ChangedInstanceIds[i], obj.activeSelf, obj.isStatic);
+                                IncrementalHierarchyFunctions.UpdateActiveAndStaticState(_Hierarchy, batch.ChangedEntityIds[i], obj.activeSelf, obj.isStatic);
                             }
                         }
                     }
@@ -837,7 +837,7 @@ namespace Unity.Entities.Baking
 
                         outData.ChangedComponents.Add(new IncrementalBakingData.ChangedComponentsInfo()
                         {
-                            instanceID = c.GetInstanceID(),
+                            instanceID = c.GetEntityId(),
                             unityTypeIndex = TypeManager.GetTypeIndex(c.GetType())
                         });
                     }
@@ -848,7 +848,7 @@ namespace Unity.Entities.Baking
                     {
                         outData.ChangedComponents.Add(new IncrementalBakingData.ChangedComponentsInfo()
                         {
-                            instanceID = c.GetInstanceID(),
+                            instanceID = c.GetEntityId(),
                             unityTypeIndex = TypeManager.GetTypeIndex(c.GetType())
                         });
                     }
@@ -870,18 +870,18 @@ namespace Unity.Entities.Baking
             foreach (var go in gameObjects)
             {
                 go.GetComponents(type, components);
-                _Dependencies.ResolveComponentInstanceIds(go.GetInstanceID(), components);
+                _Dependencies.ResolveComponentInstanceIds(go.GetEntityId(), components);
                 components.Clear();
             }
         }
 */
         static void CollectAllGameObjects(Scene scene, ref IncrementalHierarchy hierarchy,
-            NativeArray<int> reconvertedObjects, HashSet<GameObject> outputObjects)
+            NativeArray<EntityId> reconvertedObjects, HashSet<GameObject> outputObjects)
 
         {
             _collectNewGameObjectsMarker.Begin();
             var stack = new Stack<GameObject>();
-            var objs = InstanceIdToObject(reconvertedObjects);
+            var objs = EntityIdToObject(reconvertedObjects);
             for (int i = 0; i < objs.Count; i++)
             {
                 var obj = objs[i] as GameObject;
@@ -903,7 +903,7 @@ namespace Unity.Entities.Baking
 
                 // Ignore objects that are not root objects or have a parent that wasn't already converted. In that case
                 // we must have an event for the parent as well and later code assumes that we get the parent first.
-                if (obj.transform.parent != null && !hierarchy.IndexByInstanceId.ContainsKey(obj.transform.parent.gameObject.GetInstanceID()))
+                if (obj.transform.parent != null && !hierarchy.IndexByEntityId.ContainsKey(obj.transform.parent.gameObject.GetEntityId()))
                     continue;
 
                 stack.Push(obj);
@@ -924,11 +924,11 @@ namespace Unity.Entities.Baking
             _collectNewGameObjectsMarker.End();
         }
 
-        static void CollectGameObjects(Scene scene, NativeArray<int> reconvertedObjects, HashSet<GameObject> outputObjects)
+        static void CollectGameObjects(Scene scene, NativeArray<EntityId> reconvertedObjects, HashSet<GameObject> outputObjects)
 
         {
             _collectNewGameObjectsMarker.Begin();
-            var objs = InstanceIdToObject(reconvertedObjects);
+            var objs = EntityIdToObject(reconvertedObjects);
             for (int i = 0; i < objs.Count; i++)
             {
                 var obj = objs[i] as GameObject;

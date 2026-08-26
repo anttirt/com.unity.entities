@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Unity.Assertions;
 using Unity.Burst.CompilerServices;
 using Unity.Burst.Intrinsics;
@@ -590,6 +591,18 @@ namespace Unity.Entities
 
         // Note previously called SetArchetype: SetArchetype is used internally to refer to the function which only creates the cross-reference between the
         // entity id and the archetype (m_ArchetypeByEntity). This is not "Setting" the archetype, it is moving the components to a different archetype.
+        public void MoveArchetype(UnsafeList<EntityBatchInChunk>* entityBatchList, Archetype* dstArchetype)
+        {
+            for (int i = 0; i < entityBatchList->Length; i++)
+            {
+                var batch = (*entityBatchList)[i];
+                if (GetArchetype(batch.Chunk) == dstArchetype)
+                    continue;
+                var archetypeChunkFilter = GetArchetypeChunkFilterWithChangedArchetype(batch.Chunk, dstArchetype);
+                Move(batch, ref archetypeChunkFilter);
+            }
+        }
+
         public void Move(Entity entity, Archetype* dstArchetype)
         {
             var archetypeChunkFilter = GetArchetypeChunkFilterWithChangedArchetype(GetChunk(entity), dstArchetype);
@@ -645,6 +658,7 @@ namespace Unity.Entities
             var srcArchetype = GetArchetype(srcChunk);
             if (archetypeChunkFilter.Archetype->CleanupComplete)
             {
+                FireOnRemovedCallbacks(srcChunk, srcArchetype, 0, srcChunk.Count);
                 ChunkDataUtility.Deallocate(srcArchetype, srcChunk);
                 return;
             }
@@ -673,6 +687,7 @@ namespace Unity.Entities
             if ((srcRemainingCount == srcChunk.Count) && cleanupComplete)
             {
                 var srcArchetype = GetArchetype(srcChunk);
+                FireOnRemovedCallbacks(srcChunk, srcArchetype, 0, srcChunk.Count);
                 ChunkDataUtility.Deallocate(srcArchetype, srcChunk);
                 return;
             }
@@ -698,6 +713,7 @@ namespace Unity.Entities
             if ((srcRemainingCount == srcChunk.Count) && cleanupComplete)
             {
                 var srcArchetype = GetArchetype(srcChunk);
+                FireOnRemovedCallbacks(srcChunk, srcArchetype, 0, srcChunk.Count);
                 ChunkDataUtility.Deallocate(srcArchetype, srcChunk);
                 return;
             }
@@ -743,7 +759,9 @@ namespace Unity.Entities
                 Count = srcCount
             };
 
-            ChunkDataUtility.Clone(srcArchetype, partialSrcBatch, dstArchetype, dstChunk);
+            var dstChunkIndex = ChunkDataUtility.Clone(srcArchetype, partialSrcBatch, dstArchetype, dstChunk);
+
+            FireLifecycleCallbacks(srcChunk, dstChunk, srcArchetype, dstArchetype, srcStartIndex, dstChunkIndex, srcCount);
 
             fixed (EntityComponentStore* store = &this)
             {
@@ -752,5 +770,127 @@ namespace Unity.Entities
 
             return srcCount;
         }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        void FireOnRemovedCallbacks(ChunkIndex srcChunk, Archetype* srcArchetype, int srcChunkIndex, int srcCount)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (Hint.Unlikely(TypeManager.AnyDebugCallbacksRegistered && srcArchetype->HasOnRemovedCallbacks))
+            {
+                CallComponentLifecycleCallbacks(srcChunk, ChunkIndex.Null, srcArchetype, null, srcChunkIndex, -1, srcCount);
+            }
+#endif
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        void FireOnAddedCallbacks(ChunkIndex dstChunk, Archetype* dstArchetype, int dstChunkIndex, int count)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (Hint.Unlikely(TypeManager.AnyDebugCallbacksRegistered && dstArchetype->HasOnAddedCallbacks))
+            {
+                CallComponentLifecycleCallbacks(ChunkIndex.Null, dstChunk, null, dstArchetype, -1, dstChunkIndex, count);
+            }
+#endif
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        void FireLifecycleCallbacks(ChunkIndex srcChunk, ChunkIndex dstChunk,
+            Archetype* srcArchetype, Archetype* dstArchetype,
+            int srcChunkIndex, int dstChunkIndex, int srcCount)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (Hint.Unlikely(TypeManager.AnyDebugCallbacksRegistered && (srcArchetype->HasOnRemovedCallbacks || dstArchetype->HasOnAddedCallbacks)))
+            {
+                CallComponentLifecycleCallbacks(srcChunk, dstChunk, srcArchetype, dstArchetype, srcChunkIndex, dstChunkIndex, srcCount);
+            }
+#endif
+        }
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+        void CallComponentLifecycleCallbacks(ChunkIndex srcChunk, ChunkIndex dstChunk,
+            Archetype* srcArchetype, Archetype* dstArchetype,
+            int srcChunkIndex, int dstChunkIndex, int srcCount)
+        {
+            var srcTypeCount = srcArchetype == null ? 0 : srcArchetype->TypesCount;
+            var dstTypeCount = dstArchetype == null ? 0 : dstArchetype->TypesCount;
+            var srcTypePos = 0;
+            var dstTypePos = 0;
+            var addedTypeIndices = stackalloc int[dstTypeCount];
+            var addedTypeCount = 0;
+            var removedTypeIndices = stackalloc int[srcTypeCount];
+            var removedTypeCount = 0;
+
+            while (srcTypePos < srcTypeCount && dstTypePos < dstTypeCount)
+            {
+                var srcType = srcArchetype->Types[srcTypePos];
+                var dstType = dstArchetype->Types[dstTypePos];
+                if (srcType.TypeIndex < dstType.TypeIndex)
+                {
+                    removedTypeIndices[removedTypeCount++] = srcType.TypeIndex;
+                    srcTypePos++;
+                }
+                else if (srcType.TypeIndex > dstType.TypeIndex)
+                {
+                    addedTypeIndices[addedTypeCount++] = dstType.TypeIndex;
+                    dstTypePos++;
+                }
+                else
+                {
+                    srcTypePos++;
+                    dstTypePos++;
+                }
+            }
+
+            // Handle remaining types in src and dst archetypes
+            while (srcTypePos < srcTypeCount)
+            {
+                removedTypeIndices[removedTypeCount++] = srcArchetype->Types[srcTypePos].TypeIndex;
+                srcTypePos++;
+            }
+            while (dstTypePos < dstTypeCount)
+            {
+                addedTypeIndices[addedTypeCount++] = dstArchetype->Types[dstTypePos].TypeIndex;
+                dstTypePos++;
+            }
+
+            // Fire off removed callbacks
+            for (var i=0; i<removedTypeCount; i++)
+            {
+                var typeIdx = removedTypeIndices[i];
+                if ((typeIdx & TypeManager.HasOnRemovedCallbackFlag) == 0) continue;
+
+                var dataSize = TypeManager.GetTypeInfo(typeIdx).SizeInChunk;
+                var ptr = ChunkDataUtility.GetComponentDataWithTypeRW(srcChunk, srcArchetype, srcChunkIndex,
+                    typeIdx, GlobalSystemVersion);
+                var callback = TypeManager.GetOnRemovedCallback(typeIdx);
+                var entities = (Entity*)srcChunk.Buffer;
+
+                for (var dataIdx = 0; dataIdx < srcCount; dataIdx++)
+                {
+                    callback(&entities[srcChunkIndex + dataIdx], ptr);
+                    ptr += dataSize;
+                }
+            }
+
+            // Fire off added callbacks
+            for (var i=0; i<addedTypeCount; i++)
+            {
+                var typeIdx = addedTypeIndices[i];
+                if ((typeIdx & TypeManager.HasOnAddedCallbackFlag) == 0) continue;
+
+                var dataSize = TypeManager.GetTypeInfo(typeIdx).SizeInChunk;
+                var ptr = ChunkDataUtility.GetComponentDataWithTypeRW(dstChunk, dstArchetype, dstChunkIndex,
+                    typeIdx, GlobalSystemVersion);
+                var callback = TypeManager.GetOnAddedCallback(typeIdx);
+                var entities = (Entity*)dstChunk.Buffer;
+
+                for (var dataIdx = 0; dataIdx < srcCount; dataIdx++)
+                {
+                    callback(&entities[dstChunkIndex + dataIdx], ptr);
+                    ptr += dataSize;
+                }
+            }
+        }
+#endif
     }
 }

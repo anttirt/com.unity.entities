@@ -1,6 +1,7 @@
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
 using System.Linq;
 using NUnit.Framework;
+using Unity.Collections;
 using Unity.Entities.Serialization;
 using Unity.Entities.Tests.Conversion;
 using Unity.Scenes;
@@ -38,10 +39,10 @@ namespace Unity.Entities.Tests
             var reader = new TestBinaryReader(writer);
             SerializeUtilityHybrid.Deserialize(world.EntityManager, reader, objRefs);
 
-            var query = world.EntityManager.CreateEntityQuery(typeof(ConversionTestCompanionComponent));
-            var components = query.ToComponentArray<ConversionTestCompanionComponent>();
+            var query = world.EntityManager.CreateEntityQuery(typeof(CompanionComponent<ConversionTestCompanionComponent>));
+            var companions = query.ToComponentDataArray<CompanionComponent<ConversionTestCompanionComponent>>(Allocator.Temp);
 
-            CollectionAssert.AreEquivalent(components.Select(c => c.SomeValue), values);
+            CollectionAssert.AreEquivalent(companions.Select(c => c.CompanionRef.Value.SomeValue), values);
 
             query.Dispose();
         }

@@ -138,6 +138,12 @@ namespace Unity.Entities
         }
 
         [BurstCompile]
+        public static void MoveEntityArchetypeBatch(EntityComponentStore* entityComponentStore, UnsafeList<EntityBatchInChunk>* entityBatchList, void* dstArchetype)
+        {
+            entityComponentStore->MoveArchetype(entityBatchList, (Archetype*)dstArchetype);
+        }
+
+        [BurstCompile]
         public static void SetChunkComponent(EntityComponentStore* entityComponentStore, ArchetypeChunk* chunks, int chunkCount, void* componentData, TypeIndex componentTypeIndex)
         {
             entityComponentStore->SetChunkComponent(chunks, chunkCount, componentData, componentTypeIndex);
@@ -147,6 +153,18 @@ namespace Unity.Entities
         public static void CreateEntity(EntityComponentStore* entityComponentStore, void* archetype, Entity* outEntities, int count)
         {
             entityComponentStore->CreateEntities((Archetype*)archetype, outEntities, count);
+        }
+
+        [BurstCompile]
+        public static void AllocateAndAssignChunksToExistingEntities(EntityComponentStore* entityComponentStore, void* archetype, Entity* existingEntities, int count)
+        {
+            entityComponentStore->AllocateAndAssignChunksToExistingEntities((Archetype*)archetype, existingEntities, count);
+        }
+
+        [BurstCompile]
+        public static void DeallocateAndUnAssignChunksToExistingEntities(EntityComponentStore* entityComponentStore, Entity* entities, int count)
+        {
+            entityComponentStore->DestroyEntities(entities, count);
         }
 
         [BurstCompile]
@@ -173,5 +191,12 @@ namespace Unity.Entities
         {
             entityComponentStore->InstantiateEntities(srcEntities, outputEntities, entityCount, removePrefab);
         }
+
+        [BurstCompile]
+        public static void InstantiateExistingEntities(EntityComponentStore* entityComponentStore, Entity* srcEntity, Entity* existingEntities, int instanceCount)
+        {
+            entityComponentStore->InstantiateExistingEntities(*srcEntity, existingEntities, instanceCount);
+        }
+
     }
 }

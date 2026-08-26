@@ -315,28 +315,38 @@ namespace Unity.Entities.Editor.Tests
 
             m_Manager.AddChunkComponentData<StructChunkData>(entity);
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData<ClassChunkData>(entity);
+            #pragma warning restore 0618
 #endif
 
             _gameObject.transform.localPosition = Vector3.right;
             _gameObject.transform.localScale = Vector3.up;
             _gameObject.transform.localRotation = Quaternion.Euler(15, 30, 45);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentObject(entity, _gameObject.transform);
             m_Manager.AddComponentObject(entity, _gameObject);
+            #pragma warning restore 0618
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentObject(entity, new ClassComponentData2 { Category = Category.ClassData });
+            #pragma warning restore 0618
 #endif
 
             var buffer = m_Manager.AddBuffer<BufferElement>(entity);
             for (var i = 0; i < 50; ++i)
                 buffer.Add(new BufferElement {Category = Category.BufferData, Value = i});
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new SharedComponentData { Category = Category.SharedData });
+            #pragma warning restore 0618
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new StructChunkData { Value = 25, Category = Category.StructChunkData });
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new ClassChunkData { GameObject = _gameObject, Category = Category.ClassChunkData });
             m_Manager.SetComponentData(entity, new ClassComponentData { Category = Category.ClassData });
+            #pragma warning restore 0618
 #endif
             m_Manager.SetComponentData(entity, new StructComponentData { Category = Category.StructData });
             PropertyContainer.Accept(new TestComponentCategoryVisitor { GameObject = _gameObject}, new EntityContainer(m_Manager, entity, true));
@@ -353,22 +363,30 @@ namespace Unity.Entities.Editor.Tests
 
             m_Manager.AddChunkComponentData<StructChunkData>(entity);
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddChunkComponentData<ClassChunkData>(entity);
+            #pragma warning restore 0618
 #endif
 
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentObject(entity, new ClassComponentData2 { Category = Category.ClassData });
+            #pragma warning restore 0618
 #endif
 
             var buffer = m_Manager.AddBuffer<BufferElement>(entity);
             for (var i = 0; i < 50; ++i)
                 buffer.Add(new BufferElement {Category = Category.BufferData, FloatValue = i});
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entity, new SharedComponentData { Category = Category.SharedData });
+            #pragma warning restore 0618
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new StructChunkData { Value = 25, Category = Category.StructChunkData });
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetChunkComponentData(m_Manager.GetChunk(entity), new ClassChunkData { GameObject = _gameObject, Category = Category.ClassChunkData });
             m_Manager.SetComponentData(entity, new ClassComponentData { Category = Category.ClassData });
+            #pragma warning restore 0618
 #endif
             m_Manager.SetComponentData(entity, new StructComponentData { Category = Category.StructData });
 

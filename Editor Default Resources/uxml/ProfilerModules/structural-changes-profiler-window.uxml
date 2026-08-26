@@ -4,11 +4,6 @@
     </uie:Toolbar>
     <ui:Label name="message" class="structural-changes-profiler-window__message"/>
     <ui:VisualElement name="content" class="structural-changes-profiler-window__content">
-        <ui:VisualElement name="header" class="structural-changes-profiler-window__header">
-            <ui:Label name="column1" class="structural-changes-profiler-window__column1"/>
-            <ui:Label name="column2" class="structural-changes-profiler-window__column2"/>
-            <ui:Label name="column3" class="structural-changes-profiler-window__column3"/>
-        </ui:VisualElement>
         <ui:VisualElement name="tree-view-container" />
     </ui:VisualElement>
 </UXML>

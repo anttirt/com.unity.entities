@@ -18,7 +18,7 @@ namespace Unity.Entities.Conversion
         {
             if (@this is Component component)
                 @this = component.gameObject;
-            return new EntityGuid(@this.GetInstanceID(), 0, namespaceId, (uint)serial);
+            return new EntityGuid(@this.GetEntityId(), EntityId.None, namespaceId, (uint)serial);
         }
 
         public static bool IsPrefab(this GameObject @this) =>

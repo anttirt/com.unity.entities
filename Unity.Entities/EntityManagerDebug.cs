@@ -5,6 +5,7 @@ using Unity.Burst;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using UnityEngine;
 
 namespace Unity.Entities
 {
@@ -363,9 +364,6 @@ namespace Unity.Entities
                 var entityComponentStore = m_Manager.GetCheckedEntityDataAccess()->EntityComponentStore;
 
                 if (entity.Index < 0
-#if ENTITY_STORE_V1
-                    || entity.Index > entityComponentStore->EntitiesCapacity
-#endif
                     )
                 {
                     return "Entity.Invalid";
@@ -485,7 +483,7 @@ namespace Unity.Entities
             public UnityEngine.Object GetAuthoringObjectForEntity(Entity entity)
             {
                 if (m_Manager.HasComponent<EntityGuid>(entity))
-                    return UnityEditor.EditorUtility.InstanceIDToObject(m_Manager.GetComponentData<EntityGuid>(entity).OriginatingId);
+                    return UnityEditor.EditorUtility.EntityIdToObject(m_Manager.GetComponentData<EntityGuid>(entity).OriginatingEntityId);
 
                 return null;
             }
@@ -493,7 +491,7 @@ namespace Unity.Entities
             [BurstCompile]
             struct BuildInstanceIDToEntityIndex : IJobChunk
             {
-                public UnsafeParallelMultiHashMap<int, Entity>.ParallelWriter EntityLookup;
+                public UnsafeParallelMultiHashMap<EntityId, Entity>.ParallelWriter EntityLookup;
                 [ReadOnly]
                 public ComponentTypeHandle<EntityGuid>                GuidType;
                 [ReadOnly]
@@ -506,7 +504,7 @@ namespace Unity.Entities
                     var guids = chunk.GetNativeArray(ref GuidType);
 
                     for (int i = 0; i != entities.Length; i++)
-                        EntityLookup.Add(guids[i].OriginatingId, entities[i]);
+                        EntityLookup.Add(guids[i].OriginatingEntityId, entities[i]);
                 }
             }
 
@@ -530,11 +528,11 @@ namespace Unity.Entities
             /// </summary>
             public void GetEntitiesForAuthoringObject(UnityEngine.Object obj, NativeList<Entity> entities)
             {
-                var instanceID = obj.GetInstanceID();
+                var entityId = obj.GetEntityId();
                 var lookup = GetCachedEntityGUIDToEntityIndexLookup();
 
                 entities.Clear();
-                foreach (var e in lookup.GetValuesForKey(instanceID))
+                foreach (var e in lookup.GetValuesForKey(entityId))
                     entities.Add(e);
             }
 
@@ -545,13 +543,13 @@ namespace Unity.Entities
 
             internal Entity GetPrimaryEntityForAuthoringObject(UnityEngine.Object obj)
             {
-                var instanceID = obj.GetInstanceID();
+                var entityId = obj.GetEntityId();
                 var access = m_Manager.GetCheckedEntityDataAccess();
                 UpdateCachedEntityGUIDToEntity(access);
 
                 var lookup = access->CachedEntityGUIDToEntityIndex;
 
-                foreach (var e in lookup.GetValuesForKey(instanceID))
+                foreach (var e in lookup.GetValuesForKey(entityId))
                 {
                     var data = access->GetComponentData<EntityGuid>(e);
                     if (data.Serial == 0)
@@ -581,7 +579,7 @@ namespace Unity.Entities
                 }
             }
 
-            internal UnsafeParallelMultiHashMap<int, Entity> GetCachedEntityGUIDToEntityIndexLookup()
+            internal UnsafeParallelMultiHashMap<EntityId, Entity> GetCachedEntityGUIDToEntityIndexLookup()
             {
                 var access = m_Manager.GetCheckedEntityDataAccess();
                 UpdateCachedEntityGUIDToEntity(access);
@@ -632,11 +630,6 @@ namespace Unity.Entities
         internal Entity GetEntityByEntityIndex(int index)
         {
             return GetCheckedEntityDataAccess()->GetEntityByEntityIndex(index);
-        }
-
-        internal int GetNameIndexByEntityIndex(int index)
-        {
-            return GetCheckedEntityDataAccess()->GetNameIndexByEntityIndex(index);
         }
     }
 }

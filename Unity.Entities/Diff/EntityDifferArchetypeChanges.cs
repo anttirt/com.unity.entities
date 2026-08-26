@@ -184,38 +184,11 @@ namespace Unity.Entities
 
             static bool ChunksAreDifferent(Archetype* srcArchetype, ChunkIndex srcChunk, Archetype* dstArchetype, ChunkIndex dstChunk)
             {
-#if !ENTITY_STORE_V1
                 // With entity store V2, since entities are remapped between the source and shadow worlds, any reference
                 // to any entity potentially needs remapping when any other chunk is moved. The only guaranteed way of
                 // not causing any synchronization problem is to copy everything all the time. This is of course expensive
                 // but still dwarfed by the general cost of live baking.
                 return true;
-#else
-                if (srcChunk.Count != dstChunk.Count)
-                    return true;
-
-                if (srcArchetype->TypesCount != dstArchetype->TypesCount)
-                    return true;
-
-                var typeCount = srcArchetype->TypesCount;
-
-                var srcChunkListIndex = srcChunk.ListIndex;
-                var dstChunkListIndex = dstChunk.ListIndex;
-
-                for (var typeIndex = 0; typeIndex < typeCount; ++typeIndex)
-                {
-                    if (srcArchetype->Types[typeIndex] != dstArchetype->Types[typeIndex])
-                        return true;
-
-                    var srcVersion = srcArchetype->Chunks.GetChangeVersion(typeIndex, srcChunkListIndex);
-                    var dstVersion = dstArchetype->Chunks.GetChangeVersion(typeIndex, dstChunkListIndex);
-
-                    if (srcVersion != dstVersion)
-                        return true;
-                }
-
-                return false;
-#endif
             }
         }
 

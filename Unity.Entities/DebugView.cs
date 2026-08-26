@@ -222,15 +222,12 @@ namespace Unity.Entities
                 object[] result = new object[archetype->NumSharedComponents];
                 var types = archetype->TypesCount;
                 int sharedIter = 0;
-                for (var i = 0; i < types; ++i)
+                for (int i = archetype->FirstSharedComponent, count = archetype->SharedComponentsEnd; i < count; ++i)
                 {
                     var componentType = archetype->Types[i];
-                    if (componentType.IsSharedComponent)
-                    {
-                        var sharedComponentValues = archetype->Chunks.GetSharedComponentValues(chunk.ListIndex);
-                        result[sharedIter] = new DebuggerDataAccess(m_ArchetypeChunk.m_EntityComponentStore).GetSharedComponentDataBoxed(sharedComponentValues[sharedIter], componentType.TypeIndex);
-                        sharedIter++;
-                    }
+                    var sharedComponentValues = archetype->Chunks.GetSharedComponentValues(chunk.ListIndex);
+                    result[sharedIter] = new DebuggerDataAccess(m_ArchetypeChunk.m_EntityComponentStore).GetSharedComponentDataBoxed(sharedComponentValues[sharedIter], componentType.TypeIndex);
+                    sharedIter++;
                 }
                 return result;
             }

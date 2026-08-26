@@ -35,7 +35,7 @@ public class SystemGenerator : ISourceGenerator
             var systemReceiver = (SystemSyntaxReceiver)context.SyntaxReceiver;
             var allModules = systemReceiver.SystemModules;
             var syntaxTreesWithCandidate = SystemGeneratorHelper.GetSyntaxTreesWithCandidates(allModules);
-            var assemblyHasReferenceToBurst = context.Compilation.ReferencedAssemblyNames.Any(n => n.Name == "Unity.Burst");
+            var assemblyHasReferenceToBurst = context.Compilation.ReferencedAssemblyNames.Any(n => n.Name == "UnityEngine.BurstModule");
             var assemblyHasReferenceToCollections = context.Compilation.ReferencedAssemblyNames.Any(n => n.Name == "Unity.Collections");
             var requiresMissingReferenceToBurst = false;
             var preprocessorInfo = PreprocessorInfo.From(context.ParseOptions.PreprocessorSymbolNames);

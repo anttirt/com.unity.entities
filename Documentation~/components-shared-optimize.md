@@ -8,7 +8,7 @@ If possible, use unmanaged shared components over managed shared components. Thi
 
 ## Avoid frequent updates
 
-Updating a shared component value for an entity is a [structural change](concepts-structural-changes.md) which means Unity moves the entity to another chunk. For performance reasons, try to avoid doing this frequently.
+Updating a shared component value for an entity is a [structural change](concepts-structural-changes.md) which means Unity moves the entity to another chunk. For performance reasons, try to avoid doing this frequently. If the data associated with an entity changes often, consider using a regular component or an external data structure instead of a shared component.
 
 ## Avoid lots of unique shared component values
 
@@ -19,4 +19,4 @@ For example, if there are 500 entities of an archetype with a shared component a
 Be careful with archetypes that have multiple shared component types. All entities in an archetype chunk must have the same combination of shared component values, so archetypes with multiple shared component types are susceptible to fragmentation.
 
 > [!NOTE]
-> To check for chunk fragmentation, you can view the chunk utilization in the [Archetypes window](editor-archetypes-window.md).
+> To check for chunk fragmentation, you can view the chunk utilization in the [Entities Memory Profiler module](profiler-module-memory.md).

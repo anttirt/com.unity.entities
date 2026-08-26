@@ -46,22 +46,6 @@ namespace Unity.Entities.Tests
 
 #endif
 
-#if ENTITY_STORE_V1
-        [Test]
-        public void IncreaseEntityCapacity()
-        {
-            var archetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            var count = 1024;
-            var array = new NativeArray<Entity>(count, Allocator.Temp);
-            m_Manager.CreateEntity(archetype, array);
-            for (int i = 0; i < count; i++)
-            {
-                Assert.AreEqual(i, array[i].Index);
-            }
-
-            array.Dispose();
-        }
-#endif
 
         [Test]
         public void AddComponent_Entity_EmptyComponentTypeSet_Works()
@@ -69,7 +53,9 @@ namespace Unity.Entities.Tests
             var emptyTypeSet = new ComponentTypeSet(Array.Empty<ComponentType>());
             var e = m_Manager.CreateEntity(typeof(EcsTestData), typeof(EcsTestSharedComp));
             var beforeArchetypeChunk = m_Manager.GetChunk(e);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.DoesNotThrow(() => { m_Manager.AddComponent(e, emptyTypeSet); });
+            #pragma warning restore 0618
             var afterArchetypeChunk = m_Manager.GetChunk(e);
             Assert.AreEqual(beforeArchetypeChunk, afterArchetypeChunk, "Entity chunk/archetype changed after adding empty component set");
         }
@@ -83,7 +69,9 @@ namespace Unity.Entities.Tests
             var beforeChunks = new NativeArray<ArchetypeChunk>(entities.Length, Allocator.Temp);
             for (int i = 0; i < entities.Length; ++i)
                 beforeChunks[i] = m_Manager.GetChunk(entities[i]);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.DoesNotThrow(() => { m_Manager.AddComponent(entities, emptyTypeSet); });
+            #pragma warning restore 0618
             var afterChunks = new NativeArray<ArchetypeChunk>(entities.Length, Allocator.Temp);
             for (int i = 0; i < entities.Length; ++i)
                 afterChunks[i] = m_Manager.GetChunk(entities[i]);
@@ -101,7 +89,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entities.Length; ++i)
                 beforeChunks[i] = m_Manager.GetChunk(entities[i]);
             using var query = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().Build(m_Manager);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.DoesNotThrow(() => { m_Manager.AddComponent(query, emptyTypeSet); });
+            #pragma warning restore 0618
             var afterChunks = new NativeArray<ArchetypeChunk>(entities.Length, Allocator.Temp);
             for (int i = 0; i < entities.Length; ++i)
                 afterChunks[i] = m_Manager.GetChunk(entities[i]);
@@ -159,7 +149,9 @@ namespace Unity.Entities.Tests
         public void AddComponentEmptyNativeArray()
         {
             var array = new NativeArray<Entity>(0, Allocator.Temp);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponent(array, typeof(EcsTestData));
+            #pragma warning restore 0618
             array.Dispose();
         }
 
@@ -186,7 +178,9 @@ namespace Unity.Entities.Tests
             entities[1] = m_Manager.CreateEntity(archetype);
             var checkEntity2 = m_Manager.CreateEntity(archetype);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponent(entities, typeof(EcsTestData2));
+            #pragma warning restore 0618
 
             Assert.IsTrue(IndexInChunkIsValid(checkEntity1));
             Assert.IsTrue(IndexInChunkIsValid(checkEntity2));
@@ -224,10 +218,14 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
             Assert.AreEqual(1, m_Manager.EntityOrderVersion);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new EcsTestData2(0));
+            #pragma warning restore 0618
             Assert.AreEqual(3, m_Manager.EntityOrderVersion);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, new EcsTestData2(5));
+            #pragma warning restore 0618
             Assert.AreEqual(3, m_Manager.EntityOrderVersion); // Shouldn't change when just setting data
 
             m_Manager.RemoveComponent<EcsTestData2>(entity);
@@ -248,7 +246,9 @@ namespace Unity.Entities.Tests
 
             var version = m_Manager.GetChunkVersionHash(entity);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, new EcsTestData());
+            #pragma warning restore 0618
 
             var version2 = m_Manager.GetChunkVersionHash(entity);
 
@@ -269,7 +269,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new TestInterfaceComponent { Value = 5});
+            #pragma warning restore 0618
             var obj = m_Manager.Debug.GetComponentBoxed(entity, typeof(TestInterface));
 
             Assert.AreEqual(typeof(TestInterfaceComponent), obj.GetType());
@@ -307,14 +309,20 @@ namespace Unity.Entities.Tests
 
             // Create two chunks in srcArchetype with different shared component values
             var ent0 = m_Manager.CreateEntity(srcArchetype);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(ent0, new EcsTestSharedComp {value = 17});
+            #pragma warning restore 0618
             var ent1 = m_Manager.CreateEntity(srcArchetype);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(ent1, new EcsTestSharedComp {value = 42});
+            #pragma warning restore 0618
 
             // move ent1's chunk to dstArchetype
             using(var query = m_Manager.CreateEntityQuery(typeof(EcsTestTag), typeof(EcsTestSharedComp)))
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 query.SetSharedComponentFilterManaged(new EcsTestSharedComp {value = 42});
+                #pragma warning restore 0618
                 m_Manager.RemoveComponent<EcsTestTag>(query);
             }
             var archetypeChunk = m_Manager.GetChunk(ent1);
@@ -329,7 +337,9 @@ namespace Unity.Entities.Tests
             // If these asserts fail, it means ent1's chunk wasn't correctly added to dstArchetype's
             // FreeChunksBySharedComponents list (specifically, it was added under a hash of the wrong shared component
             // values), and a new chunk was created for ent2 instead.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(ent2, new EcsTestSharedComp {value = 42});
+            #pragma warning restore 0618
             Assert.AreEqual(2, archetypeChunk.Count); // ent1's chunk should contain both entities
             Assert.AreEqual(archetypeChunk, m_Manager.GetChunk(ent2)); // ent1 and ent2 should have the same chunk
         }
@@ -365,7 +375,9 @@ namespace Unity.Entities.Tests
 
             for (int i = 0; i < count; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data = m_Manager.GetComponentData<EcsTestComponentWithBool>(array[i]);
+                #pragma warning restore 0618
                 Assert.AreEqual((array[i].Index & 1) == 1, data.value);
             }
 
@@ -451,11 +463,15 @@ namespace Unity.Entities.Tests
 
             for (int i = 0; i < count; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[i], new EcsTestData { value = i});
                 m_Manager.SetComponentData(entities[i], new EcsTestData2 { value0 = 20000 + i, value1 = 40000 + i});
                 m_Manager.SetComponentData(entities[i],
+                #pragma warning restore 0618
                     new EcsTestData3 { value0 = 50000 + i, value1 = 60000 + i, value2 = 70000 + i});
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[i], new EcsTestDataEntity { value0 = i, value1 = entities[i] });
+                #pragma warning restore 0618
                 var buffer = m_Manager.GetBuffer<EcsIntElement>(entities[i]);
                 buffer.Add(new EcsIntElement {Value = i});
             }
@@ -472,7 +488,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < count; i++)
             {
                 var entity = entities[i];
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var testDataEntity = m_Manager.GetComponentData<EcsTestDataEntity>(entity);
+                #pragma warning restore 0618
                 var testBuffer = m_Manager.GetBuffer<EcsIntElement>(entity);
                 FastAssert.AreEqual(testDataEntity.value1, entity);
                 FastAssert.AreEqual(testDataEntity.value0, testBuffer[0].Value);
@@ -541,8 +559,10 @@ namespace Unity.Entities.Tests
 
             for (int i = 0; i < count; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entities[i], new EcsTestData { value = i});
                 m_Manager.SetComponentData(entities[i], new EcsTestDataEntity { value0 = i, value1 = entities[i] });
+                #pragma warning restore 0618
                 var buffer = m_Manager.GetBuffer<EcsIntElement>(entities[i]);
                 buffer.Add(new EcsIntElement {Value = i});
             }
@@ -666,7 +686,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entitiesToAddData.Length; i++)
                 entitiesToAddData[i] = entities[i*2];
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponent(entitiesToAddData, typeof(EcsTestData2));
+            #pragma warning restore 0618
 
             for (int i = 0; i < count; ++i)
             {
@@ -691,7 +713,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i != data.Length; i++)
                 data[i] = new EcsTestData(entities[i].Index);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(m_Manager.UniversalQuery, data);
+            #pragma warning restore 0618
 
             for (int i = 0; i != data.Length; i++)
                 Assert.AreEqual(entities[i].Index, data[i].value);
@@ -704,7 +728,9 @@ namespace Unity.Entities.Tests
         public void AddSharedComponentData_WithEntityQuery_ThatHasNoMatch_WillNotCorruptInternalState()
         {
             var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entityQuery, new EcsTestSharedComp(1));
+            #pragma warning restore 0618
             m_Manager.Debug.CheckInternalConsistency();
         }
 
@@ -712,7 +738,9 @@ namespace Unity.Entities.Tests
         public void SetSharedComponentData_WithEntityQuery_ThatHasNoMatch_WillNotCorruptInternalState()
         {
             var entityQuery = m_Manager.CreateEntityQuery(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetSharedComponentManaged(entityQuery, new EcsTestSharedComp(1));
+            #pragma warning restore 0618
             m_Manager.Debug.CheckInternalConsistency();
         }
 
@@ -772,7 +800,9 @@ namespace Unity.Entities.Tests
                 pData[1] = kPaddingValue;       // padding byte
                 pData[2] = kPaddingValue;       // padding byte
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entity, component);
+                #pragma warning restore 0618
             }
 
             Assert.AreEqual(2, dppArchetype.ChunkCount);
@@ -785,7 +815,9 @@ namespace Unity.Entities.Tests
             // Validate the components have the byte pattern we expect
             foreach (var entity in entities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var component = m_Manager.GetComponentData<ComponentDataByteThen2PaddingBytes>(entity);
+                #pragma warning restore 0618
                 var pData = (byte*) UnsafeUtility.AddressOf(ref component);
                 Assert.AreEqual((byte) entity.Index, pData[0]);
                 Assert.AreEqual(kPaddingValue, pData[1] );
@@ -812,7 +844,9 @@ namespace Unity.Entities.Tests
                 pData[1] = (byte) entity.Index; // data byte
                 Assertions.Assert.AreEqual(0, pData[0]); // pData[2] -- padding byte left uninitialized
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(entity, component);
+                #pragma warning restore 0618
             }
             Assert.AreEqual(1, pdpArchetype.ChunkCount);
             Assert.IsTrue(seenChunkBuffers.Contains((ulong)pdpArchetype.Archetype->Chunks[0].Buffer));
@@ -822,30 +856,14 @@ namespace Unity.Entities.Tests
             // non-zero-initialized chunk memory state
             foreach (var entity in newEntities)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var component = m_Manager.GetComponentData<ComponentPaddingByteThenDataByteThenPaddingByte>(entity);
+                #pragma warning restore 0618
                 var pData = (byte*) UnsafeUtility.AddressOf(ref component);
                 Assert.AreEqual((byte)0, pData[0] );
                 Assert.AreEqual((byte) entity.Index, pData[1]);
                 Assert.AreEqual((byte)0, pData[2]);
             }
-        }
-
-        [Test]
-        [Ignore("Fix had to be reverted, check issue #2996")]
-        public void Fix1602()
-        {
-            var startArchetype = m_Manager.CreateArchetype(typeof(EcsTestData));
-            var startGroup = m_Manager.CreateEntityQuery(typeof(EcsTestData), ComponentType.Exclude<EcsTestTag>());
-            var endGroup = m_Manager.CreateEntityQuery(typeof(EcsTestTag));
-            for (int i = 0; i < 100; i++)
-            {
-                var entity = m_Manager.CreateEntity(startArchetype);
-                m_Manager.AddComponent<EcsTestTag>(startGroup);
-            }
-            Assert.AreEqual(startGroup.CalculateChunkCount(), 0);
-            Assert.AreEqual(endGroup.CalculateChunkCount(), 1);
-            startGroup.Dispose();
-            endGroup.Dispose();
         }
 
         [Test]
@@ -874,16 +892,24 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity(typeof(EcsTestData));
             Assert.AreEqual(1, m_Manager.EntityOrderVersion);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new EcsTestData2(0));
+            #pragma warning restore 0618
             Assert.AreEqual(3, m_Manager.EntityOrderVersion);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, new EcsTestData2(5));
+            #pragma warning restore 0618
             Assert.AreEqual(3, m_Manager.EntityOrderVersion); // Shouldn't change when just setting data
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new EcsTestManagedComponent());
+            #pragma warning restore 0618
             Assert.AreEqual(5, m_Manager.EntityOrderVersion);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentData(entity, new EcsTestManagedComponent() { value = "new" });
+            #pragma warning restore 0618
             Assert.AreEqual(5, m_Manager.EntityOrderVersion); // Shouldn't change when just setting data
 
             m_Manager.RemoveComponent<EcsTestData2>(entity);
@@ -898,7 +924,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, new TestInterfaceManagedComponent { Value = 5 });
+            #pragma warning restore 0618
             var obj = m_Manager.Debug.GetComponentBoxed(entity, typeof(TestInterface));
 
             Assert.AreEqual(typeof(TestInterfaceManagedComponent), obj.GetType());
@@ -913,12 +941,16 @@ namespace Unity.Entities.Tests
             var ent = m_Manager.CreateEntity();
             using var ecb = new EntityCommandBuffer(World.UpdateAllocator.ToAllocator);
             var value = new EcsTestManagedCompWithRefCount();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             ecb.AddComponent(ent, value);
             ecb.AddComponent(ent, value); // oops, accidental redundant add!
+            #pragma warning restore 0618
             ecb.Playback(m_Manager);
             Assert.AreEqual(1, value.RefCount); // without the double-dispose guard, this refcount would be zero here. That would be bad.
             var newValue = new EcsTestManagedCompWithRefCount();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.SetComponentObject(ent, ComponentType.ReadWrite<EcsTestManagedCompWithRefCount>(), newValue);
+            #pragma warning restore 0618
             Assert.AreEqual(0, value.RefCount);
             Assert.AreEqual(1, newValue.RefCount);
         }
@@ -933,27 +965,45 @@ namespace Unity.Entities.Tests
             m_Manager.DestroyEntity(destroyedEntity);
 
             // null src is an error (in debug builds only)
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(Entity.Null, dstEntity));
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(dstEntity));
             // null dst is an error
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, Entity.Null));
+            #pragma warning restore 0618
             // invalid but non-null src is an error
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(destroyedEntity, dstEntity));
+            #pragma warning restore 0618
             // invalid but non-null dst is an error
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, destroyedEntity));
+            #pragma warning restore 0618
             // missing target component on src is an error
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.Throws<ArgumentException>(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity));
+            #pragma warning restore 0618
 
             var componentValue = "value1";
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(srcEntity, new EcsTestDisposableManagedComponent { Value = componentValue });
+            #pragma warning restore 0618
             // src == dst is a no-op
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, srcEntity);
             Assert.AreEqual(componentValue, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(srcEntity).Value);
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(dstEntity));
             // If dst doesn't have the target component, it's added, and the value is not disposed
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEntity, dstEntity);
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEntity));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(componentValue, m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEntity).Value);
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -965,23 +1015,35 @@ namespace Unity.Entities.Tests
             var value2 = new EcsTestDisposableManagedComponent { Value = "Value 2" };
 
             // dst's T is null / default-initialized
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(srcEnt, value1);
             m_Manager.AddComponent<EcsTestDisposableManagedComponent>(dstEnt);
             Assert.DoesNotThrow(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEnt,dstEnt));
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEnt));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(value1,m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEnt));
+            #pragma warning restore 0618
 
             // dst's T value matches src's
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(srcEnt, value1);
             Assert.DoesNotThrow(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEnt,dstEnt));
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEnt));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(value1,m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEnt));
+            #pragma warning restore 0618
 
             // dst's T value does not match src. In this case, we need to make sure dst's old value is correctly disposed and doesn't leak.
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(srcEnt, value2);
             Assert.DoesNotThrow(() => m_Manager.MoveComponent<EcsTestDisposableManagedComponent>(srcEnt,dstEnt));
+            #pragma warning restore 0618
             Assert.IsFalse(m_Manager.HasComponent<EcsTestDisposableManagedComponent>(srcEnt));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreEqual(value2,m_Manager.GetComponentData<EcsTestDisposableManagedComponent>(dstEnt));
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -1002,6 +1064,7 @@ namespace Unity.Entities.Tests
 
                 foreach (var chunk in chunks)
                 {
+                    #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                     var components = chunk.GetManagedComponentAccessor(ref ManagedComponentType, m_Manager);
                     var entities = chunk.GetNativeArray(entsType);
 
@@ -1012,12 +1075,15 @@ namespace Unity.Entities.Tests
                         components[i] = new EcsTestManagedComponent { value = entities[i].Index.ToString() };
                         Assert.IsTrue(hash.TryAdd(entities[i], new FixedString64Bytes(components[i].value)));
                     }
+                    #pragma warning restore 0618
                 }
             }
 
             for (int i = 0; i < count; i++)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 var data = m_Manager.GetComponentData<EcsTestManagedComponent>(array[i]);
+                #pragma warning restore 0618
                 Assert.AreEqual(array[i].Index.ToString(), data.value);
             }
 
@@ -1041,8 +1107,10 @@ namespace Unity.Entities.Tests
 
                     foreach (var chunk in chunks)
                     {
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         var components = chunk.GetManagedComponentAccessor(ref managedComponentType, m_Manager);
                         Assert.AreEqual(0, components.Length);
+                        #pragma warning restore 0618
                     }
                 }
             }
@@ -1085,7 +1153,9 @@ namespace Unity.Entities.Tests
                 List = originalList,
                 Class = originalClass
             };
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, originalManagedComponent);
+            #pragma warning restore 0618
 
             void ValidateInstance(ComplexManagedComponent inst)
             {
@@ -1096,7 +1166,9 @@ namespace Unity.Entities.Tests
             }
 
             var instance = m_Manager.Instantiate(entity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var instanceComponent = m_Manager.GetComponentData<ComplexManagedComponent>(instance);
+            #pragma warning restore 0618
             ValidateInstance(instanceComponent);
 
             // We change our managed component but our new instance should be unaffected
@@ -1111,7 +1183,9 @@ namespace Unity.Entities.Tests
             Assert.AreEqual("SomeListData", instanceComponent.List[0].data);
             ValidateInstance(instanceComponent);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             Assert.AreSame(m_Manager.GetComponentData<ComplexManagedComponent>(entity), originalManagedComponent);
+            #pragma warning restore 0618
             Assert.AreNotSame(instanceComponent, originalManagedComponent);
         }
 
@@ -1126,10 +1200,14 @@ namespace Unity.Entities.Tests
             var originalEntity = m_Manager.CreateEntity();
             var originalComponent = new ManagedComponentWithArray { IntArray = new int[0] };
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(originalEntity, originalComponent);
+            #pragma warning restore 0618
 
             var instance = m_Manager.Instantiate(originalEntity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var instanceComponent = m_Manager.GetComponentData<ManagedComponentWithArray>(instance);
+            #pragma warning restore 0618
 
             Assert.That(originalComponent.IntArray, Is.Not.SameAs(instanceComponent.IntArray));
             Assert.That(instanceComponent.IntArray.Length, Is.EqualTo(0));
@@ -1141,10 +1219,14 @@ namespace Unity.Entities.Tests
             var originalEntity = m_Manager.CreateEntity();
             var originalComponent = new ManagedComponentWithArray { IntArray = null };
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(originalEntity, originalComponent);
+            #pragma warning restore 0618
 
             var instance = m_Manager.Instantiate(originalEntity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var instanceComponent = m_Manager.GetComponentData<ManagedComponentWithArray>(instance);
+            #pragma warning restore 0618
 
             Assert.That(instanceComponent.IntArray, Is.Null);
         }
@@ -1167,10 +1249,14 @@ namespace Unity.Entities.Tests
             var originalEntity = m_Manager.CreateEntity();
             var originalComponent = new ManagedComponentWithNestedClass { Nested = null };
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(originalEntity, originalComponent);
+            #pragma warning restore 0618
 
             var instance = m_Manager.Instantiate(originalEntity);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             var instanceComponent = m_Manager.GetComponentData<ManagedComponentWithNestedClass>(instance);
+            #pragma warning restore 0618
 
             Assert.That(instanceComponent.Nested, Is.Null);
         }
@@ -1180,18 +1266,22 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
             var obj = new EcsTestManagedComponent();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData(entity, obj);
             m_Manager.AddComponentData(entity, new EcsTestData());
             m_Manager.AddComponentData(entity, new ComplexManagedComponent());
             Assert.AreSame(m_Manager.GetComponentData<EcsTestManagedComponent>(entity), obj);
+            #pragma warning restore 0618
         }
 
         [Test]
         public void ManagedAddComponentDefaultsToNull()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponent<EcsTestManagedComponent>(entity);
             Assert.AreEqual(null, m_Manager.GetComponentData<EcsTestManagedComponent>(entity));
+            #pragma warning restore 0618
 
             m_Manager.RemoveComponent<EcsTestManagedComponent>(entity);
             Assert.IsFalse(m_Manager.HasComponent<EcsTestManagedComponent>(entity));
@@ -1201,17 +1291,21 @@ namespace Unity.Entities.Tests
         public void AddComponentWithExplicitNull()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData<EcsTestManagedComponent>(entity, null);
             Assert.AreEqual(null, m_Manager.GetComponentData<EcsTestManagedComponent>(entity));
+            #pragma warning restore 0618
         }
 
         [Test]
         public void SetManagedComponentDataToNull()
         {
             var entity = m_Manager.CreateEntity();
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponentData<EcsTestManagedComponent>(entity, new EcsTestManagedComponent());
             m_Manager.SetComponentData<EcsTestManagedComponent>(entity, null);
             Assert.AreEqual(null, m_Manager.GetComponentData<EcsTestManagedComponent>(entity));
+            #pragma warning restore 0618
         }
 
         [Test]
@@ -1221,7 +1315,9 @@ namespace Unity.Entities.Tests
             var entity = m_Manager.CreateEntity();
             Assert.Throws<ArgumentException>(() =>
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponentData<EcsTestManagedComponent>(entity, new EcsTestManagedComponent2());
+                #pragma warning restore 0618
             });
         }
 
@@ -1257,7 +1353,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entityCount; ++i)
             {
                 srcEntities[i] = m_Manager.CreateEntity(archetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(srcEntities[i], new EcsTestData(i));
+                #pragma warning restore 0618
             }
 
             var dstEntities = new NativeArray<Entity>(entityCount, Allocator.Temp);
@@ -1267,8 +1365,10 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < srcEntities.Length; ++i)
             {
                 Assert.AreEqual(archetype, m_Manager.GetChunk(dstEntities[i]).Archetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(m_Manager.GetComponentData<EcsTestData>(srcEntities[i]),
                     m_Manager.GetComponentData<EcsTestData>(dstEntities[i]));
+                    #pragma warning restore 0618
             }
 
             srcEntities.Dispose();
@@ -1283,7 +1383,9 @@ namespace Unity.Entities.Tests
             for (int i = 0; i < entityCount; ++i)
             {
                 srcEntities[i] = m_Manager.CreateEntity(archetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.SetComponentData(srcEntities[i], new EcsTestData(i));
+                #pragma warning restore 0618
             }
 
             using var dstWorld = new World("Copy Destination World");
@@ -1295,8 +1397,10 @@ namespace Unity.Entities.Tests
             {
                 // Can't compare archetypes across Worlds?
                 // Assert.AreEqual(archetype, dstWorld.EntityManager.GetChunk(dstEntities[i]).Archetype);
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 Assert.AreEqual(m_Manager.GetComponentData<EcsTestData>(srcEntities[i]),
                     dstWorld.EntityManager.GetComponentData<EcsTestData>(dstEntities[i]));
+                    #pragma warning restore 0618
             }
 
             srcEntities.Dispose();
@@ -1321,7 +1425,9 @@ namespace Unity.Entities.Tests
         {
             var archetype = m_Manager.CreateArchetype();
             var entities = m_Manager.CreateEntity(archetype, entityCount, Allocator.Temp);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddComponent<EcsTestData>(entities);
+            #pragma warning restore 0618
             foreach (var ent in entities)
                 Assert.IsTrue(m_Manager.HasComponent<EcsTestData>(ent));
             entities.Dispose();
@@ -1333,7 +1439,9 @@ namespace Unity.Entities.Tests
             var archetype = m_Manager.CreateArchetype();
             var entities = m_Manager.CreateEntity(archetype, entityCount, Allocator.Temp);
             foreach (var ent in entities)
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_Manager.AddComponent<EcsTestData>(ent);
+                #pragma warning restore 0618
             m_Manager.RemoveComponent<EcsTestData>(entities);
             foreach (var ent in entities)
                 Assert.IsFalse(m_Manager.HasComponent<EcsTestData>(ent));
@@ -1343,11 +1451,6 @@ namespace Unity.Entities.Tests
         [Test]
         public void GetEntityInfo_InvalidEntity_ReturnsEntityInvalid()
         {
-#if ENTITY_STORE_V1
-            var invalidEntity = new Entity {Index = m_Manager.EntityCapacity + 1, Version = 1};
-            var info = m_Manager.Debug.GetEntityInfo(invalidEntity);
-            Assert.AreEqual(info, "Entity.Invalid","Entity with Large Index failed test");
-#endif
 
             var invalidEntity2 = new Entity {Index = -1, Version = 1};
             var info2 = m_Manager.Debug.GetEntityInfo(invalidEntity2);
@@ -1375,7 +1478,9 @@ namespace Unity.Entities.Tests
                 const int COMPONENT_DATA_VALUE = 10;
                 var entity = EntityManager.CreateEntity(typeof(EcsTestData));
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 EntityManager.SetComponentData(entity, new EcsTestData
+                #pragma warning restore 0618
                 {
                     value = COMPONENT_DATA_VALUE
                 });
@@ -1731,20 +1836,6 @@ namespace Unity.Entities.Tests
 
         #endregion
 
-        [Test]
-        public void GetAspect()
-        {
-            var entity0 = m_Manager.CreateEntity();
-            m_Manager.AddComponentData(entity0, new EcsTestData(42));
-            var aspect0 = m_Manager.GetAspect<EcsTestAspect0RW>(entity0);
-            Assert.IsTrue(aspect0.EcsTestData.IsValid, "the aspect could not build the RefRW of EcsTestAspect0.EcsTestData");
-            Assert.AreEqual(aspect0.EcsTestData.ValueRO.value, 42, "the component the RefRW of EcsTestAspect0.EcsTestData points to does not have the correct value");
-
-            aspect0.EcsTestData.ValueRW.value = 420;
-            var componentAfterWrite = m_Manager.GetComponentData<EcsTestData>(entity0);
-            Assert.AreEqual(componentAfterWrite.value, 420, "The written value from the aspect's RefRW did not overwrite the component data");
-        }
-
         partial struct ScheduleEcsTestDataForWritingSystem : ISystem
         {
             struct Job : IJob
@@ -1849,8 +1940,10 @@ namespace Unity.Entities.Tests
         {
             public void OnCreate(ref SystemState state)
             {
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 state.EntityManager.AddComponentData(state.SystemHandle, new EcsTestData());
                 state.EntityManager.AddComponentData(state.SystemHandle, new EcsTestData2());
+                #pragma warning restore 0618
             }
         }
 
@@ -1873,6 +1966,30 @@ namespace Unity.Entities.Tests
         }
 
         [Test]
+        public void GetComponentDataRW_Entity_ModifiesValue()
+        {
+            var entity = m_Manager.CreateEntity(typeof(EcsTestData));
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            m_Manager.SetComponentData(entity, new EcsTestData(7));
+            #pragma warning restore 0618
+
+            var refRW = m_Manager.GetComponentDataRW<EcsTestData>(entity);
+            refRW.ValueRW.value = 42;
+
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
+            Assert.AreEqual(42, m_Manager.GetComponentData<EcsTestData>(entity).value);
+            #pragma warning restore 0618
+        }
+
+        [Test]
+        [TestRequiresDotsDebugOrCollectionChecks("Requires component existence validation")]
+        public void GetComponentDataRW_Entity_MissingComponent_Throws()
+        {
+            var entity = m_Manager.CreateEntity();
+            Assert.Throws<ArgumentException>(() => m_Manager.GetComponentDataRW<EcsTestData>(entity));
+        }
+
+        [Test]
         [TestRequiresCollectionChecks("Requires Job Safety System")]
         public unsafe void GetComponentData_Completes_OnlyWrite_Dependency()
         {
@@ -1883,8 +2000,10 @@ namespace Unity.Entities.Tests
             scheduleEcsTestDataForWritingSystem.Update(World.Unmanaged);
             scheduleEcsTestData2ForReadingSystem.Update(World.Unmanaged);
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             World.EntityManager.GetComponentData<EcsTestData>(systemWithEntityData);
             World.EntityManager.GetComponentData<EcsTestData2>(systemWithEntityData);
+            #pragma warning restore 0618
 
             Assert.IsTrue(JobHandle.CheckFenceIsDependencyOrDidSyncFence(World.Unmanaged.ResolveSystemStateRef(scheduleEcsTestDataForWritingSystem).Dependency, default));
             Assert.IsFalse(JobHandle.CheckFenceIsDependencyOrDidSyncFence(World.Unmanaged.ResolveSystemStateRef(scheduleEcsTestData2ForReadingSystem).Dependency, default));

@@ -7,38 +7,31 @@ namespace Unity.Entities
     partial class EntitiesProfiler
     {
         /// <summary>
-        /// Struct used to store per archetype information.
-        /// The total size is 1024 bytes, which leaves enough room to store up to 111 component types.
+        /// Struct used to store per archetype metadata.
+        /// Component types are stored separately in ArchetypeComponentData records.
         /// </summary>
         [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "ENABLE_PROFILER")]
-        [StructLayout(LayoutKind.Explicit, Size = 1024)]
+        [StructLayout(LayoutKind.Explicit, Size = 32)]
         public unsafe struct ArchetypeData : IEquatable<ArchetypeData>
         {
-            [FieldOffset(0)] // 8 bytes
+            [FieldOffset(0)] // 8 bytes - The archetypes hash
             public readonly ulong StableHash;
 
-            [FieldOffset(8)] // 4 bytes
+            [FieldOffset(8)] // 4 bytes - Maximum number of Entities which can fit within a chunk of this Archetype
             public readonly int ChunkCapacity;
 
-            [FieldOffset(12)] // 4 bytes
+            [FieldOffset(12)] // 4 bytes - Size (in bytes) for one instance of the Archetype
             public readonly int InstanceSize;
 
-            [FieldOffset(16)] // 1008 bytes
-            public readonly FixedComponentTypeDataList ComponentTypes;
+            [FieldOffset(16)] // 4 bytes - Number of components the Archetype contains
+            public readonly int ComponentTypeCount;
 
             public ArchetypeData(Archetype* archetype)
             {
                 StableHash = archetype->StableHash;
                 ChunkCapacity = archetype->ChunkCapacity;
                 InstanceSize = archetype->InstanceSize;
-                ComponentTypes = new FixedComponentTypeDataList();
-                for (var i = 0; i < archetype->TypesCount && i < ComponentTypes.Capacity; ++i)
-                {
-                    var typeIndex = archetype->Types[i].TypeIndex;
-                    var stableTypeHash = TypeManager.GetTypeInfo(typeIndex).StableTypeHash;
-                    var flags = TypeManager.IsChunkComponent(typeIndex) ? ComponentTypeFlags.ChunkComponent : ComponentTypeFlags.None;
-                    ComponentTypes.Add(stableTypeHash, flags);
-                }
+                ComponentTypeCount = archetype->TypesCount;
             }
 
             public bool Equals(ArchetypeData other)
@@ -49,7 +42,7 @@ namespace Unity.Entities
             [ExcludeFromBurstCompatTesting("Takes managed object")]
             public override bool Equals(object obj)
             {
-                return obj is ArchetypeData archetypeData ? Equals(archetypeData) : false;
+                return obj is ArchetypeData archetypeData && Equals(archetypeData);
             }
 
             public override int GetHashCode()

@@ -90,9 +90,6 @@ namespace Unity.Entities.Editor
         {
             return world is { IsCreated: true }
                    && entity.Index >= 0
-#if ENTITY_STORE_V1
-                   && (uint)entity.Index < (uint)world.EntityManager.EntityCapacity
-#endif
                    && world.EntityManager.Exists(entity);
         }
 
@@ -173,7 +170,7 @@ namespace Unity.Entities.Editor
                 {
                     var guid = proxyEntityManager.GetComponentData<EntityGuid>(proxyEntity);
 
-                    if (obj.GetInstanceID() == guid.OriginatingId)
+                    if (obj.GetEntityId() == guid.OriginatingEntityId)
                     {
                         world = proxy.World;
                         entity = proxyEntity;

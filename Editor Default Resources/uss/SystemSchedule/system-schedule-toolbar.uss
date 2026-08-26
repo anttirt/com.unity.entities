@@ -1,3 +1,8 @@
+.system-schedule-toolbar__wrapper
+{
+    flex-shrink: 0;
+}
+
 .system-schedule-toolbar__container
 {
     justify-content: space-between;

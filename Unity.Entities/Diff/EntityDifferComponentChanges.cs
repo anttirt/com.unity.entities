@@ -9,6 +9,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Properties;
+using UnityEngine;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -55,10 +56,10 @@ namespace Unity.Entities
             public readonly NativeArray<EntityGuid> NameChangedEntityGuids;
             public int NameChangedCount;
 
-            public NameChangeSet(int length, AllocatorManager.AllocatorHandle allocator)
+            public NameChangeSet(int namesLength, int changedGuidsLength, AllocatorManager.AllocatorHandle allocator)
             {
-                Names = CollectionHelper.CreateNativeArray<FixedString64Bytes>(length, allocator);
-                NameChangedEntityGuids = CollectionHelper.CreateNativeArray<EntityGuid>(length, allocator);
+                Names = CollectionHelper.CreateNativeArray<FixedString64Bytes>(namesLength, allocator);
+                NameChangedEntityGuids = CollectionHelper.CreateNativeArray<EntityGuid>(changedGuidsLength, allocator);
                 NameChangedCount = 0;
             }
 
@@ -694,7 +695,9 @@ namespace Unity.Entities
                             continue;
                         }
 
+                        #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                         if (!afterTypeInArchetype.IsManagedComponent && modification.CanCompareChunkVersions)
+                        #pragma warning restore 0618
                         {
                             var afterVersion = afterArchetype->Chunks.GetChangeVersion(afterIndexInTypeArray, afterChunk.ListIndex);
                             var beforeVersion = beforeArchetype->Chunks.GetChangeVersion(beforeIndexInTypeArray, beforeChunk.ListIndex);
@@ -767,7 +770,9 @@ namespace Unity.Entities
                     return;
                 }
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (afterTypeInArchetype.IsManagedComponent)
+                #pragma warning restore 0618
                 {
                     var afterManagedComponentIndex  = ((int*)(chunkBuffer + afterArchetype->Offsets[afterIndexInTypeArray]))[afterEntityIndexInChunk];
                     AppendManagedComponentData(entityGuid, afterTypeInArchetype.TypeIndex, afterManagedComponentIndex);
@@ -878,7 +883,9 @@ namespace Unity.Entities
                     return;
                 }
 
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 if (afterTypeInArchetype.IsManagedComponent)
+                #pragma warning restore 0618
                 {
                     var afterManagedComponentIndex  = ((int*)(afterChunkBuffer + afterArchetype->Offsets[afterIndexInTypeArray]))[afterEntityIndexInChunk];
                     var beforeManagedComponentIndex  = ((int*)(beforeChunkBuffer + beforeArchetype->Offsets[beforeIndexInTypeArray]))[beforeEntityIndexInChunk];
@@ -1002,8 +1009,8 @@ namespace Unity.Entities
 
                     CacheData.NonSerializableComponents.Add(new NonSerializableDebugInfo()
                     {
-                        OriginatingId = entityGuid.OriginatingId,
-                        OriginatingSubId = entityGuid.OriginatingSubId,
+                        OriginatingId = entityGuid.OriginatingEntityId,
+                        OriginatingSubId = entityGuid.OriginatingSubEntityId,
                         TypeIndex = afterTypeInArchetype.TypeIndex,
                         SharedComponent = sharedComponent ? 1 : 0
                     });
@@ -1438,8 +1445,8 @@ namespace Unity.Entities
 
         struct NonSerializableDebugInfo
         {
-            public int OriginatingId;
-            public int OriginatingSubId;
+            public EntityId OriginatingId;
+            public EntityId OriginatingSubId;
             public TypeIndex TypeIndex;
             public int SharedComponent;
         }
@@ -1698,10 +1705,10 @@ namespace Unity.Entities
             foreach (var info in debugInfo)
             {
                 var typeName = TypeManager.GetTypeInfo(info.TypeIndex).DebugTypeName;
-                var gameObject = EditorUtility.InstanceIDToObject(info.OriginatingId).name;
-                string variables = info.OriginatingSubId == 0 ?
+                var gameObject = EditorUtility.EntityIdToObject(info.OriginatingId).name;
+                string variables = info.OriginatingSubId == EntityId.None ?
                     $"'{typeName}' on GameObject '{gameObject}'" :
-                    $"'{typeName}' on GameObject '{gameObject}', '{EditorUtility.InstanceIDToObject(info.OriginatingSubId).GetType()}'";
+                    $"'{typeName}' on GameObject '{gameObject}', '{EditorUtility.EntityIdToObject(info.OriginatingSubId).GetType()}'";
 
                 if (info.SharedComponent == 1)
                 {
@@ -2050,15 +2057,11 @@ namespace Unity.Entities
         struct GetEntityNamesJob : IJob
         {
             public TypeIndex EntityGuidTypeIndex;
-            public NameChangeSet NameChanges;
             public NativeList<CreatedEntity> CreatedEntities;
             public NativeList<DestroyedEntity> DestroyedEntities;
             public NativeList<NameModifiedEntity> NameModifiedEntities;
-#if ENTITY_STORE_V1
-            public UnsafeBitArray NameChangeBitsByEntity;
-#else
-            public EntityNameStoreAccess NameStoreAccess;
-#endif
+            public NativeList<FixedString64Bytes> NamesList;
+            public NativeList<EntityGuid> EntityGuidsList;
             [NativeDisableUnsafePtrRestriction] public int* NameChangeCount;
             [NativeDisableUnsafePtrRestriction] public EntityComponentStore* AfterEntityComponentStore;
             [NativeDisableUnsafePtrRestriction] public EntityComponentStore* BeforeEntityComponentStore;
@@ -2079,20 +2082,16 @@ namespace Unity.Entities
             [BurstCompile]
             public void Execute()
             {
-                var namesPtr = (FixedString64Bytes*)NameChanges.Names.GetUnsafeReadOnlyPtr();
-                var entityGuidsPtr = (EntityGuid*)NameChanges.NameChangedEntityGuids.GetUnsafeReadOnlyPtr();
-
                 var length = CreatedEntities.Length + NameModifiedEntities.Length + DestroyedEntities.Length;
                 var entitiesLookup = new UnsafeParallelHashSet<EntityGuid>(length, Allocator.TempJob);
 
                 // Created entities will ALWAYS show up in the entityGuid set so we can safely grab the names.
                 // They will exist in the after world.
-                int nameIndex = 0;
-                int guidIndex = 0;
                 for (var i = 0; i < CreatedEntities.Length; i++)
                 {
                     var afterEntity = ChunkDataUtility.GetEntityFromEntityInChunk(AfterEntityComponentStore->GetArchetype(CreatedEntities[i].AfterEntityInChunk.Chunk), CreatedEntities[i].AfterEntityInChunk);
-                    AfterEntityComponentStore->GetName(afterEntity, out namesPtr[nameIndex++]);
+                    AfterEntityComponentStore->GetName(afterEntity, out var name);
+                    NamesList.Add(name);
                     entitiesLookup.Add(CreatedEntities[i].EntityGuid);
 
                 }
@@ -2101,43 +2100,18 @@ namespace Unity.Entities
                 for (var i = 0; i < NameModifiedEntities.Length; i++)
                 {
                     var entity = NameModifiedEntities[i].Entity;
-                    AfterEntityComponentStore->GetName(entity, out namesPtr[nameIndex++]);
-                    entityGuidsPtr[guidIndex++] = NameModifiedEntities[i].EntityGuid;
+                    AfterEntityComponentStore->GetName(entity, out var name);
+                    NamesList.Add(name);
+                    EntityGuidsList.Add(NameModifiedEntities[i].EntityGuid);
                     entitiesLookup.Add(NameModifiedEntities[i].EntityGuid);
                 }
 
-#if ENTITY_STORE_V1
                 // Only check name change bits when the sequence number of 2 worlds are the same.
                 // When the sequence numbers are the same, it is possible that there are entities with only
                 // name changes that are not captured in GetEntityInChunkChanges.
                 if (AfterEntityComponentStore->NameChangeBitsSequenceNum == BeforeEntityComponentStore->NameChangeBitsSequenceNum)
                 {
-                    int checkLength = Math.Min(AfterEntityComponentStore->EntitiesCapacity, NameChangeBitsByEntity.Length);
-                    // Entities with name changes only
-                    for (var i = 0; i < checkLength; i++)
-                    {
-                        if (NameChangeBitsByEntity.IsSet(i))
-                        {
-                            var entity = AfterEntityComponentStore->GetEntityByEntityIndex(i);
-
-                            if (TryGetEntityGuid(AfterEntityComponentStore, entity, out var entityGuid))
-                            {
-                                if (!entitiesLookup.Contains(entityGuid))
-                                {
-                                    AfterEntityComponentStore->GetName(entity, out namesPtr[nameIndex++]);
-                                    entityGuidsPtr[guidIndex++] = entityGuid;
-                                }
-                            }
-                        }
-                    }
-                }
-#else
-                // Only check name change bits when the sequence number of 2 worlds are the same.
-                // When the sequence numbers are the same, it is possible that there are entities with only
-                // name changes that are not captured in GetEntityInChunkChanges.
-                if (AfterEntityComponentStore->NameChangeBitsSequenceNum == BeforeEntityComponentStore->NameChangeBitsSequenceNum)
-                {
-                    var nameSetRO = AfterEntityComponentStore->NameStoreAccess.GetEntityWithNameSetRO();
+                    var nameSetRO = AfterEntityComponentStore->NameStoreAccess.GetEntitiesWithNamesRO();
 
                     foreach (var entity in nameSetRO)
                     {
@@ -2145,13 +2119,13 @@ namespace Unity.Entities
                         {
                             if (!entitiesLookup.Contains(entityGuid))
                             {
-                                AfterEntityComponentStore->GetName(entity, out namesPtr[nameIndex++]);
-                                entityGuidsPtr[guidIndex++] = entityGuid;
+                                AfterEntityComponentStore->GetName(entity, out var name);
+                                NamesList.Add(name);
+                                EntityGuidsList.Add(entityGuid);
                             }
                         }
                     }
                 }
-#endif
 
                 // Destroyed entities will always show up in the entityGuid set so we can grab the rest of those names.
                 // They will not exist in the after world so use the before world.
@@ -2160,10 +2134,11 @@ namespace Unity.Entities
                     var beforeArchetype =
                         BeforeEntityComponentStore->GetArchetype(DestroyedEntities[i].BeforeEntityInChunk.Chunk);
                     var beforeEntity = ChunkDataUtility.GetEntityFromEntityInChunk(beforeArchetype, DestroyedEntities[i].BeforeEntityInChunk);
-                    BeforeEntityComponentStore->GetName(beforeEntity, out namesPtr[nameIndex++]);
+                    BeforeEntityComponentStore->GetName(beforeEntity, out var name);
+                    NamesList.Add(name);
                 }
 
-                *NameChangeCount = guidIndex;
+                *NameChangeCount = EntityGuidsList.Length;
                 entitiesLookup.Dispose();
             }
         }
@@ -2189,43 +2164,43 @@ namespace Unity.Entities
 
 #if !DOTS_DISABLE_DEBUG_NAMES
 
-#if ENTITY_STORE_V1
-            var nameChangeBitsByEntity = afterEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameChangeBitsByEntity;
-            length += nameChangeBitsByEntity.CountBits(0, nameChangeBitsByEntity.Length);
-#else
-            length += afterEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameStoreAccess.CountEntitiesWithNamesSet();
-#endif
+            length += afterEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameStoreAccess.CountEntitiesWithNames();
 
 #endif
-
             // No entity name changes
             if (length == 0)
             {
-                return new NameChangeSet(0, allocator);
+                return new NameChangeSet(0, 0, allocator);
             }
 
-            var namesChanges = new NameChangeSet(length, allocator);
+            using var namesList = new NativeList<FixedString64Bytes>(Allocator.TempJob);
+            using var entityGuidsList = new NativeList<EntityGuid>(Allocator.TempJob);
             int nameChangeCount = 0;
 
 #if !DOTS_DISABLE_DEBUG_NAMES
             new GetEntityNamesJob
             {
                 EntityGuidTypeIndex = TypeManager.GetTypeIndex<EntityGuid>(),
-                NameChanges = namesChanges,
                 NameChangeCount = &nameChangeCount,
                 CreatedEntities = createdEntities,
                 DestroyedEntities = destroyedEntities,
                 NameModifiedEntities = nameModifiedEntities,
-#if ENTITY_STORE_V1
-                NameChangeBitsByEntity = nameChangeBitsByEntity,
-#else
-                NameStoreAccess = afterEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameStoreAccess,
-#endif
+                NamesList = namesList,
+                EntityGuidsList = entityGuidsList,
                 AfterEntityComponentStore = afterEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore,
                 BeforeEntityComponentStore = beforeEntityManager.GetCheckedEntityDataAccess()->EntityComponentStore
             }.Run();
 #endif
-            namesChanges.NameChangedCount = nameChangeCount;
+
+            //Collect into NameChanges
+            var namesChanges = new NameChangeSet(namesList.Length, entityGuidsList.Length, allocator);
+            var namesPtr = (FixedString64Bytes*)namesChanges.Names.GetUnsafeReadOnlyPtr();
+            var entityGuidsPtr = (EntityGuid*)namesChanges.NameChangedEntityGuids.GetUnsafeReadOnlyPtr();
+
+            UnsafeUtility.MemCpy((byte*)namesPtr, (byte*)namesList.GetUnsafePtr(), (long)namesList.Length * sizeof(FixedString64Bytes));
+            UnsafeUtility.MemCpy((byte*)entityGuidsPtr, (byte*)entityGuidsList.GetUnsafePtr(), (long)entityGuidsList.Length * sizeof(EntityGuid));
+
+            namesChanges.NameChangedCount = nameChangeCount; //How many entities changed in this world
 
             return namesChanges;
         }
@@ -2242,10 +2217,12 @@ namespace Unity.Entities
             NativeList<BlobAssetReferenceChange> m_BlobAssetReferencePatches;
             int m_EntityReferencePatchId;
             int m_BlobAssetReferencePatchId;
+            readonly UniqueReferenceExcludeAdapter m_UniqueRefExclude = new UniqueReferenceExcludeAdapter();
 
             public ManagedObjectPatches(EntityComponentStore* entityComponentStore)
             {
                 m_EntityComponentStore = entityComponentStore;
+                AddAdapter(m_UniqueRefExclude);
                 AddAdapter(this);
             }
 
@@ -2261,6 +2238,7 @@ namespace Unity.Entities
                 m_EntityReferencePatchId = 0;
                 m_BlobAssetReferencePatchId = 0;
 
+                m_UniqueRefExclude.PrepareForNewRootVisit();
                 PropertyContainer.TryAccept(this, ref value, out _);
             }
 

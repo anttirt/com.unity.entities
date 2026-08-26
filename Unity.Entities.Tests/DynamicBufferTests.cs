@@ -1,18 +1,14 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using System.Diagnostics;
 using NUnit.Framework;
 using Unity.Jobs;
-using Unity.Burst;
-using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using static Unity.Burst.CompilerServices.Aliasing;
-using Unity.Mathematics;
-using Unity.Entities;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.TestTools;
 using System.Text.RegularExpressions;
+using Unity.Burst.Intrinsics;
 
 namespace Unity.Entities.Tests
 {
@@ -26,7 +22,35 @@ namespace Unity.Entities.Tests
                 Value = value;
             }
 
+            public static implicit operator DynamicBufferElement(int value)
+            {
+                return new DynamicBufferElement { Value = value };
+            }
+
             public int Value;
+        }
+
+        [Test]
+        public void AddRangeReadOnlySpan()
+        {
+            Entity entity = m_Manager.CreateEntity(typeof(DynamicBufferElement));
+            DynamicBuffer<DynamicBufferElement> buffer = m_Manager.GetBuffer<DynamicBufferElement>(entity);
+
+            System.ReadOnlySpan<DynamicBufferElement> spanElements0 = stackalloc DynamicBufferElement[]{ 0, 1, 1, 2, 3 };
+            buffer.AddRange(spanElements0);
+
+            System.ReadOnlySpan<DynamicBufferElement> spanElements1 = stackalloc DynamicBufferElement[]{ 5, 8, 13, 21, 34 };
+            buffer.AddRange(spanElements1);
+
+            for (int i = 0, ni = spanElements0.Length; i < ni; ++i)
+            {
+                Assert.AreEqual(spanElements0[i], buffer[i]);
+            }
+
+            for (int i = 0, ni = spanElements1.Length; i < ni; ++i)
+            {
+                Assert.AreEqual(spanElements1[i], buffer[spanElements0.Length+i]);
+            }
         }
 
         [Test]
@@ -417,21 +441,23 @@ namespace Unity.Entities.Tests
                 }
             }
 
-            protected override void OnUpdate()
+            // See "DOTS-3029"
+            //[BurstCompile]
+            partial struct CheckComponentAliasJob : IJobEntity
             {
-                Entities
-                .ForEach((ref EcsTestData d1, ref EcsTestData2 d2, ref EcsTestData3 d3) =>
+                void Execute(ref EcsTestData d1, ref EcsTestData2 d2, ref EcsTestData3 d3)
                 {
                     ExpectNotAliased(in d1, in d2);
                     ExpectNotAliased(in d1, in d3);
                     ExpectNotAliased(in d2, in d3);
-                })
-                .WithoutBurst() // See "DOTS-3029"
-                // .WithBurst(synchronousCompilation: true)
-                .Run();
+                }
+            }
 
-                Entities
-                .ForEach((in DynamicBuffer<DynamicBufferData1> d1, in DynamicBuffer<DynamicBufferData2> d2, in DynamicBuffer<DynamicBufferData3> d3) =>
+            // See "DOTS-3029"
+            //[BurstCompile]
+            partial struct CheckBufferAliasJob : IJobEntity
+            {
+                void Execute(in DynamicBuffer<DynamicBufferData1> d1, in DynamicBuffer<DynamicBufferData2> d2, in DynamicBuffer<DynamicBufferData3> d3)
                 {
                     unsafe
                     {
@@ -449,10 +475,14 @@ namespace Unity.Entities.Tests
                         var copyBuffer = d1;
                         ExpectAliased(copyBuffer.GetUnsafePtr(), d1.GetUnsafePtr());
                     }
-                })
-                .WithoutBurst() // See "DOTS-3029"
-                // .WithBurst(synchronousCompilation: true)
-                .Run();
+                }
+            }
+
+            protected override void OnUpdate()
+            {
+                new CheckComponentAliasJob().Run();
+
+                new CheckBufferAliasJob().Run();
             }
         }
 

@@ -120,33 +120,6 @@ public partial struct RotationSpeedSystemForEachISystem : ISystem
     }
 
     [TestMethod]
-    public async Task SystemMethodWithAspectInvocation()
-    {
-        const string testSource = @"
-using Unity.Burst;
-using Unity.Entities;
-using Unity.Entities.Tests;
-using static Unity.Entities.SystemAPI;
-
-[BurstCompile]
-public partial struct RotationSpeedSystemForEachISystem : ISystem
-{
-    public void OnCreate(ref SystemState state) {}
-    public void OnDestroy(ref SystemState state) {}
-
-    [BurstCompile]
-    public void OnUpdate(ref SystemState state)
-    {
-        Entity entity = default;
-        var testAspectRO = GetAspect<EcsTestAspect>(entity);
-    }
-}
-";
-
-        await VerifyCS.VerifySourceGeneratorAsync(testSource, nameof(SystemMethodWithAspectInvocation), "Test0__System_19875963020.g.cs");
-    }
-
-    [TestMethod]
     public async Task SystemMethodWithManagedComponent()
     {
         const string testSource = @"
@@ -160,7 +133,9 @@ public partial struct SomeSystem : ISystem {
     public void OnUpdate(ref SystemState state){
         var e = state.EntityManager.CreateEntity();
         state.EntityManager.AddComponentData(e, new EcsTestManagedComponent{value = ""cake""});
+        #pragma warning disable CS0618 // managed API obsolete; internal/test caller still needs it.
         var comp = SystemAPI.ManagedAPI.GetSingleton<EcsTestManagedComponent>().value;
+        #pragma warning restore CS0618
     }
 }
 ";
@@ -233,7 +208,9 @@ public unsafe partial struct NestedSystemAPIInvocation_Example2 : ISystem
 {
     public void OnUpdate(ref SystemState state)
     {
+        #pragma warning disable CS0618 // managed API obsolete; internal/test caller still needs it.
         var foo = SystemAPI.ManagedAPI.GetComponent<EcsTestManagedComponent>(SystemAPI.GetSingletonEntity<EcsTestData>());
+        #pragma warning restore CS0618
     }
 }";
 

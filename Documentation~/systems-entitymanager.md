@@ -29,7 +29,7 @@ The entities in a world are created, destroyed, and modified through the world's
 |[`RemoveComponent<T>`](xref:Unity.Entities.EntityManager.RemoveComponent*)|Removes a component of type T from an existing entity.|
 |[`HasComponent<T>`](xref:Unity.Entities.EntityManager.HasComponent*)|Returns true if an entity has a component of type T.|
 
-All of the above methods are structural change operations.
+All of the above methods, except for [`HasComponent<T>`](xref:Unity.Entities.EntityManager.HasComponent*), are structural change operations.
 
 ## Additional resources
 

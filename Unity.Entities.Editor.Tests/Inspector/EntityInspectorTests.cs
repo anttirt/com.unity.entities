@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Mathematics;
-using Unity.Serialization.Editor;
+using Unity.Entities.Editor.Serialization;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -177,7 +177,9 @@ namespace Unity.Entities.Editor.Tests
 #if !UNITY_DISABLE_MANAGED_COMPONENTS
             m_World.EntityManager.AddComponent<ClassComponent>(m_Entity);
 #endif
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_World.EntityManager.AddSharedComponentManaged(m_Entity, new SharedStructComponent());
+            #pragma warning restore 0618
 
             EntityInspectorScope((root) =>
             {

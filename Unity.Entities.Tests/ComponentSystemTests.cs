@@ -1,4 +1,3 @@
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
 using System;
 using NUnit.Framework;
 using Unity.Collections;
@@ -59,7 +58,7 @@ namespace Unity.Entities.Tests
         {
             NativeArray<int> test = new NativeArray<int>(10, Allocator.Persistent);
 
-            new struct Job : IJob
+            struct Job : IJob
             {
                 public NativeArray<int> test;
 
@@ -1099,9 +1098,16 @@ namespace Unity.Entities.Tests
         partial class UpdateCountSystem : SystemBase
         {
             public int UpdateCount = 0;
+
+            [BurstCompile]
+            partial struct Job : IJobEntity
+            {
+                void Execute(ref EcsTestData data) {}
+            }
+
             protected override void OnUpdate()
             {
-                Entities.ForEach((ref EcsTestData data) => { }).Run();
+                new Job().Run();
                 ++UpdateCount;
             }
         }
@@ -1655,7 +1661,6 @@ namespace Unity.Entities.Tests
             }
 
             private EntityQuery m_Query;
-            private EntityQuery m_QueryWithAspect;
 
             [BurstCompile]
             public void OnCreate(ref SystemState state)
@@ -1668,9 +1673,6 @@ namespace Unity.Entities.Tests
                 m_Query = state.GetEntityQuery(myTypes);
 
                 myTypes.Dispose();
-
-                m_QueryWithAspect = new EntityQueryBuilder(Allocator.Temp).WithAll<EcsTestData>().WithAspect<MyAspect>()
-                    .Build(ref state);
             }
 
             [BurstCompile]
@@ -1678,7 +1680,6 @@ namespace Unity.Entities.Tests
             {
                 state.GetComponentTypeHandle<EcsTestData>();
                 state.Dependency = new MyJob().ScheduleParallel(m_Query, state.Dependency);
-                state.Dependency = new MyJob().ScheduleParallel(m_QueryWithAspect, state.Dependency);
                 state.EntityManager.CreateEntity();
             }
         }

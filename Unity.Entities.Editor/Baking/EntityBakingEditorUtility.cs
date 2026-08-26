@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace Unity.Entities.Editor
 {
@@ -16,8 +17,7 @@ namespace Unity.Entities.Editor
             if (world == null)
                 return;
 
-            using var pooledList = PooledList<Entity>.Make();
-            var cachedEntities = pooledList.List;
+            using var _ = ListPool<Entity>.Get(out var cachedEntities);
 
             var lookup = world.EntityManager.Debug.GetCachedEntityGUIDToEntityIndexLookup();
             var access = world.EntityManager.GetCheckedEntityDataAccess();
@@ -29,7 +29,7 @@ namespace Unity.Entities.Editor
 
                 cachedEntities.Clear();
 
-                foreach (var e in lookup.GetValuesForKey(gameObject.GetInstanceID()))
+                foreach (var e in lookup.GetValuesForKey(gameObject.GetEntityId()))
                 {
                     var data = access->GetComponentData<EntityGuid>(e);
 
@@ -57,13 +57,12 @@ namespace Unity.Entities.Editor
             if (world == null || !IsGameObjectBaked(gameObject))
                 return EntityBakingData.Null;
 
-            using var pooledList = PooledList<Entity>.Make();
-            var cachedEntities = pooledList.List;
+            using var _ = ListPool<Entity>.Get(out var cachedEntities);
 
             var lookup = world.EntityManager.Debug.GetCachedEntityGUIDToEntityIndexLookup();
             var access = world.EntityManager.GetCheckedEntityDataAccess();
 
-            foreach (var e in lookup.GetValuesForKey(gameObject.GetInstanceID()))
+            foreach (var e in lookup.GetValuesForKey(gameObject.GetEntityId()))
             {
                 var data = access->GetComponentData<EntityGuid>(e);
 

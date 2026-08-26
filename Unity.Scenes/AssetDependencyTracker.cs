@@ -301,7 +301,7 @@ namespace Unity.Scenes
                     }
                     else
                     {
-                        if (AssetDatabaseExperimental.GetOnDemandArtifactProgress(new ArtifactKey(guid, _AssetImportType)).state == OnDemandState.Failed)
+                        if (AssetDatabaseExperimental.GetOutOfProcessImportProgress(new ArtifactKey(guid, _AssetImportType)).state == OutOfProcessImportState.Failed)
                         {
                             _RequestRefresh = true;
                         }

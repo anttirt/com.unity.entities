@@ -1,48 +1,26 @@
 # Entity Inspector reference
 
-When you select an entity, the [Inspector](https://docs.unity3d.com/Manual/UsingTheInspector.html) displays its information in different ways depending on whether you're in [Authoring, Runtime, or Mixed data mode](editor-authoring-runtime.md).
+When you select an entity in the [Hierarchy window](https://docs.unity3d.com/6000.5/Documentation/Manual/new-hierarchy.html), the [Inspector](https://docs.unity3d.com/Manual/UsingTheInspector.html) displays information about that entity.
 
-## Authoring data mode
+![Entity Inspector when an Entity is selected in Hierarchy](images/editor-entity-inspector-hierarchy-selected.png)<br/>_Entity Inspector view with an Entity selected in Hierarchy_
 
-In Authoring data mode, represented by a white ![Authoring mode icon - a circle](images/editor-authoring-mode-dark.png) or gray ![Authoring mode icon - a circle](images/editor-authoring-mode-light.png) circle, the Inspector window displays information about the selected GameObject, which you can then use to [edit and change the properties of the GameObject](https://docs.unity3d.com/Manual/UsingTheInspector.html). If you select an entity in the [Entity Hierarchy window](editor-hierarchy-window.md), the Inspector window displays information about the entity's corresponding authoring GameObject.
+To view the authoring data for a GameObject that an entity was converted from, select the GameObject in the **From** field of the Inspector.
 
-## Runtime data mode
+## Components tab
 
-In Runtime data mode, represented by an orange ![Runtime data mode icon - an orange circle](images/editor-runtime-mode-dark.png) or red ![Runtime data mode icon - a red circle](images/editor-runtime-mode-light.png) circle, the Inspector window displays data about the selected entity in three tabs:
+The **Components** tab displays all the [components](concepts-components.md) on the selected entity, similar to how the Inspector displays MonoBehaviour components on a GameObject.
 
-* **Components:** Displays all the [components](concepts-components.md) on an entity, similar to displaying the MonoBehaviours on a GameObject. 
-* **Relationships:** Displays all the [systems](concepts-systems.md) that interact with the selected entity. This tab displays information only if the entity has one or more components that satisfy a [system query](systems-entityquery.md).
+The fields in the **Components** tab have two states:
 
-### Components and Aspects tab
+* In Edit mode, they're read-only.
+* In Play mode, you can edit them for debugging purposes. When you exit Play mode, the [baking](baking-overview.md) process overrides any changes you made.
 
-The fields in the **Components** and **Aspects** tab have two states:
+The orange or red vertical bars next to fields indicate data that does not persist between the modes (the color of the bar depends on the Editor theme).
 
-* In Edit mode, they're read-only. 
-* In Play mode, you can edit them for debugging purposes. When you exit Play mode, the GameObject conversion process overrides any changes you made, indicated by the orange or red vertical bars next to the fields.
-
-![Entity Inspector in Edit mode (Left), and Play mode (Right). Note the orange vertical bars in Play mode that indicate Unity destroys the data when you exit Play mode.](images/editor-entity-inspector-runtime-mode.png)<br/>_Entity Inspector in Edit mode (Left), and Play mode (Right). Note the orange vertical bars in Play mode that indicate Unity destroys the data when you exit Play mode._
-
-### Relationships tab
-
-The Relationships tab displays the system queries that match the selected entity. This view also displays the system's access rights to the components (**Read** or **Read & Write**). 
-
-Click on the icon to the right of a system or component name (![Go to icon - a square with an arrow pointing diagonally top right.](images/editor-go-to.png)), to change the selection to that system or component. Unity also opens the respective [System Inspector](editor-system-inspector.md) or [Component Inspector](editor-component-inspector.md) where possible.
-
-To view a list of all the Entities that match a query, click on the icon (![New window icon.](images/editor-new-window.png)) next to a query. Unity opens the [Query window](editor-query-window.md).
-
-![Entity Inspector Relationship tab](images/editor-entity-inspector-relationships.png)<br/>_Entity Inspector Relationship tab_
-
-## Mixed data mode
-
-Mixed data mode is available only in Play mode and is represented by a white and orange ![Mixed data mode icon - orange circle surrounded by a white circle.](images/editor-mixed-mode-dark.png) or gray and red ![Mixed data mode icon - red circle surrounded by a gray circle.](images/editor-mixed-mode-light.png) circle. In this mode, properties that have an orange vertical bar have their values overwritten by the corresponding value on the entity. These indicators mean that if you edit these fields, they change the data on the corresponding entity. However, Unity doesn't keep this data when you exit Play mode. Editing any fields that don't have an orange vertical bar edits the authoring value on the GameObject, and Unity retains this data when you exit Play mode.
-
-![Entity Inspector in Mixed data mode](images/editor-entity-inspector-mixed-mode.png)<br/>_Entity Inspector in Mixed data mode_
-
+![Entity Inspector in Edit mode (left), and Play mode (right). The orange vertical bars in Play mode that indicate that Unity destroys the data when you exit Play mode.](images/editor-entity-inspector-components-play-vs-edit.png)<br/>_Entity Inspector in Edit mode (left), and Play mode (right). The orange vertical bars in Play mode indicate that Unity destroys the data when you exit Play mode._
 
 ## Additional resources
 
 * [Entities user manual](concepts-entities.md)
-* [Entities Hierarchy window reference](editor-hierarchy-window.md)
+* [Hierarchy window reference](editor-hierarchy-window.md)
 * [System Inspector reference](editor-system-inspector.md)
-* [Component Inspector reference](editor-component-inspector.md)
-* [Query window reference](editor-query-window.md)

@@ -81,7 +81,9 @@ namespace Unity.Entities.Tests
         {
             var entity = m_Manager.CreateEntity();
 
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             m_Manager.AddSharedComponentManaged(entity, new EcsTestSharedComp());
+            #pragma warning restore 0618
 
             var removed0 = m_Manager.RemoveComponent<EcsTestSharedComp>(entity);
             var removed1 = m_Manager.RemoveComponent<EcsTestSharedComp>(entity);

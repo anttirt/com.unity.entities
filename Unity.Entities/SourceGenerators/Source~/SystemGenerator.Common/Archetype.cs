@@ -9,7 +9,6 @@ public readonly struct Archetype : IEquatable<Archetype>
 {
     public readonly EntityQueryOptions Options;
 
-    // Aspect types may be present in the All collection
     public readonly IReadOnlyCollection<Query> All;
     public readonly IReadOnlyCollection<Query> Any;
     public readonly IReadOnlyCollection<Query> None;

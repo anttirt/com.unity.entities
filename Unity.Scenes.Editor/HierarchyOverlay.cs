@@ -15,9 +15,9 @@ namespace UnityEditor.UI
             public static GUIContent subSceneEditingTooltip = EditorGUIUtility.TrTextContent(string.Empty, "Toggle whether the Sub Scene is open for editing.");
         }
 
-        internal static void HierarchyWindowItemOnGUI(int instanceID, Rect selectionRect)
+        internal static void HierarchyWindowItemOnGUI(EntityId entityId, Rect selectionRect)
         {
-            var gameObject = EditorUtility.InstanceIDToObject(instanceID) as GameObject;
+            var gameObject = EditorUtility.EntityIdToObject(entityId) as GameObject;
             if (gameObject != null)
             {
                 SubScene subScene;

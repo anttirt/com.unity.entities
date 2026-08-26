@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -13,11 +14,16 @@ public partial struct SomeSystem : global::Unity.Entities.ISystemCompilerGenerat
         var e = state.EntityManager.CreateEntity();
         #line 11 "/0/Test0.cs"
         state.EntityManager.AddComponentData(e, new EcsTestManagedComponent{value = "cake"});
-        #line 12 "/0/Test0.cs"
+        #line 13 "/0/Test0.cs"
+        
+#pragma warning disable CS0618 // managed API obsolete; internal/test caller still needs it.
         var comp = __query_1641826531_0.GetSingleton<EcsTestManagedComponent>().value;
         #line hidden
+        
+#pragma warning restore CS0618
     }
 
+    #pragma warning disable 0618
     
     TypeHandle __TypeHandle;
     global::Unity.Entities.EntityQuery __query_1641826531_0;
@@ -47,4 +53,5 @@ public partial struct SomeSystem : global::Unity.Entities.ISystemCompilerGenerat
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

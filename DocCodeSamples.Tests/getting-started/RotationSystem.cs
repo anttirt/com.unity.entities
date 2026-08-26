@@ -7,6 +7,7 @@ namespace Doc.CodeSamples.Tests.GettingStarted
 
     // This example defines an unmanaged system based on the ISystem interface.
     // ECS uses code generation, which is why the struct must be declared as partial.
+    #region example-no-using
     public partial struct RotationSystem : ISystem
     {
         // The BurstCompile attribute indicates that the method should be compiled
@@ -34,5 +35,6 @@ namespace Doc.CodeSamples.Tests.GettingStarted
             }
         }
     }
+    #endregion
     #endregion
 }

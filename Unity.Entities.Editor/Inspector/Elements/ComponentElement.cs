@@ -46,6 +46,7 @@ namespace Unity.Entities.Editor
             var query = SearchUtils.CreateComponentQuery(value);
             menu.AppendAction("Open in Hierarchy...", (a) =>
             {
+                //TODO DOTS-11153: Open the new Hierarchy window instead with the component query once we can filter by ECS components in the new Hierarchy
                 HierarchyWindow.OpenWindow(query);
             }, DropdownMenuAction.AlwaysEnabled);
             menu.AppendAction("Open in Search Window...", (a) =>

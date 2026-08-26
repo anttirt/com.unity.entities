@@ -1,6 +1,6 @@
 # Entities Memory Profiler module reference
 
-The Entities Memory Profiler module displays how much memory the [Archetypes](concepts-archetypes.md) in your project used on a per-frame basis. The information available in this module is the same as the [Archetypes window](editor-archetypes-window.md) but you can investigate the data on a per-frame basis. This is helpful to identify where any memory spikes happened, and what Archetypes contributed to performance-intensive actions. 
+The Entities Memory Profiler module displays how much memory the [Archetypes](concepts-archetypes.md) in your project used on a per-frame basis. You can investigate the data on a per-frame basis, which is helpful to identify where any memory spikes happened, and what Archetypes contributed to performance-intensive actions. 
 
 ![Profiler window with the Entities Memory module displayed](images/profiler-entities-memory.png)<br/>_Profiler window with the Entities Memory module displayed_
 
@@ -10,7 +10,7 @@ The Entities Memory Profiler module displays two charts: **Allocated Memory** an
 
 ## Module details pane
 
-When you select the module, the details pane at the bottom of the Profiler window displays further information about the Archetypes that used memory during the capture. The Archetypes are listed by World, with the amount of allocated and unused memory displayed. When you select an Archetype, the information available is the same as that available in the [Archetypes window](editor-archetypes-window.md):
+When you select the module, the details pane at the bottom of the Profiler window displays further information about the Archetypes that used memory during the capture. The Archetypes are listed by World, with the amount of allocated and unused memory displayed. When you select an Archetype, the following information is available:
 
 | **Property** | **Description** |
 |---|---|
@@ -25,5 +25,4 @@ When you select the module, the details pane at the bottom of the Profiler windo
 ## Additional resources
 
 * [Profiler window](https://docs.unity3d.com/Manual/Profiler.html)
-* [Archetypes window](editor-archetypes-window.md)
 * [Memory in Unity](https://docs.unity3d.com/Manual/performance-memory-overview.html)

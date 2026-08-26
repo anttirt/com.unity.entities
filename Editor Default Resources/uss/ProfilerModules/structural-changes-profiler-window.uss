@@ -48,25 +48,9 @@
     height: 24px;
 }
 
-.structural-changes-profiler-window__column1
+.structural-changes-profiler-tree-view-header
 {
     flex-grow: 1;
-    width: auto;
-    padding-left: 5px;
-    -unity-text-align: middle-left;
-}
-
-.structural-changes-profiler-window__column2
-{
-    width: 80px;
-    padding-left: 4px;
-    border-left-width: 1px;
-    -unity-text-align: middle-left;
-}
-
-.structural-changes-profiler-window__column3
-{
-    width: 80px;
     padding-left: 4px;
     border-left-width: 1px;
     -unity-text-align: middle-left;

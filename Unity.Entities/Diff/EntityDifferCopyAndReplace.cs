@@ -289,14 +289,12 @@ namespace Unity.Entities
             JobHandle.ScheduleBatchedJobs();
             srcSharedComponentIndices.Dispose();
 
-#if !ENTITY_STORE_V1
             copyJob.Complete();
             var entityRemapping = srcEntityManager.CreateEntityRemapArray(Allocator.TempJob);
             dstEntityManager.DuplicateEntitiesForDiffer(entityRemapping, chunks.AsArray(), cloned);
 
 #if !DOTS_DISABLE_DEBUG_NAMES
             dstAccess->EntityComponentStore->CopyAndUpdateNameByEntity(srcAccess->EntityComponentStore, chunks.AsArray(), entityRemapping);
-#endif
 #endif
 
             s_PlaybackManagedChangesMarker.Begin();
@@ -360,13 +358,10 @@ namespace Unity.Entities
                         srcManagedComponentStore, ref *dstAccess->EntityComponentStore);
                 }
 
-#if !ENTITY_STORE_V1
                 dstChunk.MetaChunkEntity = EntityRemapUtility.RemapEntity(ref entityRemapping, dstChunk.MetaChunkEntity);
-#endif
             }
             s_CopyManagedComponentsMarker.End();
 
-#if !ENTITY_STORE_V1
             dstEntityManager.RemapEntitiesForDiffer(entityRemapping, chunks.AsArray(), cloned);
 
             s_PlaybackManagedChangesMarker.Begin();
@@ -374,17 +369,8 @@ namespace Unity.Entities
             s_PlaybackManagedChangesMarker.End();
 
             entityRemapping.Dispose();
-#endif
 
-#if ENTITY_STORE_V1
-            // Ensure capacity in the dst world before we start linking entities.
-            dstAccess->EntityComponentStore->EnsureCapacity(srcEntityManager.EntityCapacity);
-            dstAccess->EntityComponentStore->CopyNextFreeEntityIndex(srcAccess->EntityComponentStore);
-#endif
 
-#if !DOTS_DISABLE_DEBUG_NAMES && ENTITY_STORE_V1
-            dstAccess->EntityComponentStore->CopyAndUpdateNameByEntity(srcAccess->EntityComponentStore);
-#endif
 
             new PatchAndAddClonedChunks
             {

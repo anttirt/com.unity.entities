@@ -4,6 +4,7 @@ using System.Threading;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine.Assertions;
 
@@ -13,6 +14,113 @@ namespace Unity.Entities
     {
         internal static readonly SharedStatic<EntityStore> s_entityStore = SharedStatic<EntityStore>.GetOrCreate<EntityStore.BurstStaticIdentifier>();
 
+        internal static readonly SharedStatic<EntityPool> s_entityPool = SharedStatic<EntityPool>.GetOrCreate<EntityPool.BurstStaticIdentifier>();
+
+
+        internal struct EntityPool
+        {
+            internal struct BurstStaticIdentifier { }
+
+            [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Size = 64)]
+            struct ArrayInfo
+            {
+                public int m_AvailableEntityCount;
+                public int m_IndexOfNextAvailableEntity;
+            }
+
+            ArrayInfo* m_Arrays;
+            Entity* m_PreallocatedEntitiesPtr;
+
+
+            internal const int k_PooledEntitiesPerThread = EntityStore.k_EntitiesInBlock / 2;
+
+            public int NumberOfEntitiesAllocatedByPool;
+
+             internal void Populate()
+            {
+                int totalEntities = k_PooledEntitiesPerThread * JobsUtility.MaxJobThreadCount;
+                NumberOfEntitiesAllocatedByPool = totalEntities;
+
+                if (m_PreallocatedEntitiesPtr != null)
+                    return;
+
+                m_PreallocatedEntitiesPtr = (Entity*)Memory.Unmanaged.Allocate(
+                    totalEntities * sizeof(Entity),
+                    UnsafeUtility.AlignOf<Entity>(),
+                    Allocator.Persistent);
+                s_entityStore.Data.AllocateEntities(m_PreallocatedEntitiesPtr, totalEntities, ChunkIndex.Null, 0);
+
+
+                m_Arrays = (ArrayInfo*)Memory.Unmanaged.Allocate(
+                    JobsUtility.MaxJobThreadCount * sizeof(ArrayInfo),
+                    64,
+                    Allocator.Persistent);
+
+                for (int i = 0; i < JobsUtility.MaxJobThreadCount; i++)
+                {
+                    m_Arrays[i].m_IndexOfNextAvailableEntity = 0;
+                    m_Arrays[i].m_AvailableEntityCount = k_PooledEntitiesPerThread;
+                }
+            }
+
+            internal void Reset()
+            {
+                if (m_Arrays != null)
+                {
+                    for (int i = 0; i < JobsUtility.MaxJobThreadCount; i++)
+                    {
+                        m_Arrays[i].m_IndexOfNextAvailableEntity = 0;
+                        m_Arrays[i].m_AvailableEntityCount = k_PooledEntitiesPerThread;
+                    }
+                }
+            }
+
+            internal void RePopulate()
+            {
+                int totalEntities = k_PooledEntitiesPerThread * JobsUtility.MaxJobThreadCount;
+                s_entityStore.Data.AllocateEntities(m_PreallocatedEntitiesPtr, totalEntities, ChunkIndex.Null, 0);
+
+                for (int i = 0; i < JobsUtility.MaxJobThreadCount; i++)
+                {
+                    m_Arrays[i].m_IndexOfNextAvailableEntity = 0;
+                    m_Arrays[i].m_AvailableEntityCount = k_PooledEntitiesPerThread;
+                }
+            }
+
+            internal void Dispose()
+            {
+                Memory.Unmanaged.Free(m_Arrays, Allocator.Persistent);
+                m_Arrays = null;
+                Memory.Unmanaged.Free(m_PreallocatedEntitiesPtr, Allocator.Persistent);
+                m_PreallocatedEntitiesPtr = null;
+            }
+
+            internal void TakeEntitiesFromPool(Entity* entities, int entityCount)
+            {
+                int threadIndex = JobsUtility.ThreadIndex;
+                ArrayInfo* threadArrayInfo = m_Arrays + threadIndex;
+                Entity* threadPtr = m_PreallocatedEntitiesPtr + k_PooledEntitiesPerThread * threadIndex;
+
+                int maxAvailableEntities = threadArrayInfo->m_AvailableEntityCount;
+                if (maxAvailableEntities >= entityCount)
+                {
+                    UnsafeUtility.MemCpy(entities, threadPtr + threadArrayInfo->m_IndexOfNextAvailableEntity, entityCount * sizeof(Entity));
+                    threadArrayInfo->m_IndexOfNextAvailableEntity += entityCount;
+                    threadArrayInfo->m_AvailableEntityCount -= entityCount;
+                    return;
+                }
+
+                UnsafeUtility.MemCpy(entities, threadPtr + threadArrayInfo->m_IndexOfNextAvailableEntity, maxAvailableEntities * sizeof(Entity));
+
+                int remaining = entityCount - maxAvailableEntities;
+                s_entityStore.Data.AllocateEntities(entities + maxAvailableEntities,
+                    remaining, ChunkIndex.Null, 0);
+
+                s_entityStore.Data.AllocateEntities(threadPtr, k_PooledEntitiesPerThread, ChunkIndex.Null, 0);
+                threadArrayInfo->m_IndexOfNextAvailableEntity = 0;
+                threadArrayInfo->m_AvailableEntityCount = k_PooledEntitiesPerThread;
+            }
+        }
         internal struct EntityStore : IDisposable
         {
             internal struct BurstStaticIdentifier { }
@@ -23,17 +131,10 @@ namespace Unity.Entities
                 public fixed ulong allocated[k_EntitiesInBlock / 64];
                 public fixed ulong entityInChunk[k_EntitiesInBlock];
                 public fixed int versions[k_EntitiesInBlock];
-#if !DOTS_DISABLE_DEBUG_NAMES
-                public fixed int nameByEntityIndex[k_EntitiesInBlock];
-#endif
             }
 
-            const int k_EntitiesInBlock = 8192;
-#if !DOTS_DISABLE_DEBUG_NAMES
-            const int k_BlockSize = k_EntitiesInBlock / 8 + k_EntitiesInBlock * 16;
-#else
+            internal const int k_EntitiesInBlock = 8192;
             const int k_BlockSize = k_EntitiesInBlock / 8 + k_EntitiesInBlock * 12;
-#endif
             const int k_BlockCount = 16384;
             const int k_BlockBusy = -1;
             internal const int MaximumTheoreticalAmountOfEntities = k_EntitiesInBlock * k_BlockCount;
@@ -185,12 +286,26 @@ namespace Unity.Entities
 
             internal void AllocateEntities(NativeArray<Entity> entities)
             {
-                AllocateEntities((Entity*)entities.GetUnsafePtr(), entities.Length, ChunkIndex.Null, 0);
+                AllocateEntitiesDirect((Entity*)entities.GetUnsafePtr(), entities.Length, ChunkIndex.Null, 0);
             }
 
             internal void AllocateEntities(Entity* entities, int entityCount)
             {
-                AllocateEntities(entities, entityCount, ChunkIndex.Null, 0);
+                AllocateEntitiesDirect(entities, entityCount, ChunkIndex.Null, 0);
+            }
+
+
+            internal void AllocateEntitiesDirect(Entity* entities, int totalCount, ChunkIndex chunkIndex,
+                int firstEntityInChunkIndex)
+            {
+                if (totalCount < EntityPool.k_PooledEntitiesPerThread && chunkIndex == ChunkIndex.Null)
+                {
+                    s_entityPool.Data.TakeEntitiesFromPool(entities, totalCount);
+                }
+                else
+                {
+                    AllocateEntities(entities, totalCount, chunkIndex, firstEntityInChunkIndex);
+                }
             }
 
             internal void AllocateEntities(Entity* entities, int totalCount, ChunkIndex chunkIndex, int firstEntityInChunkIndex)
@@ -407,10 +522,6 @@ namespace Unity.Entities
                             versions[indexInBlock]++;
                             allocated[indexInBlock / 64] &= ~0UL ^ mask;
 
-#if !DOTS_DISABLE_DEBUG_NAMES
-                            block->nameByEntityIndex[indexInBlock] = default;
-#endif
-
                             blockCount--;
                         }
                     }
@@ -437,42 +548,6 @@ namespace Unity.Entities
 
                 this = default;
             }
-
-#if !DOTS_DISABLE_DEBUG_NAMES
-            internal EntityName GetEntityName(Entity entity)
-            {
-                return GetEntityName(entity.Index);
-            }
-
-            internal EntityName GetEntityName(int index)
-            {
-                var blockIndex = index / k_EntitiesInBlock;
-                var indexInBlock = index % k_EntitiesInBlock;
-
-                var block = (DataBlock*)m_DataBlocks[blockIndex];
-                if (block == null) return default;
-
-                var bitfield = block->allocated[indexInBlock / 64];
-                var mask = 1UL << (indexInBlock % 64);
-
-                if ((bitfield & mask) == 0) return default;
-
-                var nameIndex = block->nameByEntityIndex[indexInBlock];
-                return new EntityName { Index = nameIndex };
-            }
-
-            public void SetEntityName(Entity entity, EntityName name)
-            {
-                var blockIndex = entity.Index / k_EntitiesInBlock;
-                var indexInBlock = entity.Index % k_EntitiesInBlock;
-
-                var block = (DataBlock*)m_DataBlocks[blockIndex];
-
-                DebugOnlyThrowIfEntityDoesntExist(entity, block, indexInBlock);
-
-                block->nameByEntityIndex[indexInBlock] = name.Index;
-            }
-#endif
         }
     }
 }

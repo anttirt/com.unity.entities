@@ -49,11 +49,6 @@
     padding: 0px;
 }
 
-.aspect-icon
-{
-    background-image: var(--aspect-icon);
-}
-
 .component-data
 {
     background-image: var(--component-icon);

@@ -7,6 +7,7 @@ namespace Unity.Entities
         public readonly TypeIndex TypeIndex;
 
         public bool IsBuffer => TypeIndex.IsBuffer;
+        public bool IsTransform => TypeIndex.IsTransform;
         public bool IsCleanupComponent => TypeIndex.IsCleanupComponent;
         public bool IsCleanupSharedComponent => TypeIndex.IsCleanupSharedComponent;
         public bool IsSharedComponent => TypeIndex.IsSharedComponentType;
@@ -14,7 +15,9 @@ namespace Unity.Entities
         public bool IsChunkComponent => TypeIndex.IsChunkComponent;
         public bool HasEntityReferences => TypeIndex.HasEntityReferences;
         public bool IsEnableable => TypeIndex.IsEnableable;
+#pragma warning disable 0618 // managed-component helper obsolete; this is the wrapper accessor.
         public bool IsManagedComponent => TypeIndex.IsManagedComponent;
+#pragma warning restore 0618
         public bool IsBakeOnlyType => TypeIndex.IsBakingOnlyType;
         public bool IsChunkSerializable => TypeIndex.IsChunkSerializable;
 

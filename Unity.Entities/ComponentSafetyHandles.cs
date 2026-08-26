@@ -6,12 +6,13 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Profiling;
 using UnityEngine.Profiling;
+using Unity.Scripting.LifecycleManagement;
 
 namespace Unity.Entities
 {
     [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "ENABLE_UNITY_COLLECTIONS_CHECKS", CompileTarget = GenerateTestsForBurstCompatibilityAttribute.BurstCompatibleCompileTarget.Editor)]
     // internal for BurstCompatible test support
-    unsafe internal struct ComponentSafetyHandles
+    unsafe internal partial struct ComponentSafetyHandles
     {
         const int                   kMaxTypes = TypeManager.MaximumTypesCount;
 
@@ -62,6 +63,11 @@ namespace Unity.Entities
                         CreateStaticSafetyId(
                             $"BufferLookup<{TypeManager.GetTypeInfo(typeIndex).DebugTypeName}>");
                 }
+                else if (typeIndex.IsTransform)
+                {
+                    m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup[typeIndexWithoutFlags] =
+                        CreateStaticSafetyId($"TransformLookup");
+                }
                 else
                 {
                     m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup[typeIndexWithoutFlags] =
@@ -76,6 +82,11 @@ namespace Unity.Entities
                     m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays[typeIndexWithoutFlags] =
                         CreateStaticSafetyId(
                             $"BufferTypeHandle<{TypeManager.GetTypeInfo(typeIndex).DebugTypeName}>");
+                }
+                else if (typeIndex.IsTransform)
+                {
+                    m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays[typeIndexWithoutFlags] =
+                        CreateStaticSafetyId($"TransformTypeHandle");
                 }
                 else if (typeIndex.IsSharedComponentType)
                 {
@@ -149,10 +160,11 @@ namespace Unity.Entities
 
         public void OnCreate()
         {
-            m_TypeArrayIndices = (ushort*)Memory.Unmanaged.Allocate(sizeof(ushort) * kMaxTypes, 16, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Safety.ComponentHandles", Allocator.Persistent);
+            m_TypeArrayIndices = (ushort*)Memory.Unmanaged.Allocate(sizeof(ushort) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemSet(m_TypeArrayIndices, 0xFF, sizeof(ushort) * kMaxTypes);
 
-            m_ComponentSafetyHandles = (ComponentSafetyHandle*)Memory.Unmanaged.Allocate(sizeof(ComponentSafetyHandle) * kMaxTypes, 16, Allocator.Persistent);
+            m_ComponentSafetyHandles = (ComponentSafetyHandle*)Memory.Unmanaged.Allocate(sizeof(ComponentSafetyHandle) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemClear(m_ComponentSafetyHandles, sizeof(ComponentSafetyHandle) * kMaxTypes);
 
             m_TempSafety = AtomicSafetyHandle.Create();
@@ -167,37 +179,30 @@ namespace Unity.Entities
         }
 
         static bool s_Initialized;
-        private static bool s_AppDomainUnloadRegistered;
+
         [ExcludeFromBurstCompatTesting("Uses managed delegates")]
         public static void Initialize()
         {
             if (s_Initialized)
                 return;
             s_Initialized = true;
+            var memoryLabel = Memory.CreateLabel("Entities", "Safety.ComponentHandles", Allocator.Persistent);
             m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup =
-                (int*)Memory.Unmanaged.Allocate(sizeof(int) * kMaxTypes, 16, Allocator.Persistent);
+                (int*)Memory.Unmanaged.Allocate(sizeof(int) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemClear(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup, sizeof(int) * kMaxTypes);
             m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays =
-                (int*)Memory.Unmanaged.Allocate(sizeof(int) * kMaxTypes, 16, Allocator.Persistent);
+                (int*)Memory.Unmanaged.Allocate(sizeof(int) * kMaxTypes, 16, memoryLabel);
             UnsafeUtility.MemClear(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays, sizeof(int) * kMaxTypes);
-
-            if (!s_AppDomainUnloadRegistered)
-            {
-                // important: this will always be called from a special unload thread (main thread will be blocking on this)
-                System.AppDomain.CurrentDomain.DomainUnload += (_, __) => { Shutdown(); };
-
-                // There is no domain unload in player builds, so we must be sure to shutdown when the process exits.
-                System.AppDomain.CurrentDomain.ProcessExit += (_, __) => { Shutdown(); };
-                s_AppDomainUnloadRegistered = true;
-            }
         }
 
+        [OnCodeUnloading]
         static void Shutdown()
         {
             if (s_Initialized)
             {
-                Memory.Unmanaged.Free(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup, Allocator.Persistent);
-                Memory.Unmanaged.Free(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays, Allocator.Persistent);
+                var memoryLabel = Memory.CreateLabel("Entities", "Safety.ComponentHandles", Allocator.Persistent);
+                Memory.Unmanaged.Free(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForComponentLookup, memoryLabel);
+                Memory.Unmanaged.Free(m_StaticSafetyIdData.Data.m_StaticSafetyIdsForArchetypeChunkArrays, memoryLabel);
                 s_Initialized = false;
             }
         }
@@ -250,8 +255,9 @@ namespace Unity.Entities
 
             AtomicSafetyHandle.Release(m_TempSafety);
 
-            Memory.Unmanaged.Free(m_TypeArrayIndices, Allocator.Persistent);
-            Memory.Unmanaged.Free(m_ComponentSafetyHandles, Allocator.Persistent);
+            var memoryLabel = Memory.CreateLabel("Entities", "Safety.ComponentHandles", Allocator.Persistent);
+            Memory.Unmanaged.Free(m_TypeArrayIndices, memoryLabel);
+            Memory.Unmanaged.Free(m_ComponentSafetyHandles, memoryLabel);
             m_ComponentSafetyHandles = null;
         }
 
@@ -313,7 +319,7 @@ namespace Unity.Entities
 
         public AtomicSafetyHandle GetBufferHandleForBufferLookup(TypeIndex type)
         {
-            Assert.IsTrue(type.IsBuffer);
+            Assert.IsTrue(type.IsBuffer || type.IsTransform); // TODO DOTS-10269: Transforms should not be using this safety handle
             var handle = GetBufferSafetyHandle(type);
             // Override the handle's default static safety ID
             SetStaticSafetyIdForHandle_FromEntity(ref handle, type);
@@ -359,7 +365,7 @@ namespace Unity.Entities
 
         public AtomicSafetyHandle GetBufferHandleForBufferTypeHandle(TypeIndex type)
         {
-            Assert.IsTrue(type.IsBuffer);
+            Assert.IsTrue(type.IsBuffer || type.IsTransform);
             // safety handles are configured with the static safety ID for ArchetypeChunk*Type by default,
             // so no further static safety ID setup is necessary in this path.
             return GetBufferSafetyHandle(type);
@@ -393,7 +399,7 @@ namespace Unity.Entities
 
         public AtomicSafetyHandle GetBufferSafetyHandle(TypeIndex type)
         {
-            Assert.IsTrue(type.IsBuffer);
+            Assert.IsTrue(type.IsBuffer || type.IsTransform); // TODO DOTS-10269: Transforms should not be using this safety handle
             var arrayIndex = GetTypeArrayIndex(type);
             return m_ComponentSafetyHandles[arrayIndex].BufferHandle;
         }

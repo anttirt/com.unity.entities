@@ -1,6 +1,5 @@
 using NUnit.Framework;
 using Unity.Collections;
-using Unity.Entities.CodeGeneratedJobForEach;
 using Unity.Jobs.LowLevel.Unsafe;
 using Assert = FastAssert;
 using Unity.Burst;
@@ -134,9 +133,11 @@ namespace Unity.Entities.Tests
 
             JobsUtility.ClearSystemIds();
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618            
             // In case entities journaling is initialized, clear it
             EntitiesJournaling.Clear();
+#pragma warning restore 0618            
 #endif
         }
 
@@ -262,11 +263,6 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(version, chunk.GetChangeVersion(type));
             Assert.IsFalse(chunk.DidChange(type, version));
             Assert.IsTrue(chunk.DidChange(type, version - 1));
-        }
-
-        partial class EntityForEachSystem : SystemBase
-        {
-            protected override void OnUpdate() {}
         }
 
         public EmptySystem EmptySystem

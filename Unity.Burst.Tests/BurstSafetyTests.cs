@@ -100,6 +100,7 @@ public class BurstSafetyTests
     }
 
     [Test]
+    [Timeout(360000)]
     public void ParallelForMinMaxChecks()
     {
         var messageCount = 0;

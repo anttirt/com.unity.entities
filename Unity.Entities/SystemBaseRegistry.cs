@@ -6,6 +6,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Assertions;
+using Unity.Scripting.LifecycleManagement;
 
 namespace Unity.Entities
 {
@@ -113,13 +114,12 @@ namespace Unity.Entities
     /// prefer <seealso cref="World.AddSystem"/>
     /// </summary>
     [GenerateTestsForBurstCompatibility]
-    public static class SystemBaseRegistry
+    public static partial class SystemBaseRegistry
     {
         class Managed
         {
             public static List<Type> s_StructTypes = null;
             public static List<RegistrationEntry> s_PendingRegistrations;
-            public static bool s_DisposeRegistered = false;
         }
 
         struct Dummy
@@ -128,7 +128,14 @@ namespace Unity.Entities
 
         internal readonly static SharedStatic<UnmanagedSystemTypeRegistryData> s_Data = SharedStatic<UnmanagedSystemTypeRegistryData>.GetOrCreate<Dummy>();
 
-        // TODO: Need to dispose this thing when domain reload happens.
+        [OnCodeUnloading]
+        static void OnCodeUnloading()
+        {
+            s_Data.Data.Dispose();
+            Managed.s_PendingRegistrations = null;
+            Managed.s_StructTypes = null;
+        }
+
         public delegate void ForwardingFunc(IntPtr systemPtr, IntPtr state);
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
@@ -172,22 +179,8 @@ namespace Unity.Entities
                 Managed.s_StructTypes = new List<Type>();
 
                 ref var data = ref s_Data.Data;
-                data.Construct();
-
-                // Arrange for domain unloads to wipe the pending registration list, which works around multiple domain reloads in sequence
-                if (!Managed.s_DisposeRegistered)
-                {
-                    Managed.s_DisposeRegistered = true;
-#if UNITY_EDITOR
-                    AppDomain.CurrentDomain.DomainUnload += (_, __) =>
-#else
-                    AppDomain.CurrentDomain.ProcessExit += (_, __) =>
-#endif
-                    {
-                        s_Data.Data.Dispose();
-                        Managed.s_PendingRegistrations = null;
-                    };
-                }
+                if (!data.Constructed)
+                    data.Construct();
             }
 
             // The order/number here must match UnmanagedSystemFunctionType

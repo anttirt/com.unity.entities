@@ -105,15 +105,6 @@ public static class JobEntityGeneratorErrors
             location);
     }
 
-    public static void SGJE0021(ISourceGeneratorDiagnosable diagnosable, Location location, string parameterName)
-    {
-        diagnosable.LogError(
-            nameof(SGJE0021),
-            k_ErrorTitle,
-            $"{parameterName} is an Aspect passed with a `ref` or `in` keyword.  Aspects are already act as reference types and should just be passed in by value.",
-            location);
-    }
-
     public static void SGJE0022(ISourceGeneratorDiagnosable diagnosable, Location location, string parameterName)
     {
         diagnosable.LogError(

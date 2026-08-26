@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,7 +13,7 @@ namespace Unity.Entities
         /// <summary>
         /// Array of <see cref="ComponentTypeView"/>.
         /// </summary>
-        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+        [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
         [DebuggerDisplay("Length = {Length}")]
         [DebuggerTypeProxy(typeof(ComponentTypeViewArrayDebugView))]
         [StructLayout(LayoutKind.Sequential)]
@@ -98,7 +98,7 @@ namespace Unity.Entities
             /// <summary>
             /// Enumerator that can iterate through the <see cref="ComponentTypeViewArray"/>.
             /// </summary>
-            [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "(UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING")]
+            [GenerateTestsForBurstCompatibility(RequiredUnityDefine = "UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING")]
             public struct Enumerator : IEnumerator<ComponentTypeView>
             {
                 readonly ComponentTypeViewArray m_ComponentTypeViewArray;

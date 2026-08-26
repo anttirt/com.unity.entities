@@ -8,9 +8,13 @@ A **world** is a collection of [entities](concepts-entities.md). An entity's ID 
 
 A world owns a set of [systems](concepts-systems.md), which usually only accesses the entities within that same world. Additionally, a set of entities within a world which have the same set of component types are stored together in an [archetype](concepts-archetypes.md), which determines how the components in your program are organized in memory.
 
+Entity worlds are displayed as nodes in the [Hierarchy window](editor-hierarchy-world-node.md).
+
 ## Initialization
 
 By default, when you enter Play mode, Unity creates a `World` instance and adds every system to this default world.
+
+Unity assigns this world to [`World.DefaultGameObjectInjectionWorld`](xref:Unity.Entities.World.DefaultGameObjectInjectionWorld). Code that runs outside a system has no world to work from, so it reads this property to reach the default world. This applies both to your own MonoBehaviour scripts and to Editor tools such as the SubScene Inspector and the [Entity Inspector](editor-entity-inspector.md). For example, to get the `EntityManager` of the default world from a MonoBehaviour, use `World.DefaultGameObjectInjectionWorld.EntityManager`.
 
 If you prefer to add systems to the default world manually, create a single class implementing the [ICustomBootstrap](xref:Unity.Entities.ICustomBootstrap) interface.
  
@@ -29,3 +33,4 @@ Unity uses [`WorldFlags`](xref:Unity.Entities.WorldFlags) to create specialized 
 
 * [Entities concepts](concepts-entities.md)
 * [Systems concepts](concepts-systems.md)
+* [Entity world in Hierarchy window](editor-hierarchy-world-node.md)

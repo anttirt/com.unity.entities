@@ -1,4 +1,6 @@
 using System;
+using Unity.Hierarchy;
+using UnityEditor;
 using UnityEngine.UIElements;
 
 namespace Unity.Entities.Editor
@@ -28,7 +30,23 @@ namespace Unity.Entities.Editor
                 {
                     Analytics.SendEditorEvent(Analytics.Window.Inspector, Analytics.EventType.RelationshipGoTo, Analytics.GoToEntityDestination);
                     EntitySelectionProxy.SelectEntity(@this.m_Data.World, @this.m_Data.Entity);
+                    FrameInHierarchy(@this.m_Data.Entity);
                 }, this);
+        }
+
+        static void FrameInHierarchy(Entity entity)
+        {
+            var window = EditorWindow.GetWindow<Unity.Hierarchy.Editor.HierarchyWindow>();
+            window.View.Update();
+            var handler = window.View.Source.GetNodeTypeHandlerBase<HierarchyEntityHandler>();
+            var node = handler != null ? handler.GetNode(entity) : Unity.Hierarchy.HierarchyNode.Null;
+            if (node == Unity.Hierarchy.HierarchyNode.Null)
+                return;
+
+            var viewModel = window.View.ViewModel;
+            viewModel.ClearFlags(Unity.Hierarchy.HierarchyNodeFlags.Selected);
+            viewModel.SetFlags(in node, Unity.Hierarchy.HierarchyNodeFlags.Selected);
+            window.View.Frame(in node);
         }
 
         public void Update(EntityViewData data)

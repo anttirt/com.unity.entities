@@ -11,12 +11,11 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Unity.Entities.Tests.InAnotherAssembly",
-        "Unity.Entities.Tests.InAnotherEmptyAssembly"
+        "Unity.Entities.Tests.InAnotherEmptyAssembly",
+        "Unity.Entities.Tests.ExplicitlyDisabledSystem"
     ],
     "includePlatforms": [],
-    "excludePlatforms": [
-        "iOS"
-    ],
+    "excludePlatforms": [],
     "allowUnsafeCode": true,
     "overrideReferences": true,
     "precompiledReferences": [

@@ -84,27 +84,27 @@ namespace Unity.Scenes
             return _Assets.ContainsKey(hash);
         }
 
-        public int ResolveObject(RuntimeGlobalObjectId objID)
+        public EntityId ResolveObject(RuntimeGlobalObjectId objID)
         {
             if (!_Assets.TryGetValue(objID.AssetGUID, out var manifest))
-                return 0;
+                return EntityId.None;
 
             //@TODO-PERF: sort by GlobalObjectIDs and do binary search to find the right object
             var objectIDs = manifest.AssetObjectManifest.GlobalObjectIds;
             for (int i = 0; i != objectIDs.Length; i++)
             {
                 if (objectIDs[i].Equals(objID))
-                    return manifest.AssetObjectManifest.Objects[i].GetInstanceID();
+                    return manifest.AssetObjectManifest.Objects[i].GetEntityId();
             }
 
-            return 0;
+            return EntityId.None;
         }
 
-        unsafe public void ResolveObjects(NativeArray<RuntimeGlobalObjectId> globalObjectIDs, NativeArray<int> instanceIds)
+        unsafe public void ResolveObjects(NativeArray<RuntimeGlobalObjectId> globalObjectIDs, NativeArray<EntityId> entityIds)
         {
             var globalObjectIDsPtr = (RuntimeGlobalObjectId*)globalObjectIDs.GetUnsafePtr();
             for (int i = 0; i != globalObjectIDs.Length; i++)
-                instanceIds[i] = ResolveObject(globalObjectIDsPtr[i]);
+                entityIds[i] = ResolveObject(globalObjectIDsPtr[i]);
         }
 
         public void UnloadAsset(Hash128 assetId)

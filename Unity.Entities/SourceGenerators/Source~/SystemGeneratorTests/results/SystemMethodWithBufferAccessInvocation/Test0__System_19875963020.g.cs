@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -30,7 +31,8 @@ public partial struct RotationSpeedSystemForEachISystem : global::Unity.Entities
         }
     }
 
-    #line 34 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
+    #pragma warning disable 0618
+    #line 36 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
     readonly struct IFE_1641826537_0
     {
         public struct ResolvedChunk
@@ -162,4 +164,5 @@ public partial struct RotationSpeedSystemForEachISystem : global::Unity.Entities
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

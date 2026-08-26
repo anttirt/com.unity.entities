@@ -14,6 +14,8 @@ namespace Unity.Entities.Editor
 
         public int[] UpdateBeforeIndices;
         public int[] UpdateAfterIndices;
+        public int[] UpdateBeforeReverseIndices;
+        public int[] UpdateAfterReverseIndices;
 
         public readonly string NicifiedDisplayName;
         public readonly string TypeName;
@@ -45,6 +47,8 @@ namespace Unity.Entities.Editor
 
             UpdateAfterIndices = Array.Empty<int>();
             UpdateBeforeIndices = Array.Empty<int>();
+            UpdateBeforeReverseIndices = Array.Empty<int>();
+            UpdateAfterReverseIndices = Array.Empty<int>();
             Recorder = Recorder.Get($"{system.World?.Name ?? "none"} {FullName}");
         }
 
@@ -80,6 +84,8 @@ namespace Unity.Entities.Editor
 
             UpdateAfterIndices = Array.Empty<int>();
             UpdateBeforeIndices = Array.Empty<int>();
+            UpdateBeforeReverseIndices = Array.Empty<int>();
+            UpdateAfterReverseIndices = Array.Empty<int>();
             Recorder = Recorder.Get($"{world.Name ?? "none"} {FullName}");
         }
     }

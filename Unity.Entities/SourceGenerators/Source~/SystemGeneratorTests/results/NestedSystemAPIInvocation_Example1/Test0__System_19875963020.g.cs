@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -11,10 +12,11 @@ public unsafe partial struct NestedSystemAPIInvocation_Example1 : global::Unity.
     void __ToggleEnabled_5DBCC748(Entity entity, ref SystemState state)
     {
         #line 15 "/0/Test0.cs"
-global::Unity.Entities.Internal.InternalCompilerInterface.SetComponentEnabledAfterCompletingDependency<global::Unity.Entities.Tests.EcsTestDataEnableable>(ref __TypeHandle.__Unity_Entities_Tests_EcsTestDataEnableable_RW_ComponentLookup, ref state, entity, !global::Unity.Entities.Internal.InternalCompilerInterface.IsComponentEnabledAfterCompletingDependency<global::Unity.Entities.Tests.EcsTestDataEnableable>(ref __TypeHandle.__Unity_Entities_Tests_EcsTestDataEnableable_RO_ComponentLookup, ref state, entity));
+        global::Unity.Entities.Internal.InternalCompilerInterface.SetComponentEnabledAfterCompletingDependency<global::Unity.Entities.Tests.EcsTestDataEnableable>(ref __TypeHandle.__Unity_Entities_Tests_EcsTestDataEnableable_RW_ComponentLookup, ref state, entity, !global::Unity.Entities.Internal.InternalCompilerInterface.IsComponentEnabledAfterCompletingDependency<global::Unity.Entities.Tests.EcsTestDataEnableable>(ref __TypeHandle.__Unity_Entities_Tests_EcsTestDataEnableable_RO_ComponentLookup, ref state, entity));
         #line hidden
     }
 
+    #pragma warning disable 0618
     
     TypeHandle __TypeHandle;
     struct TypeHandle
@@ -41,4 +43,5 @@ global::Unity.Entities.Internal.InternalCompilerInterface.SetComponentEnabledAft
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

@@ -39,14 +39,14 @@ namespace Unity.Transforms.Hybrid.Tests
             RwdAllocator.Rewind();
         }
 
-        static IEnumerable<int> GetInstanceIds(GameObject go)
+        static IEnumerable<EntityId> GetInstanceIds(GameObject go)
         {
             var open = new Stack<UnityEngine.Transform>();
             open.Push(go.transform);
             while (open.Count > 0)
             {
                 var top = open.Pop();
-                yield return top.gameObject.GetInstanceID();
+                yield return top.gameObject.GetEntityId();
                 int n = top.childCount;
                 for (int i = 0; i < n; i++)
                     open.Push(top.GetChild(i));
@@ -65,8 +65,8 @@ namespace Unity.Transforms.Hybrid.Tests
             new GameObject("c22").transform.SetParent(c2.transform);
             IncrementalHierarchyFunctions.Build(new [] {go}, out m_Hierarchy, RwdAllocator.ToAllocator);
 
-            var changedIds = new NativeList<int>(1, RwdAllocator.ToAllocator);
-            changedIds.Add(go.GetInstanceID());
+            var changedIds = new NativeList<EntityId>(1, RwdAllocator.ToAllocator);
+            changedIds.Add(go.GetEntityId());
 
             var visitedIndices = new NativeParallelHashMap<int, bool>(6, RwdAllocator.ToAllocator);
 
@@ -79,10 +79,10 @@ namespace Unity.Transforms.Hybrid.Tests
                 foreach (var id in GetInstanceIds(go))
                 {
                     Assert.IsTrue(changedIds.Contains(id));
-                    var index = m_Hierarchy.IndexByInstanceId[id];
+                    var index = m_Hierarchy.IndexByEntityId[id];
                     bool success = visitedIndices.TryGetValue(index, out bool isInOriginalList);
                     Assert.IsTrue(success);
-                    Assert.AreEqual(id == go.GetInstanceID(), isInOriginalList);
+                    Assert.AreEqual(id == go.GetEntityId(), isInOriginalList);
                 }
             }
             finally

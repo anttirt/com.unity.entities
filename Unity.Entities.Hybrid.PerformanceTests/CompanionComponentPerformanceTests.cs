@@ -23,7 +23,9 @@ namespace Unity.Entities.Hybrid.PerformanceTests
         {
             // This test might require transform components
             var entity = GetEntity(TransformUsageFlags.Dynamic);
+            #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
             AddComponentObject(entity, authoring);
+            #pragma warning restore 0618
         }
     }
 
@@ -99,7 +101,9 @@ namespace Unity.Entities.Hybrid.PerformanceTests
             }
 
             var companionGameObjectUpdateTransformSystem =
+                #pragma warning disable 0618 // managed API obsolete; internal/test caller still needs it.
                 m_DefaultWorld.World.GetExistingSystem<CompanionGameObjectUpdateTransformSystem>();
+                #pragma warning restore 0618
             var statePtr = m_DefaultWorld.World.Unmanaged.ResolveSystemState(companionGameObjectUpdateTransformSystem);
             Measure.ProfilerMarkers(statePtr->GetProfilerMarkerName(m_DefaultWorld.World));
 

@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 #pragma warning disable 0219
 #line 1 "Temp/GeneratedCode/TestProject/Test0__System_19875963020.g.cs"
 using Unity.Burst;
@@ -14,6 +15,7 @@ public unsafe partial struct PartialMethodSystem : global::Unity.Entities.ISyste
         #line hidden
     }
 
+    #pragma warning disable 0618
     
     TypeHandle __TypeHandle;
     global::Unity.Entities.EntityQuery __query_1641826531_0;
@@ -43,4 +45,5 @@ public unsafe partial struct PartialMethodSystem : global::Unity.Entities.ISyste
         __AssignQueries(ref state);
         __TypeHandle.__AssignHandles(ref state);
     }
+    #pragma warning restore 0618
 }

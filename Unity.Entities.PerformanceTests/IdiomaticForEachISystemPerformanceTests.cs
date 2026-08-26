@@ -1,4 +1,3 @@
-using System.Linq;
 using NUnit.Framework;
 using Unity.Burst;
 using Unity.Collections;
@@ -12,31 +11,6 @@ namespace Unity.Entities.PerformanceTests
     public struct SpeedModifier : IComponentData
     {
         public float Value;
-    }
-
-#pragma warning disable CS0618 // Disable Aspects obsolete warnings
-    public readonly partial struct RotateAspect : IAspect
-    {
-        readonly RefRW<LocalTransform> Transform;
-
-        public void Rotate(float time, float speedModifier) =>
-            Transform.ValueRW.Rotation =
-                math.mul(
-                    math.normalize(Transform.ValueRO.Rotation),
-                    quaternion.AxisAngle(math.up(), time * speedModifier));
-    }
-#pragma warning restore CS0618
-
-    [BurstCompile(CompileSynchronously = true)]
-    partial struct IterateAndUseAspectSystem : ISystem
-    {
-        [BurstCompile(CompileSynchronously = true)]
-        public void OnUpdate(ref SystemState state)
-        {
-            var time = SystemAPI.Time.DeltaTime;
-            foreach (var (rotateAspect, speedModifierRef) in SystemAPI.Query<RotateAspect, RefRO<SpeedModifier>>())
-                rotateAspect.Rotate(time, speedModifierRef.ValueRO.Value);
-        }
     }
 
     [BurstCompile(CompileSynchronously = true)]
@@ -56,92 +30,31 @@ namespace Unity.Entities.PerformanceTests
         }
     }
 
-    partial class EntitiesForEachThroughComponentsSystem : SystemBase
-    {
-        protected override void OnUpdate()
-        {
-            var time = SystemAPI.Time.DeltaTime;
-#pragma warning disable CS0618 // Disable Entities.ForEach obsolete warnings
-            Entities.ForEach((ref LocalTransform localTransform, in SpeedModifier speedModifier) =>
-            {
-                localTransform.Rotation =
-                    math.mul(
-                        math.normalize(localTransform.Rotation),
-                        quaternion.AxisAngle(math.up(), time * speedModifier.Value));
-
-            }).WithBurst(synchronousCompilation: true).Run();
-#pragma warning restore CS0618
-        }
-    }
-
-    public enum IterationType
-    {
-        Idiomatic,
-        EntitiesForEach
-    }
-
     [TestFixture]
     public class IdiomaticForEachISystemPerformanceTests : ECSTestsFixture
     {
         EntityArchetype _archetype;
 
         [SetUp]
-        public void SetUp() =>
-            _archetype = m_Manager.CreateArchetype(AspectUtils.GetRequiredComponents<RotateAspect>().Append(ComponentType.ReadWrite<SpeedModifier>()).ToArray());
+        public void SetUp() => _archetype = m_Manager.CreateArchetype(typeof(LocalTransform), typeof(SpeedModifier));
 
         [Test, Performance]
         [Category("Performance")]
-        public unsafe void IterateAndUseAspects([Values(100, 100000)] int entityCount)
-        {
-            var system = World.GetOrCreateSystem<IterateAndUseAspectSystem>();
-            var systemPtr = &system;
-            using var entities = CollectionHelper.CreateNativeArray<Entity>(entityCount, World.UpdateAllocator.ToAllocator);
-            m_Manager.CreateEntity(_archetype, entities);
-            Measure.Method(() => systemPtr->Update(World.Unmanaged))
-                .WarmupCount(1)
-                .MeasurementCount(100)
-                .Run();
-        }
-
-        [Test, Performance]
-        [Category("Performance")]
-        public unsafe void IterateAndUseComponents([Values(100, 100000)] int entityCount, [Values] IterationType iterationType)
+        public unsafe void IterateAndUseComponents([Values(100, 100000)] int entityCount)
         {
             var entities = CollectionHelper.CreateNativeArray<Entity>(entityCount, World.UpdateAllocator.ToAllocator);
 
-            switch (iterationType)
-            {
-                case IterationType.Idiomatic:
-                {
-                    var system = World.GetOrCreateSystem<IterateAndUseComponentsSystem>();
-                    var systemPtr = &system;
+            var system = World.GetOrCreateSystem<IterateAndUseComponentsSystem>();
+            var systemPtr = &system;
 
-                    m_Manager.CreateEntity(_archetype, entities);
+            m_Manager.CreateEntity(_archetype, entities);
 
-                    Measure.Method(() => systemPtr->Update(World.Unmanaged))
-                        .WarmupCount(5)
-                        .MeasurementCount(100)
-                        .Run();
+            Measure.Method(() => systemPtr->Update(World.Unmanaged))
+                .WarmupCount(5)
+                .MeasurementCount(100)
+                .Run();
 
-                    entities.Dispose();
-                    break;
-                }
-
-                case IterationType.EntitiesForEach:
-                {
-                    var system = World.GetOrCreateSystemManaged<EntitiesForEachThroughComponentsSystem>();
-
-                    m_Manager.CreateEntity(_archetype, entities);
-
-                    Measure.Method(() => system.Update())
-                        .WarmupCount(5)
-                        .MeasurementCount(100)
-                        .Run();
-
-                    entities.Dispose();
-                    break;
-                }
-            }
+            entities.Dispose();
         }
     }
 }

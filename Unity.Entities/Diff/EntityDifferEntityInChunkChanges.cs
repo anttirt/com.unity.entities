@@ -94,11 +94,7 @@ namespace Unity.Entities
             [ReadOnly] public NativeList<ArchetypeChunkChangeFlags> Flags;
             [ReadOnly] public NativeList<int> EntityCounts;
 #if UNITY_EDITOR && !DOTS_DISABLE_DEBUG_NAMES
-#if ENTITY_STORE_V1
-            [NativeDisableUnsafePtrRestriction, ReadOnly] public EntityName* NameByEntity;
-#else
             public EntityNameStoreAccess NameStoreAccess;
-#endif
 
 #endif
             [NativeDisableParallelForRestriction, WriteOnly] public NativeArray<EntityInChunkWithGuid> Entities;
@@ -119,16 +115,12 @@ namespace Unity.Entities
                 var entitiesIndex = startIndex;
                 for (int i = 0, count = chunk.Count; i < count; ++i)
                 {
-                    var entityIndex = entityBuffer[i].Index;
+                    var entity = entityBuffer[i];
                     int nameIndex = 0;
 
 #if UNITY_EDITOR && !DOTS_DISABLE_DEBUG_NAMES
 
-#if ENTITY_STORE_V1
-                    nameIndex = NameByEntity[entityIndex].Index;
-#else
-                    nameIndex = NameStoreAccess.GetEntityNameByEntityIndex(entityIndex).Index;
-#endif
+                    nameIndex = EntityNameStorage.GetEntityName(entity).Index;
 
 #endif
                     Entities[entitiesIndex++] = new EntityInChunkWithGuid
@@ -257,11 +249,7 @@ namespace Unity.Entities
                 EntityCounts = archetypeChunkChangeSet.EntityCounts,
 #if UNITY_EDITOR && !DOTS_DISABLE_DEBUG_NAMES
 
-#if ENTITY_STORE_V1
-                NameByEntity = entityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameByEntity,
-#else
                 NameStoreAccess = entityManager.GetCheckedEntityDataAccess()->EntityComponentStore->NameStoreAccess,
-#endif
 
 #endif
                 Entities = entities

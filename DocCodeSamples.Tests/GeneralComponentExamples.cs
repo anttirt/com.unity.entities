@@ -1,8 +1,6 @@
 using Unity.Entities;
 using Unity.Transforms;
-using System;
 using Unity.Mathematics;
-using UnityEngine;
 
 namespace Doc.CodeSamples.Tests
 {
@@ -87,24 +85,4 @@ namespace Doc.CodeSamples.Tests
         }
     }
     #endregion
-
-
-#if !UNITY_DISABLE_MANAGED_COMPONENTS
-    #region managed-component-external-resource
-    public class ManagedComponentWithExternalResource : IComponentData, IDisposable, ICloneable
-    {
-        public ParticleSystem ParticleSystem;
-
-        public void Dispose()
-        {
-            UnityEngine.Object.Destroy(ParticleSystem);
-        }
-
-        public object Clone()
-        {
-            return new ManagedComponentWithExternalResource { ParticleSystem = UnityEngine.Object.Instantiate(ParticleSystem) };
-        }
-    }
-    #endregion
-#endif
 }

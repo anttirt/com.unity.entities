@@ -13,7 +13,6 @@ public readonly struct TypeHandleFieldDescription : IEquatable<TypeHandleFieldDe
     public enum TypeHandleSource
     {
         None,
-        Aspect,
         Component,
         SharedComponent,
         BufferElement
@@ -31,13 +30,6 @@ public readonly struct TypeHandleFieldDescription : IEquatable<TypeHandleFieldDe
     {
         switch (Source)
         {
-            case TypeHandleSource.Aspect:
-                if (IsReadOnly)
-                    w.Write("[global::Unity.Collections.ReadOnly] ");
-                if (forcePublic)
-                    w.Write("public ");
-                w.Write($"{TypeSymbol.ToFullName()}.TypeHandle {GeneratedFieldName};");
-                break;
             case TypeHandleSource.BufferElement:
                 if (IsReadOnly)
                     w.Write("[global::Unity.Collections.ReadOnly] ");
@@ -65,7 +57,6 @@ public readonly struct TypeHandleFieldDescription : IEquatable<TypeHandleFieldDe
 
     public string GetMemberAssignment() => Source switch
     {
-        TypeHandleSource.Aspect => $"{GeneratedFieldName} = new {TypeSymbol.ToFullName()}.TypeHandle(ref state);",
         TypeHandleSource.BufferElement => $"{GeneratedFieldName} = state.GetBufferTypeHandle<{TypeSymbol.ToFullName()}>({(IsReadOnly ? "true" : "false")});",
         TypeHandleSource.Component =>
             TypeSymbol.IsReferenceType
@@ -87,12 +78,7 @@ public readonly struct TypeHandleFieldDescription : IEquatable<TypeHandleFieldDe
         var typeSymbolValidIdentifier = TypeSymbol.ToValidIdentifier();
         if (isSpecifiedTypeSymbol)
         {
-            if (typeSymbol.IsAspect())
-            {
-                GeneratedFieldName = $"__{typeSymbolValidIdentifier}_{(IsReadOnly ? "RO" : "RW")}_AspectTypeHandle";
-                Source = TypeHandleSource.Aspect;
-            }
-            else if (typeSymbol.InheritsFromInterface("Unity.Entities.IBufferElementData"))
+            if (typeSymbol.InheritsFromInterface("Unity.Entities.IBufferElementData"))
             {
                 GeneratedFieldName = $"__{typeSymbolValidIdentifier}_{(IsReadOnly ? "RO" : "RW")}_BufferTypeHandle";
                 Source = TypeHandleSource.BufferElement;
@@ -113,11 +99,6 @@ public readonly struct TypeHandleFieldDescription : IEquatable<TypeHandleFieldDe
             var constraintTypes = typeParameterSymbol.ConstraintTypes;
             switch (forcedTypeHandleSource)
             {
-                case TypeHandleSource.Aspect:
-                    Debug.Assert(constraintTypes.Any(t => t.ToFullName() == "global::Unity.Entities.IAspect" || t.IsAspect()), "SG-DBG: Specified aspect types must be aspects");
-                    GeneratedFieldName = $"__{typeSymbolValidIdentifier}_{(IsReadOnly ? "RO" : "RW")}_AspectTypeHandle";
-                    Source = TypeHandleSource.Aspect;
-                    break;
                 case TypeHandleSource.BufferElement:
                     Debug.Assert(constraintTypes.Any(t => t.ToFullName() == "global::Unity.Entities.IBufferElementData" || t.InheritsFromInterface("Unity.Entities.IBufferElementData")), "SG-DBG: Specified buffer element types must be buffer element types");
                     GeneratedFieldName = $"__{typeSymbolValidIdentifier}_{(IsReadOnly ? "RO" : "RW")}_BufferTypeHandle";

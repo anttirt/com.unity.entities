@@ -8,6 +8,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Core;
 using Unity.Profiling;
+using Unity.Scripting.LifecycleManagement;
 
 namespace Unity.Entities
 {
@@ -95,6 +96,10 @@ namespace Unity.Entities
         /// </summary>
         /// <param name="defaultWorldName">The name of the default <see cref="World"/> that will be created</param>
         /// <returns>true if the bootstrap has performed initialization, or false if default world initialization should be performed.</returns>
+        /// <remarks>
+        /// If this method returns true, it must also set <see cref="World.DefaultGameObjectInjectionWorld"/> to the world that
+        /// GameObject-based code and the Editor integration should use. Unity asserts if the property is still null.
+        /// </remarks>
         bool Initialize(string defaultWorldName);
     }
 
@@ -106,13 +111,26 @@ namespace Unity.Entities
     /// process entities from the same World, etc.</remarks>
     [DebuggerDisplay("{Name} - {Flags} (#{SequenceNumber})")]
     [DebuggerTypeProxy(typeof(WorldDebugView))]
-    public unsafe partial class World : IDisposable
+    public unsafe class World : IDisposable
     {
         internal static readonly List<World> s_AllWorlds = new List<World>();
 
         /// <summary>
-        /// Reference to the default World
+        /// The default <see cref="World"/>. The code that runs outside a system reads this property to reach a world.
         /// </summary>
+        /// <remarks>
+        /// <see cref="DefaultWorldInitialization.Initialize"/> assigns this property, so it's null until Unity creates the default
+        /// world, and null again after you dispose that world.
+        ///
+        /// Code that runs outside a system has no world to work from, so it reads this property instead. This applies both to
+        /// your own MonoBehaviour scripts and to Editor tools such as the SubScene Inspector and the Entity Inspector. The most
+        /// common use in your own code is to reach an <see cref="EntityManager"/>, for example
+        /// `World.DefaultGameObjectInjectionWorld.EntityManager`.
+        ///
+        /// Assigning a different world to this property redirects all of those callers to that world.
+        /// </remarks>
+        /// <seealso cref="ICustomBootstrap"/>
+        /// <seealso cref="DefaultWorldInitialization"/>
         public static World DefaultGameObjectInjectionWorld { get; set; }
 
         internal Dictionary<Type, ComponentSystemBase> m_SystemLookup = new Dictionary<Type, ComponentSystemBase>();
@@ -229,13 +247,6 @@ namespace Unity.Entities
 
         void Init(WorldFlags flags, AllocatorManager.AllocatorHandle backingAllocatorHandle)
         {
-#if UNITY_EDITOR
-            // Multiple worlds can be created, but we only want the cleanup callback registered once.
-            // Removing the callback if it is missing is silently ignored.
-            AppDomain.CurrentDomain.DomainUnload -= DefaultWorldInitialization.CleanupEntityComponentStore;
-            AppDomain.CurrentDomain.DomainUnload += DefaultWorldInitialization.CleanupEntityComponentStore;
-#endif
-
             s_NewWorldMarker.Begin();
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -246,10 +257,18 @@ namespace Unity.Entities
 
             s_AllWorlds.Add(this);
 
+#if UNITY_EDITOR            
+            m_TimeSingletonQuery = EntityManager.CreateEntityQuery( 
+                ComponentType.ReadWrite<WorldTime>(),
+                ComponentType.ReadWrite<WorldTimeQueue>(),
+                ComponentType.ReadWrite<HideInHierarchy>());
+#else
             m_TimeSingletonQuery = EntityManager.CreateEntityQuery(ComponentType.ReadWrite<WorldTime>(),
                 ComponentType.ReadWrite<WorldTimeQueue>());
+#endif
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (EntitiesJournaling.Enabled)
             {
                 EntitiesJournaling.AddRecord(
@@ -261,6 +280,7 @@ namespace Unity.Entities
 
                 EntitiesJournaling.OnWorldCreated(this);
             }
+#pragma warning restore 0618
 #endif
 
             s_NewWorldMarker.End();
@@ -282,7 +302,8 @@ namespace Unity.Entities
 
             // Debug.LogError("Dispose World "+ Name + " - " + GetHashCode());
 
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             if (EntitiesJournaling.Enabled)
             {
                 EntitiesJournaling.AddRecord(
@@ -292,14 +313,11 @@ namespace Unity.Entities
                     entities: null,
                     entityCount: 0);
             }
+#pragma warning restore 0618
 #endif
 
             m_Unmanaged.EntityManager.PreDisposeCheck();
 
-
-            if(m_ExternalAPIState != null)
-                m_Unmanaged.DestroyManagedSystemState(m_ExternalAPIState);
-            m_ExternalAPIState = null;
 
             // We don't want any jobs making changes to this world as we are disposing it.
             // This could be particularly bad if we are destroying blobs referenced by Components as a job attempts to access them.
@@ -351,10 +369,18 @@ namespace Unity.Entities
             {
                 if (m_TimeSingletonQuery.IsEmptyIgnoreFilter)
                 {
+#if UNITY_EDITOR
+                    var timeTypes = stackalloc ComponentType[3];
+                    timeTypes[0] = ComponentType.ReadWrite<WorldTime>();
+                    timeTypes[1] = ComponentType.ReadWrite<WorldTimeQueue>();
+                    timeTypes[2] = ComponentType.ReadWrite<HideInHierarchy>();
+                    var entity = EntityManager.CreateEntity(EntityManager.CreateArchetype(timeTypes, 3));
+#else
                     var timeTypes = stackalloc ComponentType[2];
                     timeTypes[0] = ComponentType.ReadWrite<WorldTime>();
                     timeTypes[1] = ComponentType.ReadWrite<WorldTimeQueue>();
                     var entity = EntityManager.CreateEntity(EntityManager.CreateArchetype(timeTypes, 2));
+#endif
                     EntityManager.SetName(entity, "WorldTime");
                 }
 
@@ -489,8 +515,10 @@ namespace Unity.Entities
 #if ENABLE_PROFILER
             EntitiesProfiler.OnSystemCreated(system.m_StatePtr->m_SystemTypeIndex, system.SystemHandle);
 #endif
-#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !DISABLE_ENTITIES_JOURNALING
+#if UNITY_INCLUDE_INSTRUMENTATION && !DISABLE_ENTITIES_JOURNALING
+#pragma warning disable 0618
             EntitiesJournaling.OnSystemCreated(system.m_StatePtr->m_SystemTypeIndex, system.SystemHandle);
+#pragma warning restore 0618
 #endif
 
             SystemCreated?.Invoke(this, system);
@@ -1486,36 +1514,6 @@ namespace Unity.Entities
             }
             return null;
         }
-
-
-        /// <summary>
-        /// This stub system is used to create instances of aspects
-        /// when no SystemState is available (outside dot runtime).
-        /// It is used by EntityManager.GetAspect and EntityManager.GetAspectRO
-        /// which will be called from the editor.
-        /// </summary>
-        [DisableAutoCreation]
-        class SystemStub : ComponentSystemBase
-        {
-            public override void Update()
-                => throw new System.NotImplementedException();
-        }
-        [NativeDisableUnsafePtrRestriction]
-        SystemState* m_ExternalAPIState = null;
-
-        [ExcludeFromBurstCompatTesting("accesses managed stub system")]
-        internal SystemState* ExternalAPIState
-        {
-            get
-            {
-                if (m_ExternalAPIState == null)
-                    m_ExternalAPIState = Unmanaged.
-                        AllocateSystemStateForManagedSystem
-                            (this, new SystemStub());
-                return m_ExternalAPIState;
-            }
-        }
-
     }
 
     /// <summary>
